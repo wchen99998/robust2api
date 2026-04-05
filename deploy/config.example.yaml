@@ -993,3 +993,23 @@ update:
   # Leave empty for direct connection (recommended for overseas servers)
   # 留空表示直连（适用于海外服务器）
   proxy_url: ""
+
+# =============================================================================
+# OpenTelemetry Observability (可观测性)
+# =============================================================================
+otel:
+  # Enable OpenTelemetry instrumentation
+  # 启用 OpenTelemetry 工具
+  enabled: false
+  # Service name for telemetry
+  # 遥测服务名称
+  service_name: "sub2api"
+  # OpenTelemetry collector endpoint (OTLP/HTTP)
+  # OpenTelemetry 收集器端点 (OTLP/HTTP)
+  endpoint: "http://alloy.monitoring.svc:4318"
+  # Trace sampling rate (0.0 - 1.0)
+  # 追踪采样率（0.0 - 1.0）
+  trace_sample_rate: 0.1
+  # Prometheus metrics export port
+  # Prometheus 指标导出端口
+  metrics_port: 9090
