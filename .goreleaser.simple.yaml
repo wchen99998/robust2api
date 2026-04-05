@@ -36,20 +36,22 @@ checksum:
 changelog:
   disable: true
 
-# 仅 GHCR x86_64 镜像 (v2)
-dockers_v2:
-  - images:
-      - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/sub2api"
-    tags:
-      - "{{ .Version }}"
-      - "latest"
+# 仅 GHCR x86_64 镜像
+dockers:
+  - id: amd64
+    ids: [sub2api]
+    goos: linux
+    goarch: amd64
+    image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/sub2api:{{ .Version }}"
+      - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/sub2api:latest"
     dockerfile: Dockerfile.goreleaser
     extra_files:
       - deploy/docker-entrypoint.sh
-    labels:
-      "org.opencontainers.image.version": "{{ .Version }}"
-      "org.opencontainers.image.revision": "{{ .Commit }}"
-      "org.opencontainers.image.source": "https://github.com/{{ .Env.GITHUB_REPO_OWNER }}/{{ .Env.GITHUB_REPO_NAME }}"
+    build_flag_templates:
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .Commit }}"
+      - "--label=org.opencontainers.image.source=https://github.com/{{ .Env.GITHUB_REPO_OWNER }}/{{ .Env.GITHUB_REPO_NAME }}"
 
 release:
   github:
