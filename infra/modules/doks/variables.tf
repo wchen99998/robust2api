@@ -13,7 +13,7 @@ variable "region" {
 variable "k8s_version" {
   description = "Kubernetes version prefix (latest patch auto-selected)"
   type        = string
-  default     = "1.31"
+  default     = "1.34"
 }
 
 variable "node_size" {
