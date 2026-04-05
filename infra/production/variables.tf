@@ -29,7 +29,7 @@ variable "cluster_name" {
 variable "k8s_version" {
   description = "Kubernetes version prefix"
   type        = string
-  default     = "1.31"
+  default     = "1.34"
 }
 
 variable "node_size" {

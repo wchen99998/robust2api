@@ -28,6 +28,7 @@ Edit `terraform.tfvars` with your values:
 do_token     = "dop_v1_..."
 region       = "sgp1"
 cluster_name = "sub2api"
+k8s_version  = "1.34"
 
 # Kubernetes bootstrap
 letsencrypt_email = "admin@yourdomain.com"
@@ -42,12 +43,31 @@ cloudflare_proxied   = true
 # enable_managed_database = true
 ```
 
-Provision:
+> **Important:** Check available Kubernetes versions before deploying:
+> ```bash
+> curl -s -X GET "https://api.digitalocean.com/v2/kubernetes/options" \
+>   -H "Authorization: Bearer $DO_TOKEN" | python3 -c \
+>   "import sys,json; d=json.load(sys.stdin); [print(v['slug']) for v in d['options']['versions']]"
+> ```
+
+### Staged Apply (Required)
+
+Terraform must be applied in stages because `kubernetes_manifest` (ClusterIssuer) requires the CRDs from cert-manager, which requires the cluster to exist first.
 
 ```bash
 terraform init
-terraform plan        # review what will be created
-terraform apply       # type 'yes' to confirm
+
+# Stage 1: Create the DOKS cluster
+terraform apply -target=module.doks
+
+# Stage 2: Install ingress-nginx, cert-manager, and app namespace
+terraform apply \
+  -target=module.kubernetes.kubernetes_namespace.app \
+  -target=module.kubernetes.helm_release.ingress_nginx \
+  -target=module.kubernetes.helm_release.cert_manager
+
+# Stage 3: Create ClusterIssuer and Cloudflare DNS record
+terraform apply
 ```
 
 This creates:
@@ -60,41 +80,65 @@ This creates:
 ## 2. Configure kubectl
 
 ```bash
+doctl auth init
 doctl kubernetes cluster kubeconfig save sub2api
 kubectl get nodes     # verify connectivity
 ```
 
 ## 3. Deploy Sub2API
 
-Generate secrets first:
+### Build Helm dependencies
+
+```bash
+helm dependency build deploy/helm/sub2api
+```
+
+### Generate secrets and install
 
 ```bash
 JWT_SECRET=$(openssl rand -hex 32)
 TOTP_KEY=$(openssl rand -hex 32)
 ADMIN_PASS=$(openssl rand -base64 16)
+PG_PASS=$(openssl rand -base64 16)
+REDIS_PASS=$(openssl rand -base64 16)
 
 echo "JWT_SECRET:    $JWT_SECRET"
-echo "TOTP_KEY:      $TOTP_KEY"
 echo "ADMIN_PASS:    $ADMIN_PASS"
 ```
 
-Deploy with Helm:
+Install with in-cluster PostgreSQL and Redis:
 
 ```bash
 helm install sub2api deploy/helm/sub2api \
   -n sub2api \
-  -f deploy/helm/sub2api/values-production.yaml \
+  --set image.repository=ghcr.io/wei-shaw/sub2api \
+  --set image.tag=0.1.107 \
   --set ingress.host=api.yourdomain.com \
+  --set ingress.className=nginx \
+  --set "ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod" \
+  --set ingress.tls.enabled=true \
   --set secrets.jwtSecret="$JWT_SECRET" \
   --set secrets.totpEncryptionKey="$TOTP_KEY" \
-  --set secrets.adminPassword="$ADMIN_PASS"
+  --set secrets.adminPassword="$ADMIN_PASS" \
+  --set postgresql.auth.password="$PG_PASS" \
+  --set redis.auth.password="$REDIS_PASS"
 ```
 
-Verify:
+> **Cloudflare SSL:** Set your Cloudflare SSL/TLS mode to **"Full (Strict)"** in the dashboard (SSL/TLS → Overview). This ensures end-to-end encryption: client → Cloudflare → HTTPS → nginx (Let's Encrypt cert) → app. Using "Flexible" mode will cause a 308 redirect loop because nginx forces HTTPS.
+
+> **Note on Bitnami image tags:** The Bitnami PostgreSQL and Redis subcharts pin specific image tags that may be removed from Docker Hub over time. If pods show `ImagePullBackOff`, override with available tags:
+> ```bash
+> helm upgrade sub2api deploy/helm/sub2api -n sub2api --reuse-values \
+>   --set postgresql.image.tag=latest \
+>   --set redis.image.tag=latest
+> ```
+
+### Verify
 
 ```bash
 kubectl -n sub2api get pods        # all pods should be Running
 kubectl -n sub2api get ingress     # should show your host + LB IP
+kubectl -n sub2api get certificate # TLS cert should show READY=True
 ```
 
 Your app should be accessible at `https://api.yourdomain.com`.
@@ -186,16 +230,16 @@ terraform destroy
 ## Architecture Overview
 
 ```
-Cloudflare (DNS + CDN/WAF)
+Cloudflare (DNS + CDN/WAF, proxied)
     |
-DO Load Balancer
+DO Load Balancer (TLS passthrough)
     |
-ingress-nginx (TLS via cert-manager)
+ingress-nginx (TLS via cert-manager / Let's Encrypt)
     |
 Sub2API pods (namespace: sub2api)
     |
-    +-- Redis (in-cluster, Bitnami subchart)
-    +-- PostgreSQL (in-cluster or DO Managed)
+    +-- Redis (in-cluster, Bitnami subchart, standalone)
+    +-- PostgreSQL (in-cluster Bitnami subchart, or DO Managed)
 ```
 
 ## Terraform Modules
@@ -208,6 +252,35 @@ Sub2API pods (namespace: sub2api)
 | `infra/modules/dns` | Cloudflare A record pointing to LB |
 
 ## Troubleshooting
+
+### Pods stuck in ImagePullBackOff
+
+Check which image is failing:
+
+```bash
+kubectl -n sub2api describe pod <pod-name> | tail -10
+```
+
+Common causes:
+- **Private GHCR image:** Create an image pull secret and set `imagePullSecrets`
+- **Bitnami tag removed:** Override with `--set postgresql.image.tag=latest` or `--set redis.image.tag=latest`
+
+### App pod CrashLoopBackOff
+
+Usually means PostgreSQL or Redis aren't ready yet. Delete the app pod to trigger a restart once dependencies are running:
+
+```bash
+kubectl -n sub2api delete pod -l app.kubernetes.io/name=sub2api
+```
+
+### Stale ReplicaSets after upgrade
+
+If old ReplicaSets keep spawning pods with wrong images:
+
+```bash
+kubectl -n sub2api get rs
+kubectl -n sub2api scale rs <old-rs-name> --replicas=0
+```
 
 ### Pods stuck in Pending
 
@@ -237,3 +310,14 @@ kubectl -n ingress-nginx get svc ingress-nginx-controller
 ```
 
 DO load balancers can take 2-3 minutes to provision.
+
+### 308 redirect loop with Cloudflare
+
+If the site returns `308 Permanent Redirect` in a loop, Cloudflare's SSL mode is likely "Flexible" (connects to origin over HTTP) while nginx forces HTTPS. Fix by setting Cloudflare SSL to **"Full (Strict)"** in the dashboard → SSL/TLS → Overview. This is the recommended mode since cert-manager provides a valid Let's Encrypt certificate on the origin.
+
+### Terraform staged apply errors
+
+If `terraform apply` fails with "no matches for kind ClusterIssuer" or "cannot create REST client", you need to apply in stages (see Section 1). This happens because:
+- Stage 1 creates the cluster (needed for kubernetes/helm providers)
+- Stage 2 installs cert-manager (needed for ClusterIssuer CRD)
+- Stage 3 creates the ClusterIssuer and DNS record
