@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"sync"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -9,6 +10,22 @@ import (
 )
 
 const meterName = "github.com/Wei-Shaw/sub2api"
+
+var (
+	globalMetrics     *Metrics
+	globalMetricsOnce sync.Once
+)
+
+// M returns the global Metrics instance, creating it on first call.
+// Safe for concurrent use. Returns a no-op-safe instance (all OTel
+// instruments are safe to call even without a configured provider).
+func M() *Metrics {
+	globalMetricsOnce.Do(func() {
+		m, _ := NewMetrics() // instruments are no-op safe; error is impossible with global meter
+		globalMetrics = m
+	})
+	return globalMetrics
+}
 
 // Metrics holds all application-level OTel metric instruments.
 type Metrics struct {

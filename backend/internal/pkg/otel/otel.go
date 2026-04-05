@@ -127,11 +127,6 @@ func ProvideOtel(cfg *config.Config) (*Provider, error) {
 	return Init(context.Background(), &cfg.Otel)
 }
 
-// ProvideMetrics is a Wire provider for application metrics.
-func ProvideMetrics() (*Metrics, error) {
-	return NewMetrics()
-}
-
 // ProvideMetricsServer is a Wire provider for the internal metrics server.
 func ProvideMetricsServer(cfg *config.Config, provider *Provider) *MetricsServer {
 	if !cfg.Otel.Enabled {

@@ -245,19 +245,6 @@ func provideCleanup(
 			}},
 		}
 
-		// Shutdown OTel providers
-		if otelProvider != nil {
-			if err := otelProvider.Shutdown(ctx); err != nil {
-				log.Printf("OTel provider shutdown error: %v", err)
-			}
-		}
-		// Shutdown metrics server
-		if metricsServer != nil {
-			if err := metricsServer.Shutdown(ctx); err != nil {
-				log.Printf("Metrics server shutdown error: %v", err)
-			}
-		}
-
 		infraSteps := []cleanupStep{
 			{"Redis", func() error {
 				if rdb == nil {
@@ -302,6 +289,19 @@ func provideCleanup(
 		}
 
 		runParallel(parallelSteps)
+
+		// Shutdown OTel after services stop (flushes remaining spans/metrics)
+		if otelProvider != nil {
+			if err := otelProvider.Shutdown(ctx); err != nil {
+				log.Printf("OTel provider shutdown error: %v", err)
+			}
+		}
+		if metricsServer != nil {
+			if err := metricsServer.Shutdown(ctx); err != nil {
+				log.Printf("Metrics server shutdown error: %v", err)
+			}
+		}
+
 		runSequential(infraSteps)
 
 		// Check if context timed out
