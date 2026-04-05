@@ -3,7 +3,7 @@ replicaCount: 1
 
 image:
   # -- Container image repository
-  repository: ghcr.io/wchen99998/sub2api
+  repository: ghcr.io/wchen99998/robust2api
   # -- Image tag (defaults to Chart appVersion)
   tag: ""
   # -- Image pull policy

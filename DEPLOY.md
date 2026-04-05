@@ -93,6 +93,17 @@ kubectl get nodes     # verify connectivity
 helm dependency build deploy/helm/sub2api
 ```
 
+### Create image pull secret (private GHCR)
+
+The container image is in a private GHCR registry. Create a pull secret using a GitHub PAT with `read:packages` scope:
+
+```bash
+kubectl -n sub2api create secret docker-registry ghcr-pull \
+  --docker-server=ghcr.io \
+  --docker-username=wchen99998 \
+  --docker-password=<GITHUB_PAT_WITH_READ_PACKAGES>
+```
+
 ### Generate secrets and install
 
 ```bash
@@ -111,8 +122,8 @@ Install with in-cluster PostgreSQL and Redis:
 ```bash
 helm install sub2api deploy/helm/sub2api \
   -n sub2api \
-  --set image.repository=ghcr.io/wei-shaw/sub2api \
-  --set image.tag=0.1.107 \
+  --set image.repository=ghcr.io/wchen99998/robust2api \
+  --set image.tag=0.1.0 \
   --set ingress.host=api.yourdomain.com \
   --set ingress.className=nginx \
   --set "ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod" \
@@ -121,7 +132,8 @@ helm install sub2api deploy/helm/sub2api \
   --set secrets.totpEncryptionKey="$TOTP_KEY" \
   --set secrets.adminPassword="$ADMIN_PASS" \
   --set postgresql.auth.password="$PG_PASS" \
-  --set redis.auth.password="$REDIS_PASS"
+  --set redis.auth.password="$REDIS_PASS" \
+  --set 'imagePullSecrets[0].name=ghcr-pull'
 ```
 
 > **Cloudflare SSL:** Set your Cloudflare SSL/TLS mode to **"Full (Strict)"** in the dashboard (SSL/TLS → Overview). This ensures end-to-end encryption: client → Cloudflare → HTTPS → nginx (Let's Encrypt cert) → app. Using "Flexible" mode will cause a 308 redirect loop because nginx forces HTTPS.
