@@ -175,7 +175,7 @@ By default, ExternalDNS creates records with Cloudflare proxy enabled or disable
 
 ```bash
 # Disable Cloudflare proxy for a specific deployment
-helm install ... --set cloudflareProxied=false
+helm install ... --set ingress.cloudflareProxied="false"
 ```
 
 ### Custom domains (extraHosts)
@@ -185,7 +185,7 @@ To serve the application on additional hostnames (e.g. a vanity domain), use the
 ```bash
 helm install ... \
   --set ingress.host=api-sub2api.do-prod.yourdomain.com \
-  --set 'extraHosts[0]=api.mycustomdomain.com'
+  --set 'ingress.extraHosts[0].host=api.mycustomdomain.com'
 ```
 
 ExternalDNS will create records for all hosts listed in the Ingress. For custom domains outside the `domain_suffix`, ensure their DNS is configured separately to point to the load balancer.
