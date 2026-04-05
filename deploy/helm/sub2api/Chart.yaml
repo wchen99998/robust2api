@@ -1,0 +1,16 @@
+apiVersion: v2
+name: sub2api
+description: Sub2API - AI API Gateway Platform for subscription quota distribution
+type: application
+version: 0.1.0
+appVersion: "latest"
+
+dependencies:
+  - name: postgresql
+    version: "~16"
+    repository: oci://registry-1.docker.io/bitnamicharts
+    condition: postgresql.enabled
+  - name: redis
+    version: "~20"
+    repository: oci://registry-1.docker.io/bitnamicharts
+    condition: redis.enabled

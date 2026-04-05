@@ -1,0 +1,60 @@
+# =============================================================================
+# Production Overrides
+# =============================================================================
+# Usage: helm install sub2api ./deploy/helm/sub2api -f ./deploy/helm/sub2api/values-production.yaml
+#
+# IMPORTANT: Set secrets via --set flags or external secret management, NOT in this file.
+#   helm install sub2api ./deploy/helm/sub2api \
+#     -f ./deploy/helm/sub2api/values-production.yaml \
+#     --set secrets.jwtSecret=<value> \
+#     --set secrets.totpEncryptionKey=<value> \
+#     --set secrets.adminPassword=<value>
+# =============================================================================
+
+replicaCount: 2
+
+config:
+  database:
+    maxOpenConns: 256
+    maxIdleConns: 128
+
+  redis:
+    poolSize: 4096
+    minIdleConns: 256
+
+ingress:
+  host: sub2api.example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  tls:
+    enabled: true
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+# Disable in-cluster databases for production (use managed services)
+postgresql:
+  enabled: false
+
+redis:
+  enabled: false
+
+# Configure external services
+externalDatabase:
+  host: your-postgres-host.example.com
+  port: 5432
+  user: sub2api
+  password: ""
+  database: sub2api
+  sslmode: require
+
+externalRedis:
+  host: your-redis-host.example.com
+  port: 6379
+  password: ""
+  enableTLS: true

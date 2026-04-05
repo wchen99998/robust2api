@@ -1,0 +1,169 @@
+# -- Number of app replicas
+replicaCount: 1
+
+image:
+  # -- Container image repository
+  repository: ghcr.io/wchen99998/sub2api
+  # -- Image tag (defaults to Chart appVersion)
+  tag: ""
+  # -- Image pull policy
+  pullPolicy: IfNotPresent
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -- Override chart name
+nameOverride: ""
+# -- Override full release name
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount
+  create: true
+  # -- ServiceAccount annotations
+  annotations: {}
+  # -- ServiceAccount name (auto-generated if empty)
+  name: ""
+
+# -- Use an existing Secret instead of creating one
+# The secret must contain: DATABASE_PASSWORD, REDIS_PASSWORD, JWT_SECRET,
+# TOTP_ENCRYPTION_KEY, ADMIN_EMAIL, ADMIN_PASSWORD
+existingSecret: ""
+
+# =============================================================================
+# Application Configuration (non-sensitive, stored in ConfigMap)
+# =============================================================================
+config:
+  serverPort: "8080"
+  serverMode: "release"
+  runMode: "standard"
+  timezone: "Asia/Shanghai"
+
+  database:
+    maxOpenConns: 50
+    maxIdleConns: 10
+    connMaxLifetimeMinutes: 30
+    connMaxIdleTimeMinutes: 5
+
+  redis:
+    db: 0
+    poolSize: 1024
+    minIdleConns: 10
+    enableTLS: false
+
+  security:
+    urlAllowlistEnabled: false
+    urlAllowlistAllowInsecureHTTP: false
+    urlAllowlistAllowPrivateHosts: false
+    urlAllowlistUpstreamHosts: ""
+
+  updateProxyURL: ""
+
+# -- Extra environment variables added to ConfigMap (key-value pairs)
+extraEnv: {}
+
+# =============================================================================
+# Secrets (sensitive, stored in Secret)
+# =============================================================================
+secrets:
+  jwtSecret: ""
+  jwtExpireHour: "24"
+  totpEncryptionKey: ""
+  adminEmail: "admin@sub2api.local"
+  adminPassword: ""
+  geminiOAuthClientID: ""
+  geminiOAuthClientSecret: ""
+  geminiCliOAuthClientSecret: ""
+  antigravityOAuthClientSecret: ""
+
+# -- Extra secret environment variables (key-value pairs)
+extraSecretEnv: {}
+
+# =============================================================================
+# Persistence (/app/data volume)
+# =============================================================================
+persistence:
+  enabled: true
+  size: 1Gi
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+
+# =============================================================================
+# Service
+# =============================================================================
+service:
+  type: ClusterIP
+  port: 80
+
+# =============================================================================
+# Ingress
+# =============================================================================
+ingress:
+  enabled: true
+  className: ""
+  host: sub2api.local
+  annotations: {}
+  tls:
+    enabled: false
+    secretName: ""
+
+# =============================================================================
+# Resources
+# =============================================================================
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# =============================================================================
+# Scheduling
+# =============================================================================
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# =============================================================================
+# PostgreSQL Subchart (Bitnami)
+# =============================================================================
+postgresql:
+  enabled: true
+  auth:
+    username: sub2api
+    password: ""
+    database: sub2api
+  primary:
+    persistence:
+      size: 1Gi
+
+# -- External database (used when postgresql.enabled=false)
+externalDatabase:
+  host: ""
+  port: 5432
+  user: sub2api
+  password: ""
+  database: sub2api
+  sslmode: require
+
+# =============================================================================
+# Redis Subchart (Bitnami)
+# =============================================================================
+redis:
+  enabled: true
+  auth:
+    enabled: true
+    password: ""
+  architecture: standalone
+  master:
+    persistence:
+      size: 1Gi
+
+# -- External Redis (used when redis.enabled=false)
+externalRedis:
+  host: ""
+  port: 6379
+  password: ""
+  enableTLS: false

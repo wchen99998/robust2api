@@ -1,0 +1,43 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "sub2api.fullname" . }}
+  labels:
+    {{- include "sub2api.labels" . | nindent 4 }}
+data:
+  AUTO_SETUP: "true"
+  SERVER_HOST: "0.0.0.0"
+  SERVER_PORT: {{ .Values.config.serverPort | quote }}
+  SERVER_MODE: {{ .Values.config.serverMode | quote }}
+  RUN_MODE: {{ .Values.config.runMode | quote }}
+  TZ: {{ .Values.config.timezone | quote }}
+  # Database (non-sensitive)
+  DATABASE_HOST: {{ include "sub2api.databaseHost" . | quote }}
+  DATABASE_PORT: {{ include "sub2api.databasePort" . | quote }}
+  DATABASE_USER: {{ include "sub2api.databaseUser" . | quote }}
+  DATABASE_DBNAME: {{ include "sub2api.databaseName" . | quote }}
+  DATABASE_SSLMODE: {{ include "sub2api.databaseSSLMode" . | quote }}
+  DATABASE_MAX_OPEN_CONNS: {{ .Values.config.database.maxOpenConns | quote }}
+  DATABASE_MAX_IDLE_CONNS: {{ .Values.config.database.maxIdleConns | quote }}
+  DATABASE_CONN_MAX_LIFETIME_MINUTES: {{ .Values.config.database.connMaxLifetimeMinutes | quote }}
+  DATABASE_CONN_MAX_IDLE_TIME_MINUTES: {{ .Values.config.database.connMaxIdleTimeMinutes | quote }}
+  # Redis (non-sensitive)
+  REDIS_HOST: {{ include "sub2api.redisHost" . | quote }}
+  REDIS_PORT: {{ include "sub2api.redisPort" . | quote }}
+  REDIS_DB: {{ .Values.config.redis.db | quote }}
+  REDIS_POOL_SIZE: {{ .Values.config.redis.poolSize | quote }}
+  REDIS_MIN_IDLE_CONNS: {{ .Values.config.redis.minIdleConns | quote }}
+  REDIS_ENABLE_TLS: {{ .Values.config.redis.enableTLS | quote }}
+  # Security
+  SECURITY_URL_ALLOWLIST_ENABLED: {{ .Values.config.security.urlAllowlistEnabled | quote }}
+  SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP: {{ .Values.config.security.urlAllowlistAllowInsecureHTTP | quote }}
+  SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS: {{ .Values.config.security.urlAllowlistAllowPrivateHosts | quote }}
+  {{- if .Values.config.security.urlAllowlistUpstreamHosts }}
+  SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS: {{ .Values.config.security.urlAllowlistUpstreamHosts | quote }}
+  {{- end }}
+  {{- if .Values.config.updateProxyURL }}
+  UPDATE_PROXY_URL: {{ .Values.config.updateProxyURL | quote }}
+  {{- end }}
+  {{- range $key, $value := .Values.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

@@ -1,0 +1,36 @@
+=======================================================
+  Sub2API has been deployed!
+=======================================================
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+{{- if .Values.ingress.enabled }}
+
+Access via Ingress:
+{{- if .Values.ingress.tls.enabled }}
+  URL: https://{{ .Values.ingress.host }}
+{{- else }}
+  URL: http://{{ .Values.ingress.host }}
+{{- end }}
+
+  NOTE: You need an ingress controller installed in your cluster.
+  If you don't have one, install nginx-ingress:
+
+    helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+    helm install ingress-nginx ingress-nginx/ingress-nginx
+
+{{- else }}
+
+Access via port-forward:
+
+  kubectl port-forward svc/{{ include "sub2api.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+
+  Then open: http://localhost:8080
+
+{{- end }}
+
+Quick verification:
+
+  kubectl get pods -l app.kubernetes.io/instance={{ .Release.Name }} -n {{ .Release.Namespace }}
+  kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }} -n {{ .Release.Namespace }} -f
