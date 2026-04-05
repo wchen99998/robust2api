@@ -37,6 +37,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            {{- if .Values.observability.enabled }}
+            - name: metrics
+              containerPort: {{ .Values.observability.otel.metricsPort }}
+              protocol: TCP
+            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "sub2api.fullname" . }}
