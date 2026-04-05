@@ -101,12 +101,23 @@ service:
 # =============================================================================
 ingress:
   enabled: true
-  className: ""
+  className: "nginx"
+  # Convention: <service>-<namespace>.<domain_suffix>
+  # Example: api-sub2api.do-prod.wuhao99.com
   host: sub2api.local
-  annotations: {}
+  # Cloudflare proxy mode (set to "false" for DNS-only / grey-cloud)
+  cloudflareProxied: "true"
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
   tls:
     enabled: false
     secretName: ""
+  # Extra hosts (custom domains pointing to this service).
+  # ExternalDNS only manages domains within its configured zone filter.
+  # Example:
+  #   extraHosts:
+  #     - host: api.mycorp.com
+  extraHosts: []
 
 # =============================================================================
 # Resources

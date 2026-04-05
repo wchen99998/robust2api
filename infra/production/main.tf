@@ -38,18 +38,14 @@ module "doks" {
 module "kubernetes" {
   source = "../modules/kubernetes"
 
-  letsencrypt_email = var.letsencrypt_email
+  letsencrypt_email          = var.letsencrypt_email
+  cloudflare_api_token       = var.cloudflare_api_token
+  cloudflare_zone_id         = var.cloudflare_zone_id
+  domain_suffix              = var.domain_suffix
+  cluster_name               = var.cluster_name
+  cloudflare_proxied_default = var.cloudflare_proxied
 
   depends_on = [module.doks]
-}
-
-module "dns" {
-  source = "../modules/dns"
-
-  cloudflare_zone_id = var.cloudflare_zone_id
-  record_name        = var.domain_name
-  record_value       = module.kubernetes.load_balancer_ip
-  proxied            = var.cloudflare_proxied
 }
 
 module "database" {

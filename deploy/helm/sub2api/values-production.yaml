@@ -23,9 +23,7 @@ config:
     minIdleConns: 256
 
 ingress:
-  host: sub2api.example.com
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod
+  # Set host via --set to follow convention: api-<namespace>.<domain_suffix>
   tls:
     enabled: true
 

@@ -36,7 +36,10 @@ letsencrypt_email = "admin@yourdomain.com"
 # Cloudflare DNS
 cloudflare_api_token = "..."
 cloudflare_zone_id   = "..."
-domain_name          = "api"        # creates api.yourdomain.com
+# DNS convention: <service>-<namespace>.<suffix>
+# e.g. with suffix "do-prod.yourdomain.com", the default Ingress host
+# becomes "api-sub2api.do-prod.yourdomain.com"
+domain_suffix        = "do-prod.yourdomain.com"
 cloudflare_proxied   = true
 
 # Optional: managed PostgreSQL (default false, uses in-cluster Bitnami PG)
@@ -60,21 +63,22 @@ terraform init
 # Stage 1: Create the DOKS cluster
 terraform apply -target=module.doks
 
-# Stage 2: Install ingress-nginx, cert-manager, and app namespace
+# Stage 2: Install ingress-nginx, cert-manager, ExternalDNS, and app namespace
 terraform apply \
   -target=module.kubernetes.kubernetes_namespace.app \
   -target=module.kubernetes.helm_release.ingress_nginx \
-  -target=module.kubernetes.helm_release.cert_manager
+  -target=module.kubernetes.helm_release.cert_manager \
+  -target=module.kubernetes.helm_release.external_dns
 
-# Stage 3: Create ClusterIssuer and Cloudflare DNS record
+# Stage 3: Create ClusterIssuer and remaining resources
 terraform apply
 ```
 
 This creates:
 - DOKS cluster with autoscaling (1-3 nodes)
 - ingress-nginx controller + DO load balancer
-- cert-manager with Let's Encrypt ClusterIssuer
-- Cloudflare DNS A record pointing to the load balancer
+- cert-manager with Let's Encrypt ClusterIssuer (DNS-01 via Cloudflare)
+- ExternalDNS (auto-creates Cloudflare DNS records from Ingress resources)
 - `sub2api` namespace
 
 ## 2. Configure kubectl
@@ -124,9 +128,7 @@ helm install sub2api deploy/helm/sub2api \
   -n sub2api \
   --set image.repository=ghcr.io/wchen99998/robust2api \
   --set image.tag=0.1.0 \
-  --set ingress.host=api.yourdomain.com \
-  --set ingress.className=nginx \
-  --set "ingress.annotations.cert-manager\.io/cluster-issuer=letsencrypt-prod" \
+  --set ingress.host=api-sub2api.do-prod.yourdomain.com \
   --set ingress.tls.enabled=true \
   --set secrets.jwtSecret="$JWT_SECRET" \
   --set secrets.totpEncryptionKey="$TOTP_KEY" \
@@ -136,7 +138,7 @@ helm install sub2api deploy/helm/sub2api \
   --set 'imagePullSecrets[0].name=ghcr-pull'
 ```
 
-> **Cloudflare SSL:** Set your Cloudflare SSL/TLS mode to **"Full (Strict)"** in the dashboard (SSL/TLS → Overview). This ensures end-to-end encryption: client → Cloudflare → HTTPS → nginx (Let's Encrypt cert) → app. Using "Flexible" mode will cause a 308 redirect loop because nginx forces HTTPS.
+> **Cloudflare SSL:** Set your Cloudflare SSL/TLS mode to **"Full (Strict)"** in the dashboard (SSL/TLS -> Overview). This ensures end-to-end encryption: client -> Cloudflare -> HTTPS -> nginx (Let's Encrypt cert) -> app. Using "Flexible" mode will cause a 308 redirect loop because nginx forces HTTPS.
 
 > **Note on Bitnami image tags:** The Bitnami PostgreSQL and Redis subcharts pin specific image tags that may be removed from Docker Hub over time. If pods show `ImagePullBackOff`, override with available tags:
 > ```bash
@@ -153,7 +155,40 @@ kubectl -n sub2api get ingress     # should show your host + LB IP
 kubectl -n sub2api get certificate # TLS cert should show READY=True
 ```
 
-Your app should be accessible at `https://api.yourdomain.com`.
+Your app should be accessible at `https://api-sub2api.do-prod.yourdomain.com`.
+
+## DNS Pattern and ExternalDNS
+
+DNS records are managed automatically by ExternalDNS running in the cluster. When an Ingress resource is created, ExternalDNS reads its hostname and creates the corresponding Cloudflare DNS record pointing to the load balancer IP.
+
+### Naming convention
+
+Hostnames follow the pattern `<service>-<namespace>.<domain_suffix>`. For example, with `domain_suffix = "do-prod.yourdomain.com"`:
+
+| Service | Namespace | Hostname |
+|---------|-----------|----------|
+| api | sub2api | `api-sub2api.do-prod.yourdomain.com` |
+
+### Cloudflare proxy
+
+By default, ExternalDNS creates records with Cloudflare proxy enabled or disabled based on the `cloudflare_proxied` Terraform variable. You can override this per-Ingress using the Helm chart's `cloudflareProxied` value:
+
+```bash
+# Disable Cloudflare proxy for a specific deployment
+helm install ... --set cloudflareProxied=false
+```
+
+### Custom domains (extraHosts)
+
+To serve the application on additional hostnames (e.g. a vanity domain), use the `extraHosts` value:
+
+```bash
+helm install ... \
+  --set ingress.host=api-sub2api.do-prod.yourdomain.com \
+  --set 'extraHosts[0]=api.mycustomdomain.com'
+```
+
+ExternalDNS will create records for all hosts listed in the Ingress. For custom domains outside the `domain_suffix`, ensure their DNS is configured separately to point to the load balancer.
 
 ## 4. Using Managed PostgreSQL (Optional)
 
@@ -242,11 +277,11 @@ terraform destroy
 ## Architecture Overview
 
 ```
-Cloudflare (DNS + CDN/WAF, proxied)
+Cloudflare (DNS managed by ExternalDNS, CDN/WAF if proxied)
     |
 DO Load Balancer (TLS passthrough)
     |
-ingress-nginx (TLS via cert-manager / Let's Encrypt)
+ingress-nginx (TLS via cert-manager DNS-01 / Let's Encrypt)
     |
 Sub2API pods (namespace: sub2api)
     |
@@ -259,9 +294,8 @@ Sub2API pods (namespace: sub2api)
 | Module | What it provisions |
 |--------|--------------------|
 | `infra/modules/doks` | DOKS cluster with autoscaling node pool |
-| `infra/modules/kubernetes` | ingress-nginx, cert-manager, ClusterIssuer, app namespace |
+| `infra/modules/kubernetes` | ingress-nginx, cert-manager (DNS-01), ExternalDNS, ClusterIssuer, app namespace |
 | `infra/modules/database` | Optional DO Managed PostgreSQL with VPC firewall |
-| `infra/modules/dns` | Cloudflare A record pointing to LB |
 
 ## Troubleshooting
 
@@ -296,7 +330,7 @@ kubectl -n sub2api scale rs <old-rs-name> --replicas=0
 
 ### Pods stuck in Pending
 
-Check node capacity — the autoscaler may need time to add nodes:
+Check node capacity -- the autoscaler may need time to add nodes:
 
 ```bash
 kubectl get nodes
@@ -313,6 +347,8 @@ kubectl -n sub2api describe certificate
 kubectl -n sub2api describe certificaterequest
 ```
 
+For DNS-01 challenges, also verify the Cloudflare API token has DNS edit permissions and the zone ID is correct.
+
 ### Load balancer IP not assigned
 
 Check the ingress-nginx service:
@@ -323,13 +359,39 @@ kubectl -n ingress-nginx get svc ingress-nginx-controller
 
 DO load balancers can take 2-3 minutes to provision.
 
+### DNS record not appearing
+
+If ExternalDNS is not creating the expected Cloudflare DNS record, check its logs:
+
+```bash
+kubectl -n external-dns logs deployment/external-dns
+```
+
+Common causes:
+- **Domain filter mismatch:** The Ingress hostname must be under the configured `domain_suffix`. ExternalDNS only manages records matching its `domainFilters`.
+- **Cloudflare token permissions:** The API token needs `Zone:DNS:Edit` and `Zone:Zone:Read` permissions.
+- **Ingress not ready:** ExternalDNS reads hostnames from Ingress resources. Verify the Ingress exists and has a host set: `kubectl -n sub2api get ingress -o wide`
+
+### ExternalDNS general troubleshooting
+
+```bash
+# Check ExternalDNS pod status
+kubectl -n external-dns get pods
+
+# View recent logs
+kubectl -n external-dns logs deployment/external-dns --tail=50
+
+# Verify the Ingress annotations and hosts
+kubectl -n sub2api get ingress -o yaml
+```
+
 ### 308 redirect loop with Cloudflare
 
-If the site returns `308 Permanent Redirect` in a loop, Cloudflare's SSL mode is likely "Flexible" (connects to origin over HTTP) while nginx forces HTTPS. Fix by setting Cloudflare SSL to **"Full (Strict)"** in the dashboard → SSL/TLS → Overview. This is the recommended mode since cert-manager provides a valid Let's Encrypt certificate on the origin.
+If the site returns `308 Permanent Redirect` in a loop, Cloudflare's SSL mode is likely "Flexible" (connects to origin over HTTP) while nginx forces HTTPS. Fix by setting Cloudflare SSL to **"Full (Strict)"** in the dashboard -> SSL/TLS -> Overview. This is the recommended mode since cert-manager provides a valid Let's Encrypt certificate on the origin.
 
 ### Terraform staged apply errors
 
 If `terraform apply` fails with "no matches for kind ClusterIssuer" or "cannot create REST client", you need to apply in stages (see Section 1). This happens because:
 - Stage 1 creates the cluster (needed for kubernetes/helm providers)
-- Stage 2 installs cert-manager (needed for ClusterIssuer CRD)
-- Stage 3 creates the ClusterIssuer and DNS record
+- Stage 2 installs cert-manager and ExternalDNS (needed for ClusterIssuer CRD)
+- Stage 3 creates the ClusterIssuer and remaining resources

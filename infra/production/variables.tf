@@ -64,8 +64,8 @@ variable "cloudflare_zone_id" {
   type        = string
 }
 
-variable "domain_name" {
-  description = "DNS record name (e.g. 'api' for api.yourdomain.com)"
+variable "domain_suffix" {
+  description = "Domain suffix for convention-based DNS (<service>-<namespace>.<suffix>)"
   type        = string
 }
 

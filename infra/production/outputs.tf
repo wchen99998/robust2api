@@ -22,9 +22,9 @@ output "load_balancer_ip" {
   value       = module.kubernetes.load_balancer_ip
 }
 
-output "app_fqdn" {
-  description = "Application FQDN"
-  value       = module.dns.fqdn
+output "domain_suffix" {
+  description = "Domain suffix for services (<service>-<namespace>.<suffix>)"
+  value       = var.domain_suffix
 }
 
 # --- Database (conditional) ---
