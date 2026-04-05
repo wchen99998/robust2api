@@ -3,8 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
-	"log"
-	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -18,6 +17,10 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
+
+// runtimeStartOnce ensures runtime.Start is called at most once across all Init invocations
+// (e.g. multiple test cases that each call Init).
+var runtimeStartOnce sync.Once
 
 // Provider holds the initialized OTel providers and exposes a Shutdown method.
 type Provider struct {
@@ -109,9 +112,14 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	)
 	otel.SetMeterProvider(mp)
 
-	// Start Go runtime metrics collection (goroutines, memory, GC)
-	if err := runtime.Start(runtime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
-		return nil, fmt.Errorf("starting runtime metrics: %w", err)
+	// Start Go runtime metrics collection (goroutines, memory, GC).
+	// Guarded by sync.Once so repeated calls (e.g. in tests) don't return an error.
+	var runtimeErr error
+	runtimeStartOnce.Do(func() {
+		runtimeErr = runtime.Start(runtime.WithMinimumReadMemStatsInterval(15 * time.Second))
+	})
+	if runtimeErr != nil {
+		return nil, fmt.Errorf("starting runtime metrics: %w", runtimeErr)
 	}
 
 	return &Provider{
@@ -128,15 +136,11 @@ func ProvideOtel(cfg *config.Config) (*Provider, error) {
 }
 
 // ProvideMetricsServer is a Wire provider for the internal metrics server.
+// It only constructs the server; the caller (main.go) is responsible for starting it
+// so that no goroutine is orphaned if a later Wire provider fails.
 func ProvideMetricsServer(cfg *config.Config, provider *Provider) *MetricsServer {
 	if !cfg.Otel.Enabled {
 		return nil
 	}
-	srv := NewMetricsServer(cfg.Otel.MetricsPort, provider.PrometheusExporter())
-	go func() {
-		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
-			log.Printf("Metrics server error: %v", err)
-		}
-	}()
-	return srv
+	return NewMetricsServer(cfg.Otel.MetricsPort, provider.PrometheusExporter())
 }

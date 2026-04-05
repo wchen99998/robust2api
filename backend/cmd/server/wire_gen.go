@@ -256,8 +256,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
 	v := provideCleanup(client, redisClient, provider, metricsServer, opsMetricsCollector, opsAggregationService, opsAlertEvaluatorService, opsCleanupService, opsScheduledReportService, opsSystemLogSink, soraMediaCleanupService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService, scheduledTestRunnerService, backupService)
 	application := &Application{
-		Server:  httpServer,
-		Cleanup: v,
+		Server:        httpServer,
+		MetricsServer: metricsServer,
+		Cleanup:       v,
 	}
 	return application, nil
 }
@@ -265,8 +266,9 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 // wire.go:
 
 type Application struct {
-	Server  *http.Server
-	Cleanup func()
+	Server        *http.Server
+	MetricsServer *appelotel.MetricsServer
+	Cleanup       func()
 }
 
 func providePrivacyClientFactory() service.PrivacyClientFactory {

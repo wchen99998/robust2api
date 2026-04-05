@@ -158,6 +158,14 @@ func runMainServer() {
 		}
 	}()
 
+	if app.MetricsServer != nil {
+		go func() {
+			if err := app.MetricsServer.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+				log.Printf("Metrics server error: %v", err)
+			}
+		}()
+	}
+
 	log.Printf("Server started on %s", app.Server.Addr)
 
 	// 等待中断信号
