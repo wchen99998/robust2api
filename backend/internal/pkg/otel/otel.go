@@ -3,6 +3,8 @@ package otel
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"go.opentelemetry.io/otel"
@@ -111,4 +113,28 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 		promExporter:   promExp,
 		enabled:        true,
 	}, nil
+}
+
+// ProvideOtel is a Wire provider that initializes the OTel SDK.
+func ProvideOtel(cfg *config.Config) (*Provider, error) {
+	return Init(context.Background(), &cfg.Otel)
+}
+
+// ProvideMetrics is a Wire provider for application metrics.
+func ProvideMetrics() (*Metrics, error) {
+	return NewMetrics()
+}
+
+// ProvideMetricsServer is a Wire provider for the internal metrics server.
+func ProvideMetricsServer(cfg *config.Config, provider *Provider) *MetricsServer {
+	if !cfg.Otel.Enabled {
+		return nil
+	}
+	srv := NewMetricsServer(cfg.Otel.MetricsPort, provider.PrometheusExporter())
+	go func() {
+		if err := srv.Start(); err != nil && err != http.ErrServerClosed {
+			log.Printf("Metrics server error: %v", err)
+		}
+	}()
+	return srv
 }
