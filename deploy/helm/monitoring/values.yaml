@@ -17,7 +17,7 @@ kube-prometheus-stack:
       serviceMonitorSelectorNilUsesHelmValues: false
   grafana:
     enabled: true
-    adminPassword: ""
+    adminPassword: ""  # Set via --set grafana.adminPassword=xxx or leave empty for auto-generated
     sidecar:
       dashboards:
         enabled: true
@@ -37,6 +37,8 @@ tempo:
     storage:
       trace:
         backend: s3
+        # S3 credentials: provide via --set or use existingSecret
+        # Do NOT commit real credentials to values.yaml
         s3:
           bucket: ""
           endpoint: ""
@@ -53,6 +55,8 @@ loki:
       replication_factor: 1
     storage:
       type: s3
+      # S3 credentials: provide via --set or use existingSecret
+      # Do NOT commit real credentials to values.yaml
       s3:
         s3: ""
         region: ""

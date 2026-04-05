@@ -1,3 +1,4 @@
+{{- if .Values.alloy.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -104,3 +105,4 @@ data:
         url = "http://{{ .Release.Name }}-loki.{{ .Values.namespace }}.svc:3100/loki/api/v1/push"
       }
     }
+{{- end }}
