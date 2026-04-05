@@ -1,9 +1,9 @@
 output "fqdn" {
-  description = "Fully qualified domain name of the record"
-  value       = cloudflare_record.app.hostname
+  description = "DNS record name as created"
+  value       = cloudflare_dns_record.app.name
 }
 
 output "record_id" {
   description = "Cloudflare DNS record ID"
-  value       = cloudflare_record.app.id
+  value       = cloudflare_dns_record.app.id
 }
