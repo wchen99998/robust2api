@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -106,6 +108,11 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 		sdkmetric.WithReader(promExp),
 	)
 	otel.SetMeterProvider(mp)
+
+	// Start Go runtime metrics collection (goroutines, memory, GC)
+	if err := runtime.Start(runtime.WithMinimumReadMemStatsInterval(15 * time.Second)); err != nil {
+		return nil, fmt.Errorf("starting runtime metrics: %w", err)
+	}
 
 	return &Provider{
 		tracerProvider: tp,
