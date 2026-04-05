@@ -27,6 +27,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
@@ -110,6 +112,12 @@ func NewGatewayHandler(
 // Messages handles Claude API compatible messages endpoint
 // POST /v1/messages
 func (h *GatewayHandler) Messages(c *gin.Context) {
+	ctx := c.Request.Context()
+	tracer := otel.Tracer("sub2api.gateway")
+	ctx, span := tracer.Start(ctx, "gateway.messages")
+	defer span.End()
+	c.Request = c.Request.WithContext(ctx)
+
 	// 从context获取apiKey和user（ApiKeyAuth中间件已设置）
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
@@ -122,6 +130,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
+	span.SetAttributes(
+		attribute.Int64("user_id", subject.UserID),
+		attribute.Int64("api_key_id", apiKey.ID),
+	)
+
 	reqLog := requestLogger(
 		c,
 		"handler.gateway.messages",
@@ -156,6 +169,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
+	span.SetAttributes(
+		attribute.String("model", reqModel),
+		attribute.Bool("stream", reqStream),
+	)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射

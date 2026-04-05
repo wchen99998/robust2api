@@ -37,6 +37,8 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -4131,6 +4133,17 @@ func enforceCacheControlLimit(body []byte) []byte {
 
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
+	tracer := otel.Tracer("sub2api.gateway")
+	ctx, span := tracer.Start(ctx, "gateway.forward")
+	defer span.End()
+	if account != nil {
+		span.SetAttributes(
+			attribute.Int64("account_id", int64(account.ID)),
+			attribute.String("platform", string(account.Platform)),
+		)
+	}
+	c.Request = c.Request.WithContext(ctx)
+
 	startTime := time.Now()
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
@@ -4284,7 +4297,13 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
+		_, upstreamSpan := tracer.Start(ctx, "gateway.upstream_request")
+		upstreamSpan.SetAttributes(attribute.String("upstream_url", safeUpstreamURL(upstreamReq.URL.String())))
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+		if resp != nil {
+			upstreamSpan.SetAttributes(attribute.Int("upstream_status", resp.StatusCode))
+		}
+		upstreamSpan.End()
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
