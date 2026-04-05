@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
@@ -4599,6 +4600,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					return ""
 				}(),
 			})
+			appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -4619,6 +4621,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
+		appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
@@ -4908,6 +4911,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 					return ""
 				}(),
 			})
+			appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -4926,6 +4930,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
+		appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
@@ -5624,6 +5629,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 				Kind:               "retry_exhausted_failover",
 				Message:            extractUpstreamErrorMessage(respBody),
 			})
+			appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -5640,6 +5646,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
+		appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
@@ -7893,6 +7900,24 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if account.IsCacheTTLOverrideEnabled() {
 		applyCacheTTLOverride(&result.Usage, account.GetCacheTTLOverrideTarget())
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
+	}
+
+	// Record token metrics via OTel business metrics.
+	{
+		platform := account.Platform
+		model := result.Model
+		if result.Usage.InputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.InputTokens), "input", platform, model)
+		}
+		if result.Usage.OutputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.OutputTokens), "output", platform, model)
+		}
+		if result.Usage.CacheCreationInputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.CacheCreationInputTokens), "cache_creation", platform, model)
+		}
+		if result.Usage.CacheReadInputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.CacheReadInputTokens), "cache_read", platform, model)
+		}
 	}
 
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）
