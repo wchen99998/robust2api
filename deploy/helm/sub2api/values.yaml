@@ -124,11 +124,11 @@ ingress:
 # =============================================================================
 resources:
   requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: 500m
+    cpu: 250m
     memory: 512Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
 
 # =============================================================================
 # Scheduling
@@ -147,8 +147,15 @@ postgresql:
     password: ""
     database: sub2api
   primary:
+    resources:
+      requests:
+        cpu: 500m
+        memory: 512Mi
+      limits:
+        cpu: "2"
+        memory: 2Gi
     persistence:
-      size: 1Gi
+      size: 5Gi
 
 # -- External database (used when postgresql.enabled=false)
 externalDatabase:
@@ -169,6 +176,13 @@ redis:
     password: ""
   architecture: standalone
   master:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 256Mi
     persistence:
       size: 1Gi
 
