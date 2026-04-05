@@ -39,6 +39,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const (
@@ -4297,11 +4298,15 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
-		_, upstreamSpan := tracer.Start(ctx, "gateway.upstream_request")
+		ctx, upstreamSpan := tracer.Start(ctx, "gateway.upstream_request")
 		upstreamSpan.SetAttributes(attribute.String("upstream_url", safeUpstreamURL(upstreamReq.URL.String())))
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 		if resp != nil {
 			upstreamSpan.SetAttributes(attribute.Int("upstream_status", resp.StatusCode))
+		}
+		if err != nil {
+			upstreamSpan.RecordError(err)
+			upstreamSpan.SetStatus(codes.Error, err.Error())
 		}
 		upstreamSpan.End()
 		if err != nil {
@@ -4693,9 +4698,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	var clientDisconnect bool
+	_, responseSpan := tracer.Start(ctx, "gateway.response_transform")
 	if reqStream {
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, shouldMimicClaudeCode)
 		if err != nil {
+			responseSpan.End()
 			if err.Error() == "have error in stream" {
 				return nil, &UpstreamFailoverError{
 					StatusCode: 403,
@@ -4709,9 +4716,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	} else {
 		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel)
 		if err != nil {
+			responseSpan.End()
 			return nil, err
 		}
 	}
+	responseSpan.End()
 
 	return &ForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
