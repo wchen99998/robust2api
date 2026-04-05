@@ -23,5 +23,5 @@ func WithTraceContext(ctx context.Context, l *zap.Logger) *zap.Logger {
 
 // FromContextWithTrace returns the context logger enriched with trace context.
 func FromContextWithTrace(ctx context.Context) *zap.Logger {
-	return WithTraceContext(ctx, FromContext(ctx))
+	return FromContext(ctx)
 }

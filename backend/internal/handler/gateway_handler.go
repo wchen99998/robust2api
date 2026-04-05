@@ -119,18 +119,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	defer span.End()
 	c.Request = c.Request.WithContext(ctx)
 
-	// Record request count and duration via OTel business metrics.
-	startTime := time.Now()
-	defer func() {
-		duration := time.Since(startTime).Seconds()
-		platform := ""
-		if p, ok := c.Get("platform"); ok {
-			platform, _ = p.(string)
-		}
-		appelotel.M().RecordRequest(c.Request.Context(), c.Request.Method, c.FullPath(), c.Writer.Status(), platform)
-		appelotel.M().RecordDuration(c.Request.Context(), duration, c.Request.Method, c.FullPath(), c.Writer.Status(), platform)
-	}()
-
 	// 从context获取apiKey和user（ApiKeyAuth中间件已设置）
 	ctx, authSpan := tracer.Start(ctx, "gateway.authenticate")
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)

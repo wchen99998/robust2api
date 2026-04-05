@@ -121,7 +121,7 @@ data:
         {
           "title": "Account Failovers",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+          "gridPos": { "h": 4, "w": 12, "x": 0, "y": 16 },
           "datasource": { "type": "prometheus" },
           "targets": [
             {
@@ -133,36 +133,12 @@ data:
         {
           "title": "Rate Limit Rejections",
           "type": "stat",
-          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 16 },
+          "gridPos": { "h": 4, "w": 12, "x": 12, "y": 16 },
           "datasource": { "type": "prometheus" },
           "targets": [
             {
               "expr": "sum(increase(sub2api_ratelimit_rejections_total[1h]))",
               "legendFormat": "Last Hour"
-            }
-          ]
-        },
-        {
-          "title": "Concurrency Queue Depth",
-          "type": "gauge",
-          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
-          "datasource": { "type": "prometheus" },
-          "targets": [
-            {
-              "expr": "sub2api_concurrency_queue_depth",
-              "legendFormat": "Queue Depth"
-            }
-          ]
-        },
-        {
-          "title": "Active Upstream Accounts",
-          "type": "stat",
-          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
-          "datasource": { "type": "prometheus" },
-          "targets": [
-            {
-              "expr": "sum(sub2api_upstream_accounts_active) by (platform)",
-              "legendFormat": "{{ "{{" }}platform{{ "}}" }}"
             }
           ]
         }
@@ -184,7 +160,7 @@ data:
           "datasource": { "type": "prometheus" },
           "targets": [
             {
-              "expr": "process_runtime_go_goroutines{job=~\".*sub2api.*\"}",
+              "expr": "go_goroutine_count{job=~\".*sub2api.*\"}",
               "legendFormat": "Goroutines"
             }
           ]
@@ -196,36 +172,24 @@ data:
           "datasource": { "type": "prometheus" },
           "targets": [
             {
-              "expr": "process_runtime_go_mem_heap_alloc_bytes{job=~\".*sub2api.*\"} / 1024 / 1024",
-              "legendFormat": "Heap Alloc (MB)"
+              "expr": "sum(go_memory_used_bytes{job=~\".*sub2api.*\"}) by (memory_type) / 1024 / 1024",
+              "legendFormat": "{{ "{{" }}memory_type{{ "}}" }} Used (MB)"
             },
             {
-              "expr": "process_runtime_go_mem_heap_sys_bytes{job=~\".*sub2api.*\"} / 1024 / 1024",
-              "legendFormat": "Heap Sys (MB)"
+              "expr": "sum(go_memory_gc_goal_bytes{job=~\".*sub2api.*\"}) / 1024 / 1024",
+              "legendFormat": "GC Goal (MB)"
             }
           ]
         },
         {
           "title": "GC Pause Duration",
           "type": "timeseries",
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
           "datasource": { "type": "prometheus" },
           "targets": [
             {
-              "expr": "rate(process_runtime_go_gc_pause_ns_total{job=~\".*sub2api.*\"}[5m]) / 1e6",
+              "expr": "rate(go_gc_duration_seconds_sum{job=~\".*sub2api.*\"}[5m]) * 1000",
               "legendFormat": "GC Pause (ms/s)"
-            }
-          ]
-        },
-        {
-          "title": "Concurrency Queue Depth",
-          "type": "timeseries",
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-          "datasource": { "type": "prometheus" },
-          "targets": [
-            {
-              "expr": "sub2api_concurrency_queue_depth",
-              "legendFormat": "Queue Depth"
             }
           ]
         }

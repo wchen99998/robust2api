@@ -23,6 +23,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
 	"github.com/cespare/xxhash/v2"
@@ -4230,6 +4231,14 @@ type OpenAIRecordUsageInput struct {
 // RecordUsage records usage and deducts balance
 func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRecordUsageInput) error {
 	result := input.Result
+	account := input.Account
+	platform := ""
+	if account != nil {
+		platform = account.Platform
+	}
+	if result.FirstTokenMs != nil && *result.FirstTokenMs > 0 {
+		appelotel.M().RecordTTFT(ctx, float64(*result.FirstTokenMs)/1000, platform, result.Model)
+	}
 
 	// 跳过所有 token 均为零的用量记录——上游未返回 usage 时不应写入数据库
 	if result.Usage.InputTokens == 0 && result.Usage.OutputTokens == 0 &&
@@ -4237,9 +4246,21 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		return nil
 	}
 
+	if result.Usage.InputTokens > 0 {
+		appelotel.M().RecordTokens(ctx, int64(result.Usage.InputTokens), "input", platform, result.Model)
+	}
+	if result.Usage.OutputTokens > 0 {
+		appelotel.M().RecordTokens(ctx, int64(result.Usage.OutputTokens), "output", platform, result.Model)
+	}
+	if result.Usage.CacheCreationInputTokens > 0 {
+		appelotel.M().RecordTokens(ctx, int64(result.Usage.CacheCreationInputTokens), "cache_creation", platform, result.Model)
+	}
+	if result.Usage.CacheReadInputTokens > 0 {
+		appelotel.M().RecordTokens(ctx, int64(result.Usage.CacheReadInputTokens), "cache_read", platform, result.Model)
+	}
+
 	apiKey := input.APIKey
 	user := input.User
-	account := input.Account
 	subscription := input.Subscription
 
 	// 计算实际的新输入token（减去缓存读取的token）

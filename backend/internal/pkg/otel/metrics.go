@@ -2,6 +2,7 @@ package otel
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"go.opentelemetry.io/otel"
@@ -124,60 +125,58 @@ func NewMetrics() (*Metrics, error) {
 }
 
 func (m *Metrics) RecordRequest(ctx context.Context, method, route string, status int, platform string) {
+	attrs := []attribute.KeyValue{
+		attribute.Int("http.status_code", status),
+	}
+	attrs = appendOptionalStringAttr(attrs, "http.method", method)
+	attrs = appendOptionalStringAttr(attrs, "http.route", route)
+	attrs = appendOptionalStringAttr(attrs, "platform", platform)
 	m.httpRequestsTotal.Add(ctx, 1,
-		metric.WithAttributes(
-			attribute.String("http.method", method),
-			attribute.String("http.route", route),
-			attribute.Int("http.status_code", status),
-			attribute.String("platform", platform),
-		),
+		metric.WithAttributes(attrs...),
 	)
 }
 
 func (m *Metrics) RecordDuration(ctx context.Context, durationSec float64, method, route string, status int, platform string) {
+	attrs := []attribute.KeyValue{
+		attribute.Int("http.status_code", status),
+	}
+	attrs = appendOptionalStringAttr(attrs, "http.method", method)
+	attrs = appendOptionalStringAttr(attrs, "http.route", route)
+	attrs = appendOptionalStringAttr(attrs, "platform", platform)
 	m.httpRequestDuration.Record(ctx, durationSec,
-		metric.WithAttributes(
-			attribute.String("http.method", method),
-			attribute.String("http.route", route),
-			attribute.Int("http.status_code", status),
-			attribute.String("platform", platform),
-		),
+		metric.WithAttributes(attrs...),
 	)
 }
 
 func (m *Metrics) RecordTTFT(ctx context.Context, ttftSec float64, platform, model string) {
+	attrs := appendOptionalStringAttr(nil, "platform", platform)
+	attrs = appendOptionalStringAttr(attrs, "model", model)
 	m.httpRequestTTFT.Record(ctx, ttftSec,
-		metric.WithAttributes(
-			attribute.String("platform", platform),
-			attribute.String("model", model),
-		),
+		metric.WithAttributes(attrs...),
 	)
 }
 
 func (m *Metrics) RecordTokens(ctx context.Context, count int64, direction, platform, model string) {
+	attrs := appendOptionalStringAttr(nil, "direction", direction)
+	attrs = appendOptionalStringAttr(attrs, "platform", platform)
+	attrs = appendOptionalStringAttr(attrs, "model", model)
 	m.tokensTotal.Add(ctx, count,
-		metric.WithAttributes(
-			attribute.String("direction", direction),
-			attribute.String("platform", platform),
-			attribute.String("model", model),
-		),
+		metric.WithAttributes(attrs...),
 	)
 }
 
 func (m *Metrics) RecordUpstreamError(ctx context.Context, platform, errorKind string) {
+	attrs := appendOptionalStringAttr(nil, "platform", platform)
+	attrs = appendOptionalStringAttr(attrs, "error_kind", errorKind)
 	m.upstreamErrorsTotal.Add(ctx, 1,
-		metric.WithAttributes(
-			attribute.String("platform", platform),
-			attribute.String("error_kind", errorKind),
-		),
+		metric.WithAttributes(attrs...),
 	)
 }
 
 func (m *Metrics) RecordAccountFailover(ctx context.Context, platform string) {
+	attrs := appendOptionalStringAttr(nil, "platform", platform)
 	m.accountFailoversTotal.Add(ctx, 1,
-		metric.WithAttributes(
-			attribute.String("platform", platform),
-		),
+		metric.WithAttributes(attrs...),
 	)
 }
 
@@ -194,9 +193,15 @@ func (m *Metrics) SetConcurrencyQueueDepth(ctx context.Context, depth int64) {
 }
 
 func (m *Metrics) SetUpstreamAccountsActive(ctx context.Context, count int64, platform string) {
+	attrs := appendOptionalStringAttr(nil, "platform", platform)
 	m.upstreamAccountsActive.Record(ctx, count,
-		metric.WithAttributes(
-			attribute.String("platform", platform),
-		),
+		metric.WithAttributes(attrs...),
 	)
+}
+
+func appendOptionalStringAttr(attrs []attribute.KeyValue, key, value string) []attribute.KeyValue {
+	if value = strings.TrimSpace(value); value == "" {
+		return attrs
+	}
+	return append(attrs, attribute.String(key, value))
 }

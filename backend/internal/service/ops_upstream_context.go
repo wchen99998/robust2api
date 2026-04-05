@@ -2,9 +2,12 @@ package service
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/gin-gonic/gin"
 )
 
@@ -66,6 +69,7 @@ func setOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage
 	}
 	if upstreamStatusCode > 0 {
 		c.Set(OpsUpstreamStatusCodeKey, upstreamStatusCode)
+		recordOpsUpstreamMetric(c, upstreamStatusCode)
 	}
 	if msg := strings.TrimSpace(upstreamMessage); msg != "" {
 		c.Set(OpsUpstreamErrorMessageKey, msg)
@@ -73,6 +77,21 @@ func setOpsUpstreamError(c *gin.Context, upstreamStatusCode int, upstreamMessage
 	if detail := strings.TrimSpace(upstreamDetail); detail != "" {
 		c.Set(OpsUpstreamErrorDetailKey, detail)
 	}
+}
+
+func recordOpsUpstreamMetric(c *gin.Context, upstreamStatusCode int) {
+	if c == nil || upstreamStatusCode <= 0 || c.Request == nil {
+		return
+	}
+
+	platform, _ := c.Request.Context().Value(ctxkey.Platform).(string)
+	platform = strings.TrimSpace(platform)
+	if platform == "" {
+		platform, _ = c.Request.Context().Value(ctxkey.ForcePlatform).(string)
+		platform = strings.TrimSpace(platform)
+	}
+
+	appelotel.M().RecordUpstreamError(c.Request.Context(), platform, strconv.Itoa(upstreamStatusCode))
 }
 
 // OpsUpstreamErrorEvent describes one upstream error attempt during a single gateway request.

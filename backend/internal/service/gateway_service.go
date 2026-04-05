@@ -7906,6 +7906,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	{
 		platform := account.Platform
 		model := result.Model
+		if result.FirstTokenMs != nil && *result.FirstTokenMs > 0 {
+			appelotel.M().RecordTTFT(ctx, float64(*result.FirstTokenMs)/1000, platform, model)
+		}
 		if result.Usage.InputTokens > 0 {
 			appelotel.M().RecordTokens(ctx, int64(result.Usage.InputTokens), "input", platform, model)
 		}

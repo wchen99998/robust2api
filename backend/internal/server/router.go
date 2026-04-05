@@ -57,6 +57,7 @@ func SetupRouter(
 	if cfg.Otel.Enabled {
 		r.Use(otelgin.Middleware("sub2api"))
 		r.Use(middleware2.TraceIDHeader())
+		r.Use(middleware2.RequestMetrics())
 	}
 	r.Use(middleware2.CORS(cfg.CORS))
 	r.Use(middleware2.SecurityHeaders(cfg.Security.CSP, func() []string {
