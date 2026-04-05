@@ -36,7 +36,7 @@ output "database_host" {
 
 output "database_port" {
   description = "Managed PostgreSQL port (empty if disabled)"
-  value       = var.enable_managed_database ? module.database[0].port : ""
+  value       = var.enable_managed_database ? tostring(module.database[0].port) : ""
 }
 
 output "database_user" {
