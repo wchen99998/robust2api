@@ -1,0 +1,73 @@
+## Namespace for monitoring stack
+namespace: monitoring
+
+## kube-prometheus-stack (Prometheus + Grafana + Alertmanager)
+kube-prometheus-stack:
+  enabled: true
+  prometheus:
+    prometheusSpec:
+      retention: 15d
+      storageSpec:
+        volumeClaimTemplate:
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 50Gi
+      serviceMonitorSelectorNilUsesHelmValues: false
+  grafana:
+    enabled: true
+    adminPassword: ""
+    sidecar:
+      dashboards:
+        enabled: true
+        label: grafana_dashboard
+      datasources:
+        enabled: true
+        label: grafana_datasource
+    ingress:
+      enabled: false
+  alertmanager:
+    enabled: true
+
+## Grafana Tempo (distributed tracing)
+tempo:
+  enabled: true
+  tempo:
+    storage:
+      trace:
+        backend: s3
+        s3:
+          bucket: ""
+          endpoint: ""
+          access_key: ""
+          secret_key: ""
+    retention: 720h
+
+## Grafana Loki (log aggregation)
+loki:
+  enabled: true
+  deploymentMode: SingleBinary
+  loki:
+    commonConfig:
+      replication_factor: 1
+    storage:
+      type: s3
+      s3:
+        s3: ""
+        region: ""
+    limits_config:
+      retention_period: 720h
+  singleBinary:
+    replicas: 1
+    persistence:
+      size: 10Gi
+
+## Grafana Alloy (unified collection agent)
+alloy:
+  enabled: true
+  alloy:
+    configMap:
+      create: false
+      name: alloy-config
+      key: config.alloy
