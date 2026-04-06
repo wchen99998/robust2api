@@ -97,7 +97,7 @@ func getOrCreateGeneratedSecuritySecret(ctx context.Context, client *ent.Client,
 	return value, value == generated, nil
 }
 
-func createSecuritySecretIfAbsent(ctx context.Context, client *ent.Client, key, value string) (string, error) {
+func CreateSecuritySecretIfAbsent(ctx context.Context, client *ent.Client, key, value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if len([]byte(value)) < 32 {
 		return "", fmt.Errorf("secret %q must be at least 32 bytes", key)
@@ -123,6 +123,10 @@ func createSecuritySecretIfAbsent(ctx context.Context, client *ent.Client, key, 
 		return "", fmt.Errorf("stored secret %q must be at least 32 bytes", key)
 	}
 	return storedValue, nil
+}
+
+func createSecuritySecretIfAbsent(ctx context.Context, client *ent.Client, key, value string) (string, error) {
+	return CreateSecuritySecretIfAbsent(ctx, client, key, value)
 }
 
 func querySecuritySecretWithRetry(ctx context.Context, client *ent.Client, key string) (*ent.SecuritySecret, error) {

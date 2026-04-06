@@ -80,14 +80,11 @@ secrets:
 extraSecretEnv: {}
 
 # =============================================================================
-# Persistence (/app/data volume)
+# Bootstrap Job
 # =============================================================================
-persistence:
-  enabled: true
-  size: 1Gi
-  storageClass: ""
-  accessModes:
-    - ReadWriteOnce
+bootstrap:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 300
 
 # =============================================================================
 # Service

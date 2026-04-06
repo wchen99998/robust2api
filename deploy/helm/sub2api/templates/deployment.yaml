@@ -6,10 +6,6 @@ metadata:
     {{- include "sub2api.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
-  {{- if and .Values.persistence.enabled (eq (int .Values.replicaCount) 1) }}
-  strategy:
-    type: Recreate
-  {{- end }}
   selector:
     matchLabels:
       {{- include "sub2api.selectorLabels" . | nindent 6 }}
@@ -70,17 +66,6 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
-          {{- if .Values.persistence.enabled }}
-          volumeMounts:
-            - name: data
-              mountPath: /app/data
-          {{- end }}
-      {{- if .Values.persistence.enabled }}
-      volumes:
-        - name: data
-          persistentVolumeClaim:
-            claimName: {{ include "sub2api.fullname" . }}
-      {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

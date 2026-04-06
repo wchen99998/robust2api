@@ -13,19 +13,7 @@ func resetViperWithJWTSecret(t *testing.T) {
 	t.Helper()
 	viper.Reset()
 	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
-}
-
-func TestLoadForBootstrapAllowsMissingJWTSecret(t *testing.T) {
-	viper.Reset()
-	t.Setenv("JWT_SECRET", "")
-
-	cfg, err := LoadForBootstrap()
-	if err != nil {
-		t.Fatalf("LoadForBootstrap() error: %v", err)
-	}
-	if cfg.JWT.Secret != "" {
-		t.Fatalf("LoadForBootstrap() should keep empty jwt.secret during bootstrap")
-	}
+	t.Setenv("TOTP_ENCRYPTION_KEY", strings.Repeat("a", 64))
 }
 
 func TestNormalizeRunMode(t *testing.T) {
@@ -838,6 +826,20 @@ func TestValidateJWTSecret_UTF8Bytes(t *testing.T) {
 	}
 }
 
+func TestLoadRequiresTotpEncryptionKey(t *testing.T) {
+	viper.Reset()
+	t.Setenv("JWT_SECRET", strings.Repeat("x", 32))
+	t.Setenv("TOTP_ENCRYPTION_KEY", "")
+
+	_, err := Load()
+	if err == nil {
+		t.Fatal("Load() should reject missing TOTP encryption key")
+	}
+	if !strings.Contains(err.Error(), "totp.encryption_key is required") {
+		t.Fatalf("Load() error = %v", err)
+	}
+}
+
 func TestValidateConfigErrors(t *testing.T) {
 	buildValid := func(t *testing.T) *Config {
 		t.Helper()
@@ -863,6 +865,21 @@ func TestValidateConfigErrors(t *testing.T) {
 			name:    "jwt secret min bytes",
 			mutate:  func(c *Config) { c.JWT.Secret = strings.Repeat("a", 31) },
 			wantErr: "jwt.secret must be at least 32 bytes",
+		},
+		{
+			name:    "totp encryption key required",
+			mutate:  func(c *Config) { c.Totp.EncryptionKey = "" },
+			wantErr: "totp.encryption_key is required",
+		},
+		{
+			name:    "totp encryption key valid hex",
+			mutate:  func(c *Config) { c.Totp.EncryptionKey = "not-hex" },
+			wantErr: "totp.encryption_key must be valid hex",
+		},
+		{
+			name:    "totp encryption key length",
+			mutate:  func(c *Config) { c.Totp.EncryptionKey = strings.Repeat("a", 62) },
+			wantErr: "totp.encryption_key must be 32 bytes (64 hex chars)",
 		},
 		{
 			name:    "subscription maintenance worker_count non-negative",

@@ -5,7 +5,6 @@ metadata:
   labels:
     {{- include "sub2api.labels" . | nindent 4 }}
 data:
-  AUTO_SETUP: "true"
   SERVER_HOST: "0.0.0.0"
   SERVER_PORT: {{ .Values.config.serverPort | quote }}
   SERVER_MODE: {{ .Values.config.serverMode | quote }}

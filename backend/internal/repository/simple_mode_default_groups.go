@@ -9,7 +9,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
 
-func ensureSimpleModeDefaultGroups(ctx context.Context, client *dbent.Client) error {
+func EnsureSimpleModeDefaultGroups(ctx context.Context, client *dbent.Client) error {
 	if client == nil {
 		return fmt.Errorf("nil ent client")
 	}
