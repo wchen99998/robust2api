@@ -27,21 +27,17 @@ kube-prometheus-stack:
         enabled: true
         label: grafana_datasource
     ingress:
-      enabled: false  # Enable via --set, see below
-      ingressClassName: nginx
-      annotations:
-        cert-manager.io/cluster-issuer: letsencrypt-prod
-        external-dns.alpha.kubernetes.io/cloudflare-proxied: "true"
-      # Deploy with:
-      #   --set kube-prometheus-stack.grafana.ingress.enabled=true
-      #   --set kube-prometheus-stack.grafana.ingress.hosts[0]=grafana.<domain_suffix>
-      #   --set 'kube-prometheus-stack.grafana.ingress.annotations.external-dns\.alpha\.kubernetes\.io/hostname=grafana.<domain_suffix>'
-      #   --set kube-prometheus-stack.grafana.ingress.tls[0].secretName=grafana-tls
-      #   --set kube-prometheus-stack.grafana.ingress.tls[0].hosts[0]=grafana.<domain_suffix>
-      hosts: []
-      tls: []
+      enabled: false  # Managed by grafanaIngress below, not here
   alertmanager:
     enabled: true
+
+## Grafana Ingress (external access)
+## Set host to enable: --set grafanaIngress.host=grafana.<domain_suffix>
+grafanaIngress:
+  host: ""                    # Empty = ingress disabled
+  className: nginx
+  clusterIssuer: letsencrypt-prod
+  cloudflareProxied: "true"
 
 ## Grafana Tempo (distributed tracing)
 tempo:

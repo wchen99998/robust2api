@@ -312,21 +312,17 @@ helm upgrade sub2api deploy/helm/sub2api \
 
 ### Expose Grafana Externally (Optional)
 
-To expose Grafana with a public domain, TLS, and automatic DNS via ExternalDNS:
+To expose Grafana with a public domain, TLS, and automatic DNS via ExternalDNS, add `grafanaIngress.host` to the deploy command:
 
 ```bash
-GRAFANA_HOST="grafana.<domain_suffix>"   # e.g. grafana.wuhao99.com
-
 helm upgrade monitoring deploy/helm/monitoring \
   --namespace monitoring --reuse-values \
-  --set 'kube-prometheus-stack.grafana.ingress.enabled=true' \
-  --set "kube-prometheus-stack.grafana.ingress.hosts[0]=$GRAFANA_HOST" \
-  --set "kube-prometheus-stack.grafana.ingress.annotations.external-dns\.alpha\.kubernetes\.io/hostname=$GRAFANA_HOST" \
-  --set 'kube-prometheus-stack.grafana.ingress.tls[0].secretName=grafana-tls' \
-  --set "kube-prometheus-stack.grafana.ingress.tls[0].hosts[0]=$GRAFANA_HOST"
+  --set grafanaIngress.host=grafana.<domain_suffix>
 ```
 
-This uses the same ingress-nginx + cert-manager + ExternalDNS stack as the main application. The certificate is auto-provisioned via Let's Encrypt.
+This creates an Ingress with ingress-nginx, cert-manager (Let's Encrypt), and ExternalDNS — same stack as the main application. The TLS certificate is auto-provisioned.
+
+> **Note:** On first enable with `--reuse-values`, you must also pass `--set grafanaIngress.className=nginx --set grafanaIngress.clusterIssuer=letsencrypt-prod --set-string grafanaIngress.cloudflareProxied=true` since these defaults don't exist in the prior release. Subsequent upgrades will reuse them.
 
 ### Accessing the Monitoring UIs
 

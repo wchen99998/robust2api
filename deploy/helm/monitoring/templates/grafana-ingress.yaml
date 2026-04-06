@@ -1,0 +1,28 @@
+{{- if .Values.grafanaIngress.host }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: grafana
+  namespace: {{ .Values.namespace }}
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.grafanaIngress.clusterIssuer }}
+    external-dns.alpha.kubernetes.io/hostname: {{ .Values.grafanaIngress.host }}
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ .Values.grafanaIngress.cloudflareProxied | quote }}
+spec:
+  ingressClassName: {{ .Values.grafanaIngress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.grafanaIngress.host | quote }}
+      secretName: grafana-tls
+  rules:
+    - host: {{ .Values.grafanaIngress.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ .Release.Name }}-grafana
+                port:
+                  number: 80
+{{- end }}
