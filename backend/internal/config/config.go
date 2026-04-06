@@ -82,6 +82,7 @@ type Config struct {
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
+	Otel                    OtelConfig                    `mapstructure:"otel"`
 }
 
 type LogConfig struct {
@@ -162,6 +163,14 @@ type IdempotencyConfig struct {
 	CleanupIntervalSeconds int `mapstructure:"cleanup_interval_seconds"`
 	// CleanupBatchSize 每次清理的最大记录数。
 	CleanupBatchSize int `mapstructure:"cleanup_batch_size"`
+}
+
+type OtelConfig struct {
+	Enabled         bool    `mapstructure:"enabled"`
+	ServiceName     string  `mapstructure:"service_name"`
+	Endpoint        string  `mapstructure:"endpoint"`
+	TraceSampleRate float64 `mapstructure:"trace_sample_rate"`
+	MetricsPort     int     `mapstructure:"metrics_port"`
 }
 
 type LinuxDoConnectConfig struct {
@@ -1396,6 +1405,13 @@ func setDefaults() {
 	// Subscription Maintenance (bounded queue + worker pool)
 	viper.SetDefault("subscription_maintenance.worker_count", 2)
 	viper.SetDefault("subscription_maintenance.queue_size", 1024)
+
+	// OpenTelemetry
+	viper.SetDefault("otel.enabled", false)
+	viper.SetDefault("otel.service_name", "sub2api")
+	viper.SetDefault("otel.endpoint", "http://alloy.monitoring.svc:4318")
+	viper.SetDefault("otel.trace_sample_rate", 0.1)
+	viper.SetDefault("otel.metrics_port", 9090)
 
 }
 

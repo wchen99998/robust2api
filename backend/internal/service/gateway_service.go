@@ -26,6 +26,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
@@ -37,6 +38,9 @@ import (
 	"golang.org/x/sync/singleflight"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const (
@@ -3844,6 +3848,17 @@ func enforceCacheControlLimit(body []byte) []byte {
 
 // Forward 转发请求到Claude API
 func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *Account, parsed *ParsedRequest) (*ForwardResult, error) {
+	tracer := otel.Tracer("sub2api.gateway")
+	ctx, span := tracer.Start(ctx, "gateway.forward")
+	defer span.End()
+	if account != nil {
+		span.SetAttributes(
+			attribute.Int64("account_id", int64(account.ID)),
+			attribute.String("platform", string(account.Platform)),
+		)
+	}
+	c.Request = c.Request.WithContext(ctx)
+
 	startTime := time.Now()
 	if parsed == nil {
 		return nil, fmt.Errorf("parse request: empty request")
@@ -3997,7 +4012,17 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
+		_, upstreamSpan := tracer.Start(ctx, "gateway.upstream_request")
+		upstreamSpan.SetAttributes(attribute.String("upstream_url", safeUpstreamURL(upstreamReq.URL.String())))
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+		if resp != nil {
+			upstreamSpan.SetAttributes(attribute.Int("upstream_status", resp.StatusCode))
+		}
+		if err != nil {
+			upstreamSpan.RecordError(err)
+			upstreamSpan.SetStatus(codes.Error, err.Error())
+		}
+		upstreamSpan.End()
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
@@ -4288,6 +4313,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 					return ""
 				}(),
 			})
+			appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -4308,6 +4334,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
+		appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
@@ -4387,9 +4414,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	var usage *ClaudeUsage
 	var firstTokenMs *int
 	var clientDisconnect bool
+	_, responseSpan := tracer.Start(ctx, "gateway.response_transform")
 	if reqStream {
 		streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, reqModel, shouldMimicClaudeCode)
 		if err != nil {
+			responseSpan.End()
 			if err.Error() == "have error in stream" {
 				return nil, &UpstreamFailoverError{
 					StatusCode: 403,
@@ -4403,9 +4432,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 	} else {
 		usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, reqModel)
 		if err != nil {
+			responseSpan.End()
 			return nil, err
 		}
 	}
+	responseSpan.End()
 
 	return &ForwardResult{
 		RequestID:        resp.Header.Get("x-request-id"),
@@ -4593,6 +4624,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 					return ""
 				}(),
 			})
+			appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -4611,6 +4643,7 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
+		appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
@@ -5309,6 +5342,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 				Kind:               "retry_exhausted_failover",
 				Message:            extractUpstreamErrorMessage(respBody),
 			})
+			appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 			return nil, &UpstreamFailoverError{
 				StatusCode:             resp.StatusCode,
 				ResponseBody:           respBody,
@@ -5325,6 +5359,7 @@ func (s *GatewayService) handleBedrockUpstreamErrors(
 		resp.Body = io.NopCloser(bytes.NewReader(respBody))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
+		appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
 			AccountID:          account.ID,
@@ -7572,6 +7607,27 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if account.IsCacheTTLOverrideEnabled() {
 		applyCacheTTLOverride(&result.Usage, account.GetCacheTTLOverrideTarget())
 		cacheTTLOverridden = (result.Usage.CacheCreation5mTokens + result.Usage.CacheCreation1hTokens) > 0
+	}
+
+	// Record token metrics via OTel business metrics.
+	{
+		platform := account.Platform
+		model := result.Model
+		if result.FirstTokenMs != nil && *result.FirstTokenMs > 0 {
+			appelotel.M().RecordTTFT(ctx, float64(*result.FirstTokenMs)/1000, platform, model)
+		}
+		if result.Usage.InputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.InputTokens), "input", platform, model)
+		}
+		if result.Usage.OutputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.OutputTokens), "output", platform, model)
+		}
+		if result.Usage.CacheCreationInputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.CacheCreationInputTokens), "cache_creation", platform, model)
+		}
+		if result.Usage.CacheReadInputTokens > 0 {
+			appelotel.M().RecordTokens(ctx, int64(result.Usage.CacheReadInputTokens), "cache_read", platform, model)
+		}
 	}
 
 	// 获取费率倍数（优先级：用户专属 > 分组默认 > 系统默认）

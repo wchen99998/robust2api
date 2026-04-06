@@ -524,7 +524,7 @@ func FromContext(ctx context.Context) *zap.Logger {
 		return L()
 	}
 	if l, ok := ctx.Value(loggerContextKey).(*zap.Logger); ok && l != nil {
-		return l
+		return WithTraceContext(ctx, l)
 	}
-	return L()
+	return WithTraceContext(ctx, L())
 }

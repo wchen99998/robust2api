@@ -22,11 +22,14 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
@@ -110,18 +113,37 @@ func NewGatewayHandler(
 // Messages handles Claude API compatible messages endpoint
 // POST /v1/messages
 func (h *GatewayHandler) Messages(c *gin.Context) {
+	ctx := c.Request.Context()
+	tracer := otel.Tracer("sub2api.gateway")
+	ctx, span := tracer.Start(ctx, "gateway.messages")
+	defer span.End()
+	c.Request = c.Request.WithContext(ctx)
+
 	// 从context获取apiKey和user（ApiKeyAuth中间件已设置）
+	_, authSpan := tracer.Start(ctx, "gateway.authenticate")
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
+		authSpan.End()
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
 
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
+		authSpan.End()
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
+	authSpan.SetAttributes(
+		attribute.Int64("user_id", subject.UserID),
+		attribute.Int64("api_key_id", apiKey.ID),
+	)
+	authSpan.End()
+	span.SetAttributes(
+		attribute.Int64("user_id", subject.UserID),
+		attribute.Int64("api_key_id", apiKey.ID),
+	)
+
 	reqLog := requestLogger(
 		c,
 		"handler.gateway.messages",
@@ -156,6 +178,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
+	span.SetAttributes(
+		attribute.String("model", reqModel),
+		attribute.Bool("stream", reqStream),
+	)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射
@@ -209,6 +235,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		// On error, allow request to proceed
 	} else if !canWait {
 		reqLog.Info("gateway.user_wait_queue_full", zap.Int("max_wait", maxWait))
+		appelotel.M().RecordRateLimitRejection(c.Request.Context(), "user_wait_queue")
 		h.errorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
 		return
 	}
@@ -241,12 +268,15 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	// 2. 【新增】Wait后二次检查余额/订阅
+	_, rateLimitSpan := tracer.Start(c.Request.Context(), "gateway.rate_limit")
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+		rateLimitSpan.End()
 		reqLog.Info("gateway.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message := billingErrorDetails(err)
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+	rateLimitSpan.End()
 
 	// 计算粘性会话hash
 	parsedReq.SessionContext = &service.SessionContext{
@@ -263,6 +293,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	} else if apiKey.Group != nil {
 		platform = apiKey.Group.Platform
 	}
+	c.Set("platform", platform)
 	sessionKey := sessionHash
 	if platform == service.PlatformGemini && sessionHash != "" {
 		sessionKey = "gemini:" + sessionHash
@@ -353,6 +384,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Int64("account_id", account.ID),
 						zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
 					)
+					appelotel.M().RecordRateLimitRejection(c.Request.Context(), "account_wait_queue")
 					h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
 					return
 				}
@@ -468,6 +500,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 			h.submitUsageRecordTask(func(ctx context.Context) {
+				usageTracer := otel.Tracer("sub2api.gateway")
+				_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					APIKey:             apiKey,
@@ -492,6 +526,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Int64("account_id", account.ID),
 					).Error("gateway.record_usage_failed", zap.Error(err))
 				}
+				usageSpan.End()
 			})
 			return
 		}
@@ -518,8 +553,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 		for {
 			// 选择支持该模型的账号
+			_, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
 			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, parsedReq.MetadataUserID, int64(0))
 			if err != nil {
+				selectSpan.End()
 				if len(fs.FailedAccountIDs) == 0 {
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
@@ -542,6 +579,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 			account := selection.Account
+			selectSpan.SetAttributes(
+				attribute.Int64("account_id", int64(account.ID)),
+				attribute.String("platform", string(account.Platform)),
+			)
+			selectSpan.End()
 			setOpsSelectedAccount(c, account.ID, account.Platform)
 
 			// 检查请求拦截（预热请求、SUGGESTION MODE等）
@@ -576,6 +618,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Int64("account_id", account.ID),
 						zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
 					)
+					appelotel.M().RecordRateLimitRejection(c.Request.Context(), "account_wait_queue")
 					h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later", streamStarted)
 					return
 				}
@@ -808,6 +851,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
 			h.submitUsageRecordTask(func(ctx context.Context) {
+				usageTracer := otel.Tracer("sub2api.gateway")
+				_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
 					APIKey:             currentAPIKey,
@@ -832,6 +877,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Int64("account_id", account.ID),
 					).Error("gateway.record_usage_failed", zap.Error(err))
 				}
+				usageSpan.End()
 			})
 			return
 		}
@@ -1218,6 +1264,7 @@ func (h *GatewayHandler) calculateSubscriptionRemaining(group *service.Group, su
 
 // handleConcurrencyError handles concurrency-related errors with proper 429 response
 func (h *GatewayHandler) handleConcurrencyError(c *gin.Context, err error, slotType string, streamStarted bool) {
+	appelotel.M().RecordRateLimitRejection(c.Request.Context(), "concurrency_"+slotType)
 	h.handleStreamingAwareError(c, http.StatusTooManyRequests, "rate_limit_error",
 		fmt.Sprintf("Concurrency limit exceeded for %s, please retry later", slotType), streamStarted)
 }

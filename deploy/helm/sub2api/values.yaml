@@ -192,3 +192,16 @@ externalRedis:
   port: 6379
   password: ""
   enableTLS: false
+
+## Observability (OpenTelemetry + Prometheus metrics)
+observability:
+  enabled: false
+  otel:
+    serviceName: "sub2api"
+    endpoint: "http://alloy.monitoring.svc.cluster.local:4318"
+    traceSampleRate: "0.1"
+    metricsPort: 9090
+  serviceMonitor:
+    enabled: false
+    interval: 15s
+    labels: {}

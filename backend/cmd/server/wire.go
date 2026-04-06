@@ -13,6 +13,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/server"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -23,14 +24,18 @@ import (
 )
 
 type Application struct {
-	Server  *http.Server
-	Cleanup func()
+	Server        *http.Server
+	MetricsServer *appelotel.MetricsServer
+	Cleanup       func()
 }
 
 func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 	wire.Build(
 		// Infrastructure layer ProviderSets
 		config.ProviderSet,
+
+		// OpenTelemetry providers
+		appelotel.ProviderSet,
 
 		// Business layer ProviderSets
 		repository.ProviderSet,
@@ -51,7 +56,7 @@ func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
 		provideCleanup,
 
 		// Application struct
-		wire.Struct(new(Application), "Server", "Cleanup"),
+		wire.Struct(new(Application), "Server", "MetricsServer", "Cleanup"),
 	)
 	return nil, nil
 }
@@ -70,6 +75,8 @@ func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
 func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
+	otelProvider *appelotel.Provider,
+	metricsServer *appelotel.MetricsServer,
 	opsMetricsCollector *service.OpsMetricsCollector,
 	opsAggregation *service.OpsAggregationService,
 	opsAlertEvaluator *service.OpsAlertEvaluatorService,
@@ -283,6 +290,19 @@ func provideCleanup(
 		}
 
 		runParallel(parallelSteps)
+
+		// Shutdown OTel after services stop (flushes remaining spans/metrics)
+		if otelProvider != nil {
+			if err := otelProvider.Shutdown(ctx); err != nil {
+				log.Printf("OTel provider shutdown error: %v", err)
+			}
+		}
+		if metricsServer != nil {
+			if err := metricsServer.Shutdown(ctx); err != nil {
+				log.Printf("Metrics server shutdown error: %v", err)
+			}
+		}
+
 		runSequential(infraSteps)
 
 		// Check if context timed out
