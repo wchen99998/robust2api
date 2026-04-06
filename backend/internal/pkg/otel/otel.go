@@ -58,6 +58,7 @@ func (p *Provider) Shutdown(ctx context.Context) error {
 }
 
 // Init initializes OTel tracing and metrics providers.
+// Traces are exported via OTLP/gRPC. Metrics are exposed via Prometheus scrape only (no OTLP push).
 // If cfg.Enabled is false, returns a no-op Provider.
 func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	if !cfg.Enabled {
@@ -92,7 +93,7 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	)
 	otel.SetTracerProvider(tp)
 
-	// --- Meter ---
+	// --- Meter (Prometheus scrape only, no OTLP push) ---
 	promExp, err := promexporter.New()
 	if err != nil {
 		return nil, fmt.Errorf("creating prometheus exporter: %w", err)
