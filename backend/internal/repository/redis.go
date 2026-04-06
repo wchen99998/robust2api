@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-
+	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -21,7 +21,14 @@ import (
 // 2. MinIdleConns: 保持最小空闲连接，减少冷启动延迟（默认 10）
 // 3. DialTimeout/ReadTimeout/WriteTimeout: 精确控制各阶段超时
 func InitRedis(cfg *config.Config) *redis.Client {
-	return redis.NewClient(buildRedisOptions(cfg))
+	client := redis.NewClient(buildRedisOptions(cfg))
+	// Add OpenTelemetry tracing hook — produces a child span per Redis command.
+	if err := redisotel.InstrumentTracing(client); err != nil {
+		// Non-fatal: tracing is best-effort. Log and continue.
+		// The client works fine without the hook.
+		_ = err
+	}
+	return client
 }
 
 // buildRedisOptions 构建 Redis 连接选项
