@@ -19,3 +19,8 @@ cloudflare_proxied   = true
 # Managed PostgreSQL (optional, default false)
 enable_managed_database = false
 # db_size               = "db-s-1vcpu-1gb"
+
+# Observability storage (optional, default false)
+# Creates Cloudflare R2 buckets for Tempo (traces) and Loki (logs)
+enable_observability_storage = false
+# cloudflare_account_id = "your_cloudflare_account_id"

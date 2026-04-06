@@ -133,6 +133,12 @@ aicodex
 output/
 
 # ===================
+# Helm
+# ===================
+**/charts/*.tgz
+**/Chart.lock
+
+# ===================
 # Terraform
 # ===================
 **/.terraform/

@@ -18,7 +18,7 @@ kube-prometheus-stack:
       serviceMonitorSelectorNilUsesHelmValues: false
   grafana:
     enabled: true
-    adminPassword: ""  # Set via --set grafana.adminPassword=xxx or leave empty for auto-generated
+    adminPassword: ""  # Set via --set kube-prometheus-stack.grafana.adminPassword=xxx
     sidecar:
       dashboards:
         enabled: true
@@ -38,13 +38,12 @@ tempo:
     storage:
       trace:
         backend: s3
-        # S3 credentials: provide via --set or use existingSecret
-        # Do NOT commit real credentials to values.yaml
         s3:
-          bucket: ""
-          endpoint: ""
-          access_key: ""
-          secret_key: ""
+          bucket: ""       # --set tempo.tempo.storage.trace.s3.bucket=sub2api-tempo
+          endpoint: ""     # --set tempo.tempo.storage.trace.s3.endpoint=<account_id>.r2.cloudflarestorage.com
+          access_key: ""   # --set tempo.tempo.storage.trace.s3.access_key=...
+          secret_key: ""   # --set tempo.tempo.storage.trace.s3.secret_key=...
+          insecure: false
     retention: 720h
 
 ## Grafana Loki (log aggregation)
@@ -58,17 +57,36 @@ loki:
   backend:
     replicas: 0
   loki:
+    auth_enabled: false
     commonConfig:
       replication_factor: 1
     storage:
       type: s3
-      # S3 credentials: provide via --set or use existingSecret
-      # Do NOT commit real credentials to values.yaml
       s3:
-        s3: ""
-        region: ""
+        endpoint: ""         # --set loki.loki.storage.s3.endpoint=<account_id>.r2.cloudflarestorage.com
+        region: auto         # R2 uses "auto" as region
+        accessKeyId: ""      # --set loki.loki.storage.s3.accessKeyId=...
+        secretAccessKey: ""  # --set loki.loki.storage.s3.secretAccessKey=...
+        s3ForcePathStyle: true
+      bucketNames:
+        chunks: ""           # --set loki.loki.storage.bucketNames.chunks=sub2api-loki
+        ruler: ""            # --set loki.loki.storage.bucketNames.ruler=sub2api-loki
+        admin: ""            # --set loki.loki.storage.bucketNames.admin=sub2api-loki
+    schemaConfig:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: s3
+          schema: v13
+          index:
+            prefix: loki_index_
+            period: 24h
     limits_config:
       retention_period: 720h
+  chunksCache:
+    allocatedMemory: 512
+  resultsCache:
+    allocatedMemory: 256
   singleBinary:
     replicas: 1
     persistence:
@@ -82,3 +100,8 @@ alloy:
       create: false
       name: alloy-config
       key: config.alloy
+    extraPorts:
+      - name: otlp-grpc
+        port: 4317
+        targetPort: 4317
+        protocol: TCP

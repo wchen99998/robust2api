@@ -224,6 +224,91 @@ helm upgrade sub2api deploy/helm/sub2api \
   --reuse-values
 ```
 
+## 5. Deploy Monitoring Stack (Optional)
+
+Deploy the LGTM observability stack (Loki, Grafana, Tempo, Prometheus) with Cloudflare R2 for trace/log storage.
+
+### Prerequisites
+
+1. Your Cloudflare API token must have **R2 Storage Edit** permission (in addition to DNS Edit)
+2. Add to `infra/production/terraform.tfvars`:
+   ```hcl
+   enable_observability_storage = true
+   cloudflare_account_id        = "your_cloudflare_account_id"
+   ```
+
+### Provision R2 storage
+
+```bash
+cd infra/production
+terraform apply
+```
+
+This creates two R2 buckets (`<cluster_name>-tempo` and `<cluster_name>-loki`) in the APAC region.
+
+### Create an R2 API token
+
+Create an R2-scoped API token from the [Cloudflare dashboard](https://dash.cloudflare.com) -> R2 -> Manage R2 API Tokens. This gives you S3-compatible credentials (access key ID + secret) that Tempo and Loki use.
+
+### Deploy
+
+```bash
+helm dependency build deploy/helm/monitoring
+
+R2_ENDPOINT="<account_id>.r2.cloudflarestorage.com"
+R2_ACCESS_KEY="<r2_access_key_id>"
+R2_SECRET_KEY="<r2_secret_access_key>"
+GRAFANA_PASS=$(openssl rand -base64 16)
+
+echo "GRAFANA_PASS: $GRAFANA_PASS"
+
+helm install monitoring deploy/helm/monitoring \
+  -n monitoring --create-namespace \
+  --set kube-prometheus-stack.grafana.adminPassword="$GRAFANA_PASS" \
+  --set tempo.tempo.storage.trace.s3.bucket=sub2api-tempo \
+  --set tempo.tempo.storage.trace.s3.endpoint="$R2_ENDPOINT" \
+  --set tempo.tempo.storage.trace.s3.access_key="$R2_ACCESS_KEY" \
+  --set tempo.tempo.storage.trace.s3.secret_key="$R2_SECRET_KEY" \
+  --set loki.loki.storage.s3.endpoint="$R2_ENDPOINT" \
+  --set loki.loki.storage.s3.accessKeyId="$R2_ACCESS_KEY" \
+  --set loki.loki.storage.s3.secretAccessKey="$R2_SECRET_KEY" \
+  --set loki.loki.storage.s3.s3ForcePathStyle=true \
+  --set loki.loki.storage.s3.region=auto \
+  --set loki.loki.storage.bucketNames.chunks=sub2api-loki \
+  --set loki.loki.storage.bucketNames.ruler=sub2api-loki \
+  --set loki.loki.storage.bucketNames.admin=sub2api-loki \
+  --set loki.chunksCache.allocatedMemory=512 \
+  --set loki.resultsCache.allocatedMemory=256
+```
+
+> **Note:** The default Loki cache memory (9.8 GB) is too large for small clusters. The command above reduces it to 512 MB / 256 MB. Adjust based on your cluster capacity.
+
+### Enable OTel in Sub2API
+
+Once the monitoring stack is running, enable OTel in the app:
+
+```bash
+helm upgrade sub2api deploy/helm/sub2api \
+  -n sub2api --reuse-values \
+  --set observability.enabled=true \
+  --set observability.otel.endpoint="monitoring-alloy.monitoring.svc:4317"
+```
+
+### Access Grafana
+
+```bash
+kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
+```
+
+Then open http://localhost:3000 (user: `admin`, password: the `GRAFANA_PASS` you generated).
+
+### Verify
+
+```bash
+kubectl -n monitoring get pods        # all pods should be Running
+kubectl -n sub2api logs deployment/sub2api | grep "otel"  # OTel init logs
+```
+
 ## Common Operations
 
 ### Upgrade Sub2API
@@ -266,7 +351,10 @@ terraform output kubeconfig_command # kubectl setup command
 ### Tear down
 
 ```bash
-# Remove app first
+# Remove monitoring stack (if deployed)
+helm uninstall monitoring -n monitoring
+
+# Remove app
 helm uninstall sub2api -n sub2api
 
 # Destroy infrastructure
@@ -287,6 +375,14 @@ Sub2API pods (namespace: sub2api)
     |
     +-- Redis (in-cluster, Bitnami subchart, standalone)
     +-- PostgreSQL (in-cluster Bitnami subchart, or DO Managed)
+
+Monitoring stack (namespace: monitoring, optional)
+    |
+    +-- Prometheus (metrics) ← scrapes Sub2API /metrics
+    +-- Grafana (dashboards) ← queries Prometheus, Tempo, Loki
+    +-- Tempo (traces) → Cloudflare R2
+    +-- Loki (logs) → Cloudflare R2
+    +-- Alloy (collector) ← receives OTLP from Sub2API
 ```
 
 ## Terraform Modules
@@ -296,6 +392,7 @@ Sub2API pods (namespace: sub2api)
 | `infra/modules/doks` | DOKS cluster with autoscaling node pool |
 | `infra/modules/kubernetes` | ingress-nginx, cert-manager (DNS-01), ExternalDNS, ClusterIssuer, app namespace |
 | `infra/modules/database` | Optional DO Managed PostgreSQL with VPC firewall |
+| `infra/modules/storage` | Optional Cloudflare R2 buckets for Tempo and Loki |
 
 ## Troubleshooting
 

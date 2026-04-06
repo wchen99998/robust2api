@@ -88,3 +88,17 @@ variable "db_size" {
   type        = string
   default     = "db-s-1vcpu-1gb"
 }
+
+# --- Observability storage (optional) ---
+
+variable "enable_observability_storage" {
+  description = "Create Cloudflare R2 buckets for Tempo and Loki"
+  type        = bool
+  default     = false
+}
+
+variable "cloudflare_account_id" {
+  description = "Cloudflare account ID (required when enable_observability_storage=true)"
+  type        = string
+  default     = ""
+}

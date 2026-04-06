@@ -57,3 +57,11 @@ module "database" {
   db_size         = var.db_size
   doks_cluster_id = module.doks.cluster_id
 }
+
+module "storage" {
+  source = "../modules/storage"
+  count  = var.enable_observability_storage ? 1 : 0
+
+  cloudflare_account_id = var.cloudflare_account_id
+  cluster_name          = var.cluster_name
+}

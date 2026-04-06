@@ -54,3 +54,20 @@ output "database_name" {
   description = "Managed PostgreSQL database name (empty if disabled)"
   value       = var.enable_managed_database ? module.database[0].database : ""
 }
+
+# --- Observability storage (conditional) ---
+
+output "r2_tempo_bucket" {
+  description = "Tempo R2 bucket name (empty if disabled)"
+  value       = var.enable_observability_storage ? module.storage[0].tempo_bucket : ""
+}
+
+output "r2_loki_bucket" {
+  description = "Loki R2 bucket name (empty if disabled)"
+  value       = var.enable_observability_storage ? module.storage[0].loki_bucket : ""
+}
+
+output "r2_s3_endpoint" {
+  description = "R2 S3-compatible endpoint (empty if disabled)"
+  value       = var.enable_observability_storage ? module.storage[0].s3_endpoint : ""
+}

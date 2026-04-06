@@ -1004,9 +1004,9 @@ otel:
   # Service name for telemetry
   # 遥测服务名称
   service_name: "sub2api"
-  # OpenTelemetry collector endpoint (OTLP/HTTP)
-  # OpenTelemetry 收集器端点 (OTLP/HTTP)
-  endpoint: "http://alloy.monitoring.svc:4318"
+  # OpenTelemetry collector endpoint (OTLP/gRPC)
+  # OpenTelemetry 收集器端点 (OTLP/gRPC)
+  endpoint: "monitoring-alloy.monitoring.svc:4317"
   # Trace sampling rate (0.0 - 1.0)
   # 追踪采样率（0.0 - 1.0）
   trace_sample_rate: 0.1

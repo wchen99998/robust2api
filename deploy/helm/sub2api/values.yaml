@@ -198,7 +198,7 @@ observability:
   enabled: false
   otel:
     serviceName: "sub2api"
-    endpoint: "http://alloy.monitoring.svc.cluster.local:4318"
+    endpoint: "monitoring-alloy.monitoring.svc:4317"
     traceSampleRate: "0.1"
     metricsPort: 9090
   serviceMonitor:

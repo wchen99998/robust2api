@@ -9,8 +9,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -75,8 +75,9 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	}
 
 	// --- Tracer ---
-	traceExporter, err := otlptracehttp.New(ctx,
-		otlptracehttp.WithEndpointURL(cfg.Endpoint+"/v1/traces"),
+	traceExporter, err := otlptracegrpc.New(ctx,
+		otlptracegrpc.WithEndpoint(cfg.Endpoint),
+		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
@@ -93,8 +94,9 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	otel.SetTracerProvider(tp)
 
 	// --- Meter ---
-	metricExporter, err := otlpmetrichttp.New(ctx,
-		otlpmetrichttp.WithEndpointURL(cfg.Endpoint+"/v1/metrics"),
+	metricExporter, err := otlpmetricgrpc.New(ctx,
+		otlpmetricgrpc.WithEndpoint(cfg.Endpoint),
+		otlpmetricgrpc.WithInsecure(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating metric exporter: %w", err)

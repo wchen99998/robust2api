@@ -10,8 +10,8 @@ data:
     // OTLP Receiver — accepts traces from the app
     // ============================================
     otelcol.receiver.otlp "default" {
-      http {
-        endpoint = "0.0.0.0:4318"
+      grpc {
+        endpoint = "0.0.0.0:4317"
       }
       output {
         traces  = [otelcol.exporter.otlphttp.tempo.input]
