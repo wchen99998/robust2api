@@ -37,7 +37,7 @@ data:
 
     prometheus.remote_write "default" {
       endpoint {
-        url = "http://{{ .Release.Name }}-kube-prometheus-stack-prometheus.{{ .Values.namespace }}.svc:9090/api/v1/write"
+        url = "http://{{ .Release.Name }}-kube-prometheus-prometheus.{{ .Values.namespace }}.svc:9090/api/v1/write"
       }
     }
 
