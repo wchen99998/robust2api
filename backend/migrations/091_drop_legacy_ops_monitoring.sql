@@ -1,5 +1,3 @@
-BEGIN;
-
 DROP TABLE IF EXISTS ops_system_log_cleanup_audits CASCADE;
 DROP TABLE IF EXISTS ops_system_logs CASCADE;
 DROP TABLE IF EXISTS ops_alert_silences CASCADE;
@@ -9,5 +7,3 @@ DROP TABLE IF EXISTS ops_job_heartbeats CASCADE;
 DROP TABLE IF EXISTS ops_system_metrics CASCADE;
 DROP TABLE IF EXISTS ops_metrics_daily CASCADE;
 DROP TABLE IF EXISTS ops_metrics_hourly CASCADE;
-
-COMMIT;

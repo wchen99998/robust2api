@@ -93,6 +93,14 @@ func (s *OpsService) IsMonitoringEnabled(ctx context.Context) bool {
 	return true
 }
 
+// OpsConfig returns the ops config block, or nil if unavailable.
+func (s *OpsService) OpsConfig() *config.OpsConfig {
+	if s == nil || s.cfg == nil {
+		return nil
+	}
+	return &s.cfg.Ops
+}
+
 func (s *OpsService) RecordError(ctx context.Context, entry *OpsInsertErrorLogInput, rawRequestBody []byte) error {
 	prepared, ok, err := s.prepareErrorLogInput(ctx, entry, rawRequestBody)
 	if err != nil {

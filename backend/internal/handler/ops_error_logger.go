@@ -1250,27 +1250,48 @@ func strconvItoa(v int) string {
 	return strconv.Itoa(v)
 }
 
-// shouldSkipOpsErrorLog determines if an error should be skipped from logging.
-// Only skips known-noisy errors (count_tokens 404, client disconnects) which
-// matches the old OpsAdvancedSettings defaults. The removed configurable rules
-// (no-available-accounts, invalid-api-key, insufficient-balance) all defaulted
-// to false (i.e. logged), so behavior is unchanged.
+// shouldSkipOpsErrorLog determines if an error should be skipped from logging
+// based on the ops.ignore_* config flags (env/YAML).
 func shouldSkipOpsErrorLog(_ context.Context, ops *service.OpsService, message, body, requestPath string) bool {
 	if ops == nil {
+		return false
+	}
+	cfg := ops.OpsConfig()
+	if cfg == nil {
 		return false
 	}
 
 	msgLower := strings.ToLower(message)
 	bodyLower := strings.ToLower(body)
 
-	// count_tokens 404 is expected behavior — always skip.
-	if strings.Contains(requestPath, "/count_tokens") {
+	if cfg.IgnoreCountTokensErrors && strings.Contains(requestPath, "/count_tokens") {
 		return true
 	}
 
-	// Client disconnects (context canceled) are not errors — always skip.
-	if strings.Contains(msgLower, opsErrContextCanceled) || strings.Contains(bodyLower, opsErrContextCanceled) {
-		return true
+	if cfg.IgnoreContextCanceled {
+		if strings.Contains(msgLower, opsErrContextCanceled) || strings.Contains(bodyLower, opsErrContextCanceled) {
+			return true
+		}
+	}
+
+	if cfg.IgnoreNoAvailableAccounts {
+		if strings.Contains(msgLower, opsErrNoAvailableAccounts) || strings.Contains(bodyLower, opsErrNoAvailableAccounts) {
+			return true
+		}
+	}
+
+	if cfg.IgnoreInvalidAPIKeyErrors {
+		if strings.Contains(bodyLower, opsErrInvalidAPIKey) || strings.Contains(bodyLower, opsErrAPIKeyRequired) {
+			return true
+		}
+	}
+
+	if cfg.IgnoreInsufficientBalanceErrors {
+		if strings.Contains(bodyLower, opsErrInsufficientBalance) || strings.Contains(bodyLower, opsErrInsufficientAccountBalance) ||
+			strings.Contains(bodyLower, opsErrInsufficientQuota) ||
+			strings.Contains(msgLower, opsErrInsufficientBalance) || strings.Contains(msgLower, opsErrInsufficientAccountBalance) {
+			return true
+		}
 	}
 
 	return false

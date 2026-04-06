@@ -743,6 +743,14 @@ type OpsConfig struct {
 	// Enabled is kept for backwards compatibility with existing config files.
 	// Ops error logging is always available.
 	Enabled bool `mapstructure:"enabled"`
+
+	// Error log skip rules — control which errors are silently dropped
+	// from the ops_error_logs table. All configurable via env/YAML.
+	IgnoreCountTokensErrors         bool `mapstructure:"ignore_count_tokens_errors"`
+	IgnoreContextCanceled           bool `mapstructure:"ignore_context_canceled"`
+	IgnoreNoAvailableAccounts       bool `mapstructure:"ignore_no_available_accounts"`
+	IgnoreInvalidAPIKeyErrors       bool `mapstructure:"ignore_invalid_api_key_errors"`
+	IgnoreInsufficientBalanceErrors bool `mapstructure:"ignore_insufficient_balance_errors"`
 }
 
 type JWTConfig struct {
@@ -1138,6 +1146,11 @@ func setDefaults() {
 
 	// Ops
 	viper.SetDefault("ops.enabled", true)
+	viper.SetDefault("ops.ignore_count_tokens_errors", true)
+	viper.SetDefault("ops.ignore_context_canceled", true)
+	viper.SetDefault("ops.ignore_no_available_accounts", false)
+	viper.SetDefault("ops.ignore_invalid_api_key_errors", false)
+	viper.SetDefault("ops.ignore_insufficient_balance_errors", false)
 
 	// JWT
 	viper.SetDefault("jwt.secret", "")
