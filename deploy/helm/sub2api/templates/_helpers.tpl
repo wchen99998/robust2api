@@ -146,3 +146,11 @@ Secret name: existing or chart-managed.
 {{- include "sub2api.fullname" . }}
 {{- end }}
 {{- end }}
+
+{{/*
+Bootstrap Job name. Include the release revision so Helm creates a fresh Job
+on each upgrade instead of trying to patch an immutable Job spec.
+*/}}
+{{- define "sub2api.bootstrapJobName" -}}
+{{- printf "%s-bootstrap-r%d" (include "sub2api.fullname" .) .Release.Revision | trunc 63 | trimSuffix "-" }}
+{{- end }}

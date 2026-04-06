@@ -882,19 +882,12 @@ func NormalizeRunMode(value string) string {
 	}
 }
 
-// Load 读取并校验完整配置（要求 jwt.secret 已显式提供）。
+// Load reads and validates the application configuration.
 func Load() (*Config, error) {
-	return load(false)
+	return load()
 }
 
-// LoadForBootstrap 读取启动阶段配置。
-//
-// 启动阶段允许 jwt.secret 先留空，后续由数据库初始化流程补齐并再次完整校验。
-func LoadForBootstrap() (*Config, error) {
-	return load(true)
-}
-
-func load(allowMissingJWTSecret bool) (*Config, error) {
+func load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 
@@ -976,32 +969,11 @@ func load(allowMissingJWTSecret bool) (*Config, error) {
 		cfg.Gateway.UserMessageQueue.Mode = ""
 	}
 
-	// Auto-generate TOTP encryption key if not set (32 bytes = 64 hex chars for AES-256)
 	cfg.Totp.EncryptionKey = strings.TrimSpace(cfg.Totp.EncryptionKey)
-	if cfg.Totp.EncryptionKey == "" {
-		key, err := generateJWTSecret(32) // Reuse the same random generation function
-		if err != nil {
-			return nil, fmt.Errorf("generate totp encryption key error: %w", err)
-		}
-		cfg.Totp.EncryptionKey = key
-		cfg.Totp.EncryptionKeyConfigured = false
-		slog.Warn("TOTP encryption key auto-generated. Consider setting a fixed key for production.")
-	} else {
-		cfg.Totp.EncryptionKeyConfigured = true
-	}
-
-	originalJWTSecret := cfg.JWT.Secret
-	if allowMissingJWTSecret && originalJWTSecret == "" {
-		// 启动阶段允许先无 JWT 密钥，后续在数据库初始化后补齐。
-		cfg.JWT.Secret = strings.Repeat("0", 32)
-	}
+	cfg.Totp.EncryptionKeyConfigured = cfg.Totp.EncryptionKey != ""
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("validate config error: %w", err)
-	}
-
-	if allowMissingJWTSecret && originalJWTSecret == "" {
-		cfg.JWT.Secret = ""
 	}
 
 	if !cfg.Security.URLAllowlist.Enabled {
@@ -1391,6 +1363,17 @@ func (c *Config) Validate() error {
 	// 选择 bytes 而不是 rune 计数，确保二进制/随机串的长度语义更接近“熵”而非“字符数”。
 	if len([]byte(jwtSecret)) < 32 {
 		return fmt.Errorf("jwt.secret must be at least 32 bytes")
+	}
+	totpKey := strings.TrimSpace(c.Totp.EncryptionKey)
+	if totpKey == "" {
+		return fmt.Errorf("totp.encryption_key is required")
+	}
+	totpKeyBytes, err := hex.DecodeString(totpKey)
+	if err != nil {
+		return fmt.Errorf("totp.encryption_key must be valid hex: %w", err)
+	}
+	if len(totpKeyBytes) != 32 {
+		return fmt.Errorf("totp.encryption_key must be 32 bytes (64 hex chars)")
 	}
 	switch c.Log.Level {
 	case "debug", "info", "warn", "error":
