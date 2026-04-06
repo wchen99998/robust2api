@@ -5,7 +5,7 @@ metadata:
   name: grafana-datasources-extra
   namespace: {{ .Values.namespace }}
   labels:
-    grafana_datasource: "true"
+    grafana_datasource: "1"
 data:
   datasources.yaml: |
     apiVersion: 1
@@ -13,7 +13,7 @@ data:
       - name: Tempo
         type: tempo
         uid: tempo
-        url: http://{{ .Release.Name }}-tempo.{{ .Values.namespace }}.svc:3100
+        url: http://{{ .Release.Name }}-tempo.{{ .Values.namespace }}.svc:3200
         access: proxy
         isDefault: false
         jsonData:
@@ -26,7 +26,7 @@ data:
       - name: Loki
         type: loki
         uid: loki
-        url: http://{{ .Release.Name }}-loki.{{ .Values.namespace }}.svc:3100
+        url: http://{{ .Release.Name }}-loki-gateway.{{ .Values.namespace }}.svc:80
         access: proxy
         isDefault: false
         jsonData:

@@ -5,7 +5,7 @@ metadata:
   name: sub2api-grafana-dashboards
   namespace: {{ .Values.namespace }}
   labels:
-    grafana_dashboard: "true"
+    grafana_dashboard: "1"
 data:
   sub2api-overview.json: |
     {

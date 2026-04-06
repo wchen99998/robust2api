@@ -310,19 +310,59 @@ helm upgrade sub2api deploy/helm/sub2api \
 
 > **Note:** When using `--reuse-values`, all `observability.otel.*` sub-keys must be explicitly set since they don't exist in the prior release values.
 
-### Access Grafana
+### Accessing the Monitoring UIs
+
+All monitoring services are ClusterIP-only (not exposed to the internet). Use `kubectl port-forward` to access them locally:
+
+| Service | Port-forward command | Local URL | Credentials |
+|---------|---------------------|-----------|-------------|
+| **Grafana** (dashboards, explore) | `kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80` | http://localhost:3000 | `admin` / your `GRAFANA_PASS` |
+| **Prometheus** (metrics, targets) | `kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090` | http://localhost:9090 | None |
+| **Tempo** (trace search) | `kubectl -n monitoring port-forward svc/monitoring-tempo 3200:3200` | http://localhost:3200 | None |
+| **Alertmanager** | `kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-alertmanager 9093:9093` | http://localhost:9093 | None |
+
+#### Grafana: Dashboards and Explore
+
+Grafana is the main UI. Pre-configured datasources are available in the Explore tab:
+
+- **Prometheus** — query metrics (e.g. `rate(http_server_request_duration_seconds_count[5m])`)
+- **Tempo** — search traces by service name, duration, or trace ID
+- **Loki** — query logs (e.g. `{namespace="sub2api"}` or `{app="sub2api"} |= "error"`)
+
+Pre-built dashboards (loaded via sidecar):
+- **Sub2API Overview** — RED metrics, request rates, error rates, latencies
+- **Sub2API Resources** — Go runtime metrics (goroutines, memory, GC)
+
+#### Tempo: Direct Trace Lookup
 
 ```bash
-kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80
+# Search traces by service
+curl -s http://localhost:3200/api/search?tags=service.name%3Dsub2api&limit=10
+
+# Look up a specific trace by ID (from X-Trace-Id response header)
+curl -s http://localhost:3200/api/traces/<trace-id>
 ```
 
-Then open http://localhost:3000 (user: `admin`, password: the `GRAFANA_PASS` you generated).
+#### Loki: Direct Log Queries
+
+```bash
+# Recent sub2api logs
+curl -sG http://localhost:3200/loki/api/v1/query_range \
+  --data-urlencode 'query={namespace="sub2api"}' \
+  --data-urlencode 'limit=50'
+
+# Logs correlated to a specific trace
+curl -sG http://localhost:3200/loki/api/v1/query_range \
+  --data-urlencode 'query={namespace="sub2api"} | json | trace_id="<trace-id>"'
+```
+
+> **Tip:** In Grafana Explore, clicking a trace ID in Tempo automatically links to the correlated logs in Loki (and vice versa) via the pre-configured datasource correlations.
 
 ### Verify
 
 ```bash
 kubectl -n monitoring get pods        # all pods should be Running
-kubectl -n sub2api logs deployment/sub2api | grep "otel"  # OTel init logs
+kubectl -n sub2api logs deployment/sub2api | grep "Metrics server"  # metrics server started
 ```
 
 ## Common Operations
