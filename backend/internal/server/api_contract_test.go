@@ -472,10 +472,6 @@ func TestAPIContracts(t *testing.T) {
 					service.SettingKeyDefaultConcurrency: "5",
 					service.SettingKeyDefaultBalance:     "1.25",
 
-					service.SettingKeyOpsMonitoringEnabled:         "false",
-					service.SettingKeyOpsRealtimeMonitoringEnabled: "true",
-					service.SettingKeyOpsQueryModeDefault:          "auto",
-					service.SettingKeyOpsMetricsIntervalSeconds:    "60",
 				})
 			},
 			method:     http.MethodGet,
@@ -507,10 +503,6 @@ func TestAPIContracts(t *testing.T) {
 						"linuxdo_connect_client_id": "",
 						"linuxdo_connect_client_secret_configured": false,
 						"linuxdo_connect_redirect_url": "",
-						"ops_monitoring_enabled": false,
-						"ops_realtime_monitoring_enabled": true,
-						"ops_query_mode_default": "auto",
-						"ops_metrics_interval_seconds": 60,
 						"site_name": "Sub2API",
 						"site_logo": "",
 						"site_subtitle": "Subtitle",

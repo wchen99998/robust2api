@@ -59,12 +59,6 @@ type SystemSettings struct {
 	EnableIdentityPatch bool   `json:"enable_identity_patch"`
 	IdentityPatchPrompt string `json:"identity_patch_prompt"`
 
-	// Ops monitoring (vNext)
-	OpsMonitoringEnabled         bool
-	OpsRealtimeMonitoringEnabled bool
-	OpsQueryModeDefault          string
-	OpsMetricsIntervalSeconds    int
-
 	// Claude Code version check
 	MinClaudeCodeVersion string
 	MaxClaudeCodeVersion string

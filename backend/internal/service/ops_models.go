@@ -1,21 +1,9 @@
 package service
 
-import "time"
-
-type OpsSystemLog struct {
-	ID              int64          `json:"id"`
-	CreatedAt       time.Time      `json:"created_at"`
-	Level           string         `json:"level"`
-	Component       string         `json:"component"`
-	Message         string         `json:"message"`
-	RequestID       string         `json:"request_id"`
-	ClientRequestID string         `json:"client_request_id"`
-	UserID          *int64         `json:"user_id"`
-	AccountID       *int64         `json:"account_id"`
-	Platform        string         `json:"platform"`
-	Model           string         `json:"model"`
-	Extra           map[string]any `json:"extra,omitempty"`
-}
+import (
+	"time"
+	"unicode/utf8"
+)
 
 type OpsErrorLog struct {
 	ID        int64     `json:"id"`
@@ -187,4 +175,18 @@ type OpsRetryResult struct {
 	StartedAt  time.Time `json:"started_at"`
 	FinishedAt time.Time `json:"finished_at"`
 	DurationMs int64     `json:"duration_ms"`
+}
+
+func truncateString(s string, max int) string {
+	if max <= 0 {
+		return ""
+	}
+	if len(s) <= max {
+		return s
+	}
+	cut := s[:max]
+	for len(cut) > 0 && !utf8.ValidString(cut) {
+		cut = cut[:len(cut)-1]
+	}
+	return cut
 }

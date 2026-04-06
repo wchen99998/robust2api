@@ -53,7 +53,6 @@ type OpsService struct {
 	openAIGatewayService      *OpenAIGatewayService
 	geminiCompatService       *GeminiMessagesCompatService
 	antigravityGatewayService *AntigravityGatewayService
-	systemLogSink             *OpsSystemLogSink
 }
 
 func NewOpsService(
@@ -67,7 +66,6 @@ func NewOpsService(
 	openAIGatewayService *OpenAIGatewayService,
 	geminiCompatService *GeminiMessagesCompatService,
 	antigravityGatewayService *AntigravityGatewayService,
-	systemLogSink *OpsSystemLogSink,
 ) *OpsService {
 	svc := &OpsService{
 		opsRepo:     opsRepo,
@@ -82,42 +80,17 @@ func NewOpsService(
 		openAIGatewayService:      openAIGatewayService,
 		geminiCompatService:       geminiCompatService,
 		antigravityGatewayService: antigravityGatewayService,
-		systemLogSink:             systemLogSink,
 	}
 	svc.applyRuntimeLogConfigOnStartup(context.Background())
 	return svc
 }
 
 func (s *OpsService) RequireMonitoringEnabled(ctx context.Context) error {
-	if s.IsMonitoringEnabled(ctx) {
-		return nil
-	}
-	return ErrOpsDisabled
+	return nil
 }
 
 func (s *OpsService) IsMonitoringEnabled(ctx context.Context) bool {
-	// Hard switch: disable ops entirely.
-	if s.cfg != nil && !s.cfg.Ops.Enabled {
-		return false
-	}
-	if s.settingRepo == nil {
-		return true
-	}
-	value, err := s.settingRepo.GetValue(ctx, SettingKeyOpsMonitoringEnabled)
-	if err != nil {
-		// Default enabled when key is missing, and fail-open on transient errors
-		// (ops should never block gateway traffic).
-		if errors.Is(err, ErrSettingNotFound) {
-			return true
-		}
-		return true
-	}
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "false", "0", "off", "disabled":
-		return false
-	default:
-		return true
-	}
+	return true
 }
 
 func (s *OpsService) RecordError(ctx context.Context, entry *OpsInsertErrorLogInput, rawRequestBody []byte) error {

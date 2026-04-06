@@ -73,12 +73,6 @@ export interface SystemSettings {
   enable_identity_patch: boolean
   identity_patch_prompt: string
 
-  // Ops Monitoring (vNext)
-  ops_monitoring_enabled: boolean
-  ops_realtime_monitoring_enabled: boolean
-  ops_query_mode_default: 'auto' | 'raw' | 'preagg' | string
-  ops_metrics_interval_seconds: number
-
   // Claude Code version check
   min_claude_code_version: string
   max_claude_code_version: string
@@ -137,10 +131,6 @@ export interface UpdateSettingsRequest {
   fallback_model_antigravity?: string
   enable_identity_patch?: boolean
   identity_patch_prompt?: string
-  ops_monitoring_enabled?: boolean
-  ops_realtime_monitoring_enabled?: boolean
-  ops_query_mode_default?: 'auto' | 'raw' | 'preagg' | string
-  ops_metrics_interval_seconds?: number
   min_claude_code_version?: string
   max_claude_code_version?: string
   allow_ungrouped_key_scheduling?: boolean

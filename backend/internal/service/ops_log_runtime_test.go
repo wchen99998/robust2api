@@ -176,9 +176,7 @@ func TestResetRuntimeLogConfig_ShouldFallbackToBaseline(t *testing.T) {
 				},
 			},
 			Ops: config.OpsConfig{
-				Cleanup: config.OpsCleanupConfig{
-					ErrorLogRetentionDays: 45,
-				},
+				Enabled: true,
 			},
 		},
 	}
@@ -377,9 +375,7 @@ func TestDefaultNormalizeAndValidateRuntimeLogConfig(t *testing.T) {
 			},
 		},
 		Ops: config.OpsConfig{
-			Cleanup: config.OpsCleanupConfig{
-				ErrorLogRetentionDays: 7,
-			},
+			Enabled: true,
 		},
 	})
 	if defaults.Level != "debug" || defaults.StacktraceLevel != "fatal" || defaults.RetentionDays != 7 {

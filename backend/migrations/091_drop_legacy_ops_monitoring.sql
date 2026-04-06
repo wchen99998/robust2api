@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS ops_system_log_cleanup_audits;
+DROP TABLE IF EXISTS ops_system_logs;
+DROP TABLE IF EXISTS ops_alert_silences;
+DROP TABLE IF EXISTS ops_alert_events;
+DROP TABLE IF EXISTS ops_alert_rules;
+DROP TABLE IF EXISTS ops_job_heartbeats;
+DROP TABLE IF EXISTS ops_system_metrics;
+DROP TABLE IF EXISTS ops_metrics_daily;
+DROP TABLE IF EXISTS ops_metrics_hourly;

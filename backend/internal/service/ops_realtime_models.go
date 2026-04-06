@@ -12,8 +12,6 @@ type PlatformConcurrencyInfo struct {
 }
 
 // GroupConcurrencyInfo aggregates concurrency usage by group.
-//
-// Note: one account can belong to multiple groups; group totals are therefore not additive across groups.
 type GroupConcurrencyInfo struct {
 	GroupID        int64   `json:"group_id"`
 	GroupName      string  `json:"group_name"`
@@ -89,4 +87,19 @@ type AccountAvailability struct {
 	OverloadRemainingSec   *int64     `json:"overload_remaining_sec"`
 	ErrorMessage           string     `json:"error_message"`
 	TempUnschedulableUntil *time.Time `json:"temp_unschedulable_until,omitempty"`
+}
+
+// OpsRuntimeLogConfig stores runtime log configuration.
+type OpsRuntimeLogConfig struct {
+	Level           string         `json:"level"`
+	EnableSampling  bool           `json:"enable_sampling"`
+	SamplingInitial int            `json:"sampling_initial"`
+	SamplingNext    int            `json:"sampling_thereafter"`
+	Caller          bool           `json:"caller"`
+	StacktraceLevel string         `json:"stacktrace_level"`
+	RetentionDays   int            `json:"retention_days"`
+	Source          string         `json:"source,omitempty"`
+	UpdatedAt       string         `json:"updated_at,omitempty"`
+	UpdatedByUserID int64          `json:"updated_by_user_id,omitempty"`
+	Extra           map[string]any `json:"extra,omitempty"`
 }

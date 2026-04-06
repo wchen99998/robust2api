@@ -557,9 +557,7 @@ const customMenuItemsForAdmin = computed(() => {
 const adminNavItems = computed((): NavItem[] => {
   const baseItems: NavItem[] = [
     { path: '/admin/dashboard', label: t('nav.dashboard'), icon: DashboardIcon },
-    ...(adminSettingsStore.opsMonitoringEnabled
-      ? [{ path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon }]
-      : []),
+    { path: '/admin/ops', label: t('nav.ops'), icon: ChartIcon },
     { path: '/admin/users', label: t('nav.users'), icon: UsersIcon, hideInSimpleMode: true },
     { path: '/admin/groups', label: t('nav.groups'), icon: FolderIcon, hideInSimpleMode: true },
     { path: '/admin/channels', label: t('nav.channels', '渠道管理'), icon: ChannelIcon, hideInSimpleMode: true },
@@ -640,7 +638,7 @@ if (
   document.documentElement.classList.add('dark')
 }
 
-// Fetch admin settings (for feature-gated nav items like Ops).
+// Fetch admin settings for admin-visible custom menu items.
 watch(
   isAdmin,
   (v) => {

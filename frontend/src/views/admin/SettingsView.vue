@@ -2131,11 +2131,6 @@ const form = reactive<SettingsForm>({
   // Identity patch (Claude -> Gemini)
   enable_identity_patch: true,
   identity_patch_prompt: '',
-  // Ops monitoring (vNext)
-  ops_monitoring_enabled: true,
-  ops_realtime_monitoring_enabled: true,
-  ops_query_mode_default: 'auto',
-  ops_metrics_interval_seconds: 60,
   // Claude Code version check
   min_claude_code_version: '',
   max_claude_code_version: '',

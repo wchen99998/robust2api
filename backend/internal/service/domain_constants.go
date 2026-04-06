@@ -142,29 +142,8 @@ const (
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
 
 	// =========================
-	// Ops Monitoring (vNext)
+	// Ops Runtime Log Config
 	// =========================
-
-	// SettingKeyOpsMonitoringEnabled is a DB-backed soft switch to enable/disable ops module at runtime.
-	SettingKeyOpsMonitoringEnabled = "ops_monitoring_enabled"
-
-	// SettingKeyOpsRealtimeMonitoringEnabled controls realtime features (e.g. WS/QPS push).
-	SettingKeyOpsRealtimeMonitoringEnabled = "ops_realtime_monitoring_enabled"
-
-	// SettingKeyOpsQueryModeDefault controls the default query mode for ops dashboard (auto/raw/preagg).
-	SettingKeyOpsQueryModeDefault = "ops_query_mode_default"
-
-	// SettingKeyOpsEmailNotificationConfig stores JSON config for ops email notifications.
-	SettingKeyOpsEmailNotificationConfig = "ops_email_notification_config"
-
-	// SettingKeyOpsAlertRuntimeSettings stores JSON config for ops alert evaluator runtime settings.
-	SettingKeyOpsAlertRuntimeSettings = "ops_alert_runtime_settings"
-
-	// SettingKeyOpsMetricsIntervalSeconds controls the ops metrics collector interval (>=60).
-	SettingKeyOpsMetricsIntervalSeconds = "ops_metrics_interval_seconds"
-
-	// SettingKeyOpsAdvancedSettings stores JSON config for ops advanced settings (data retention, aggregation).
-	SettingKeyOpsAdvancedSettings = "ops_advanced_settings"
 
 	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
 	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"

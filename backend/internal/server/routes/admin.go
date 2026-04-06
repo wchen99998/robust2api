@@ -101,51 +101,15 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	ops := admin.Group("/ops")
 	{
-		// Realtime ops signals
 		ops.GET("/concurrency", h.Admin.Ops.GetConcurrencyStats)
 		ops.GET("/user-concurrency", h.Admin.Ops.GetUserConcurrencyStats)
 		ops.GET("/account-availability", h.Admin.Ops.GetAccountAvailability)
-		ops.GET("/realtime-traffic", h.Admin.Ops.GetRealtimeTrafficSummary)
 
-		// Alerts (rules + events)
-		ops.GET("/alert-rules", h.Admin.Ops.ListAlertRules)
-		ops.POST("/alert-rules", h.Admin.Ops.CreateAlertRule)
-		ops.PUT("/alert-rules/:id", h.Admin.Ops.UpdateAlertRule)
-		ops.DELETE("/alert-rules/:id", h.Admin.Ops.DeleteAlertRule)
-		ops.GET("/alert-events", h.Admin.Ops.ListAlertEvents)
-		ops.GET("/alert-events/:id", h.Admin.Ops.GetAlertEvent)
-		ops.PUT("/alert-events/:id/status", h.Admin.Ops.UpdateAlertEventStatus)
-		ops.POST("/alert-silences", h.Admin.Ops.CreateAlertSilence)
-
-		// Email notification config (DB-backed)
-		ops.GET("/email-notification/config", h.Admin.Ops.GetEmailNotificationConfig)
-		ops.PUT("/email-notification/config", h.Admin.Ops.UpdateEmailNotificationConfig)
-
-		// Runtime settings (DB-backed)
 		runtime := ops.Group("/runtime")
 		{
-			runtime.GET("/alert", h.Admin.Ops.GetAlertRuntimeSettings)
-			runtime.PUT("/alert", h.Admin.Ops.UpdateAlertRuntimeSettings)
 			runtime.GET("/logging", h.Admin.Ops.GetRuntimeLogConfig)
 			runtime.PUT("/logging", h.Admin.Ops.UpdateRuntimeLogConfig)
 			runtime.POST("/logging/reset", h.Admin.Ops.ResetRuntimeLogConfig)
-		}
-
-		// Advanced settings (DB-backed)
-		ops.GET("/advanced-settings", h.Admin.Ops.GetAdvancedSettings)
-		ops.PUT("/advanced-settings", h.Admin.Ops.UpdateAdvancedSettings)
-
-		// Settings group (DB-backed)
-		settings := ops.Group("/settings")
-		{
-			settings.GET("/metric-thresholds", h.Admin.Ops.GetMetricThresholds)
-			settings.PUT("/metric-thresholds", h.Admin.Ops.UpdateMetricThresholds)
-		}
-
-		// WebSocket realtime (QPS/TPS)
-		ws := ops.Group("/ws")
-		{
-			ws.GET("/qps", h.Admin.Ops.QPSWSHandler)
 		}
 
 		// Error logs (legacy)
@@ -171,20 +135,6 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 
 		// Request drilldown (success + error)
 		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
-
-		// Indexed system logs
-		ops.GET("/system-logs", h.Admin.Ops.ListSystemLogs)
-		ops.POST("/system-logs/cleanup", h.Admin.Ops.CleanupSystemLogs)
-		ops.GET("/system-logs/health", h.Admin.Ops.GetSystemLogIngestionHealth)
-
-		// Dashboard (vNext - raw path for MVP)
-		ops.GET("/dashboard/snapshot-v2", h.Admin.Ops.GetDashboardSnapshotV2)
-		ops.GET("/dashboard/overview", h.Admin.Ops.GetDashboardOverview)
-		ops.GET("/dashboard/throughput-trend", h.Admin.Ops.GetDashboardThroughputTrend)
-		ops.GET("/dashboard/latency-histogram", h.Admin.Ops.GetDashboardLatencyHistogram)
-		ops.GET("/dashboard/error-trend", h.Admin.Ops.GetDashboardErrorTrend)
-		ops.GET("/dashboard/error-distribution", h.Admin.Ops.GetDashboardErrorDistribution)
-		ops.GET("/dashboard/openai-token-stats", h.Admin.Ops.GetDashboardOpenAITokenStats)
 	}
 }
 
