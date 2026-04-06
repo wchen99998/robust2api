@@ -41,7 +41,7 @@ data:
   {{- range $key, $value := .Values.extraEnv }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}
-  {{- if .Values.observability.enabled }}
+  {{- if ((.Values.observability).enabled) }}
   OTEL_ENABLED: "true"
   OTEL_SERVICE_NAME: {{ .Values.observability.otel.serviceName | quote }}
   OTEL_ENDPOINT: {{ .Values.observability.otel.endpoint | quote }}

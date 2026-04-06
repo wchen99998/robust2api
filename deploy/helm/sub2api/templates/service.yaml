@@ -11,7 +11,7 @@ spec:
       targetPort: http
       protocol: TCP
       name: http
-  {{- if .Values.observability.enabled }}
+  {{- if ((.Values.observability).enabled) }}
     - port: {{ .Values.observability.otel.metricsPort }}
       targetPort: metrics
       protocol: TCP

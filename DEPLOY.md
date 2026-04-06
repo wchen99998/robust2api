@@ -127,7 +127,7 @@ Install with in-cluster PostgreSQL and Redis:
 helm install sub2api deploy/helm/sub2api \
   -n sub2api \
   --set image.repository=ghcr.io/wchen99998/robust2api \
-  --set image.tag=0.1.0 \
+  --set image.tag=0.1.1 \
   --set ingress.host=api-sub2api.do-prod.yourdomain.com \
   --set ingress.tls.enabled=true \
   --set secrets.jwtSecret="$JWT_SECRET" \
