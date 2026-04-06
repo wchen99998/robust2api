@@ -53,6 +53,20 @@ variable "database_name" {
   default     = "sub2api"
 }
 
+# --- In-cluster service credentials ---
+
+variable "in_cluster_postgresql_password" {
+  description = "Password for the in-cluster PostgreSQL subchart"
+  type        = string
+  sensitive   = true
+}
+
+variable "in_cluster_redis_password" {
+  description = "Password for the in-cluster Redis subchart"
+  type        = string
+  sensitive   = true
+}
+
 # --- Secrets ---
 
 variable "jwt_secret" {

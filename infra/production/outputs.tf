@@ -92,8 +92,8 @@ output "jwt_secret" {
 }
 
 output "totp_encryption_key" {
-  description = "Auto-generated TOTP encryption key"
-  value       = random_password.totp_encryption_key.result
+  description = "Auto-generated TOTP encryption key (64 hex chars)"
+  value       = random_id.totp_encryption_key.hex
   sensitive   = true
 }
 

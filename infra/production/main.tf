@@ -66,6 +66,20 @@ module "storage" {
   cluster_name          = var.cluster_name
 }
 
+check "monitoring_requires_observability_storage" {
+  assert {
+    condition     = !var.enable_monitoring || var.enable_observability_storage
+    error_message = "enable_observability_storage must be true when enable_monitoring is enabled (R2 buckets required for Tempo/Loki)."
+  }
+}
+
+check "monitoring_requires_r2_credentials" {
+  assert {
+    condition     = !var.enable_monitoring || (var.r2_access_key != "" && var.r2_secret_key != "")
+    error_message = "r2_access_key and r2_secret_key must be set when enable_monitoring is enabled."
+  }
+}
+
 # --- Auto-generated secrets ---
 
 resource "random_password" "jwt_secret" {
@@ -73,7 +87,16 @@ resource "random_password" "jwt_secret" {
   special = true
 }
 
-resource "random_password" "totp_encryption_key" {
+resource "random_id" "totp_encryption_key" {
+  byte_length = 32
+}
+
+resource "random_password" "sub2api_postgresql_password" {
+  length  = 32
+  special = true
+}
+
+resource "random_password" "sub2api_redis_password" {
   length  = 32
   special = true
 }
@@ -99,15 +122,17 @@ module "sub2api" {
   app_image_tag = var.app_image_tag
 
   # Database (conditional on managed DB)
-  database_host     = var.enable_managed_database ? module.database[0].host : ""
-  database_port     = var.enable_managed_database ? module.database[0].port : 5432
-  database_user     = var.enable_managed_database ? module.database[0].user : "sub2api"
-  database_password = var.enable_managed_database ? module.database[0].password : ""
-  database_name     = var.enable_managed_database ? module.database[0].database : "sub2api"
+  database_host                  = var.enable_managed_database ? module.database[0].host : ""
+  database_port                  = var.enable_managed_database ? module.database[0].port : 5432
+  database_user                  = var.enable_managed_database ? module.database[0].user : "sub2api"
+  database_password              = var.enable_managed_database ? module.database[0].password : ""
+  database_name                  = var.enable_managed_database ? module.database[0].database : "sub2api"
+  in_cluster_postgresql_password = random_password.sub2api_postgresql_password.result
+  in_cluster_redis_password      = random_password.sub2api_redis_password.result
 
   # Secrets (auto-generated)
   jwt_secret          = random_password.jwt_secret.result
-  totp_encryption_key = random_password.totp_encryption_key.result
+  totp_encryption_key = random_id.totp_encryption_key.hex
   admin_email         = var.admin_email
   admin_password      = random_password.admin_password.result
 
@@ -120,24 +145,17 @@ module "monitoring" {
   source = "../modules/monitoring"
   count  = var.enable_monitoring ? 1 : 0
 
-  lifecycle {
-    precondition {
-      condition     = !var.enable_monitoring || var.enable_observability_storage
-      error_message = "enable_observability_storage must be true when enable_monitoring is enabled (R2 buckets required for Tempo/Loki)."
-    }
-  }
-
   chart_path    = "${path.module}/../../deploy/helm/monitoring"
   domain_suffix = var.domain_suffix
 
   grafana_admin_password = random_password.grafana_admin_password.result
 
   # R2 storage (from storage module)
-  r2_endpoint   = module.storage[0].s3_endpoint
+  r2_endpoint   = var.enable_observability_storage ? module.storage[0].s3_endpoint : ""
   r2_access_key = var.r2_access_key
   r2_secret_key = var.r2_secret_key
-  tempo_bucket  = module.storage[0].tempo_bucket
-  loki_bucket   = module.storage[0].loki_bucket
+  tempo_bucket  = var.enable_observability_storage ? module.storage[0].tempo_bucket : ""
+  loki_bucket   = var.enable_observability_storage ? module.storage[0].loki_bucket : ""
 
   depends_on = [module.kubernetes]
 }

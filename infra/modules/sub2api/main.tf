@@ -49,6 +49,11 @@ resource "helm_release" "sub2api" {
     value = local.use_external_db ? "false" : "true"
   }
 
+  set_sensitive {
+    name  = "postgresql.auth.password"
+    value = var.in_cluster_postgresql_password
+  }
+
   dynamic "set" {
     for_each = local.use_external_db ? [1] : []
     content {
@@ -101,6 +106,11 @@ resource "helm_release" "sub2api" {
   set {
     name  = "redis.enabled"
     value = "true"
+  }
+
+  set_sensitive {
+    name  = "redis.auth.password"
+    value = var.in_cluster_redis_password
   }
 
   # --- Secrets ---
