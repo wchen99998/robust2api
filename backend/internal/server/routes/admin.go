@@ -105,13 +105,6 @@ func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		ops.GET("/user-concurrency", h.Admin.Ops.GetUserConcurrencyStats)
 		ops.GET("/account-availability", h.Admin.Ops.GetAccountAvailability)
 
-		runtime := ops.Group("/runtime")
-		{
-			runtime.GET("/logging", h.Admin.Ops.GetRuntimeLogConfig)
-			runtime.PUT("/logging", h.Admin.Ops.UpdateRuntimeLogConfig)
-			runtime.POST("/logging/reset", h.Admin.Ops.ResetRuntimeLogConfig)
-		}
-
 		// Error logs (legacy)
 		ops.GET("/errors", h.Admin.Ops.GetErrorLogs)
 		ops.GET("/errors/:id", h.Admin.Ops.GetErrorLogByID)

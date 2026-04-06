@@ -38,9 +38,8 @@ func PrepareOpsRequestBodyForQueue(raw []byte) (requestBodyJSON *string, truncat
 
 // OpsService provides ingestion and query APIs for the Ops monitoring module.
 type OpsService struct {
-	opsRepo     OpsRepository
-	settingRepo SettingRepository
-	cfg         *config.Config
+	opsRepo OpsRepository
+	cfg     *config.Config
 
 	accountRepo AccountRepository
 	userRepo    UserRepository
@@ -57,7 +56,6 @@ type OpsService struct {
 
 func NewOpsService(
 	opsRepo OpsRepository,
-	settingRepo SettingRepository,
 	cfg *config.Config,
 	accountRepo AccountRepository,
 	userRepo UserRepository,
@@ -67,10 +65,9 @@ func NewOpsService(
 	geminiCompatService *GeminiMessagesCompatService,
 	antigravityGatewayService *AntigravityGatewayService,
 ) *OpsService {
-	svc := &OpsService{
-		opsRepo:     opsRepo,
-		settingRepo: settingRepo,
-		cfg:         cfg,
+	return &OpsService{
+		opsRepo: opsRepo,
+		cfg:     cfg,
 
 		accountRepo: accountRepo,
 		userRepo:    userRepo,
@@ -81,8 +78,6 @@ func NewOpsService(
 		geminiCompatService:       geminiCompatService,
 		antigravityGatewayService: antigravityGatewayService,
 	}
-	svc.applyRuntimeLogConfigOnStartup(context.Background())
-	return svc
 }
 
 func (s *OpsService) RequireMonitoringEnabled(ctx context.Context) error {

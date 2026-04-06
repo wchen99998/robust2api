@@ -216,7 +216,6 @@ func ProvideRateLimitService(
 	return svc
 }
 
-
 func buildIdempotencyConfig(cfg *config.Config) IdempotencyConfig {
 	idempotencyCfg := DefaultIdempotencyConfig()
 	if cfg != nil {
@@ -276,7 +275,6 @@ func ProvideScheduledTestRunnerService(
 	svc.Start()
 	return svc
 }
-
 
 // ProvideAPIKeyAuthCacheInvalidator 提供 API Key 认证缓存失效能力
 func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {

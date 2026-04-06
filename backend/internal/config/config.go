@@ -741,7 +741,7 @@ func (r *RedisConfig) Address() string {
 
 type OpsConfig struct {
 	// Enabled is kept for backwards compatibility with existing config files.
-	// Ops error logging and runtime log config are always available.
+	// Ops error logging is always available.
 	Enabled bool `mapstructure:"enabled"`
 }
 
@@ -1136,19 +1136,8 @@ func setDefaults() {
 	viper.SetDefault("redis.min_idle_conns", 128)
 	viper.SetDefault("redis.enable_tls", false)
 
-	// Ops (vNext)
+	// Ops
 	viper.SetDefault("ops.enabled", true)
-	viper.SetDefault("ops.use_preaggregated_tables", true)
-	viper.SetDefault("ops.cleanup.enabled", true)
-	viper.SetDefault("ops.cleanup.schedule", "0 2 * * *")
-	// Retention days: vNext defaults to 30 days across ops datasets.
-	viper.SetDefault("ops.cleanup.error_log_retention_days", 30)
-	viper.SetDefault("ops.cleanup.minute_metrics_retention_days", 30)
-	viper.SetDefault("ops.cleanup.hourly_metrics_retention_days", 30)
-	viper.SetDefault("ops.aggregation.enabled", true)
-	viper.SetDefault("ops.metrics_collector_cache.enabled", true)
-	// TTL should be slightly larger than collection interval (1m) to maximize cross-replica cache hits.
-	viper.SetDefault("ops.metrics_collector_cache.ttl", 65*time.Second)
 
 	// JWT
 	viper.SetDefault("jwt.secret", "")

@@ -704,7 +704,6 @@ func TestGenerateJWTSecretDefaultLength(t *testing.T) {
 	}
 }
 
-
 func TestValidateConcurrencyPingInterval(t *testing.T) {
 	resetViperWithJWTSecret(t)
 

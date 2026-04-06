@@ -142,13 +142,6 @@ const (
 	SettingKeyIdentityPatchPrompt = "identity_patch_prompt"
 
 	// =========================
-	// Ops Runtime Log Config
-	// =========================
-
-	// SettingKeyOpsRuntimeLogConfig stores JSON config for runtime log settings.
-	SettingKeyOpsRuntimeLogConfig = "ops_runtime_log_config"
-
-	// =========================
 	// Overload Cooldown (529)
 	// =========================
 

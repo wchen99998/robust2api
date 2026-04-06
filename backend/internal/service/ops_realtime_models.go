@@ -89,17 +89,3 @@ type AccountAvailability struct {
 	TempUnschedulableUntil *time.Time `json:"temp_unschedulable_until,omitempty"`
 }
 
-// OpsRuntimeLogConfig stores runtime log configuration.
-type OpsRuntimeLogConfig struct {
-	Level           string         `json:"level"`
-	EnableSampling  bool           `json:"enable_sampling"`
-	SamplingInitial int            `json:"sampling_initial"`
-	SamplingNext    int            `json:"sampling_thereafter"`
-	Caller          bool           `json:"caller"`
-	StacktraceLevel string         `json:"stacktrace_level"`
-	RetentionDays   int            `json:"retention_days"`
-	Source          string         `json:"source,omitempty"`
-	UpdatedAt       string         `json:"updated_at,omitempty"`
-	UpdatedByUserID int64          `json:"updated_by_user_id,omitempty"`
-	Extra           map[string]any `json:"extra,omitempty"`
-}
