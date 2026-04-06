@@ -9,7 +9,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -94,14 +93,6 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	otel.SetTracerProvider(tp)
 
 	// --- Meter ---
-	metricExporter, err := otlpmetricgrpc.New(ctx,
-		otlpmetricgrpc.WithEndpoint(cfg.Endpoint),
-		otlpmetricgrpc.WithInsecure(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating metric exporter: %w", err)
-	}
-
 	promExp, err := promexporter.New()
 	if err != nil {
 		return nil, fmt.Errorf("creating prometheus exporter: %w", err)
@@ -109,7 +100,6 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 
 	mp := sdkmetric.NewMeterProvider(
 		sdkmetric.WithResource(res),
-		sdkmetric.WithReader(sdkmetric.NewPeriodicReader(metricExporter)),
 		sdkmetric.WithReader(promExp),
 	)
 	otel.SetMeterProvider(mp)
