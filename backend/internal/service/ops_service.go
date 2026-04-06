@@ -80,10 +80,15 @@ func NewOpsService(
 	}
 }
 
+// RequireMonitoringEnabled is a no-op stub. Monitoring is always enabled now
+// that the built-in observability stack has been replaced by LGTM.
+// TODO: remove this method and all call sites when the full ops error-log
+// system is removed.
 func (s *OpsService) RequireMonitoringEnabled(ctx context.Context) error {
 	return nil
 }
 
+// IsMonitoringEnabled always returns true. See RequireMonitoringEnabled.
 func (s *OpsService) IsMonitoringEnabled(ctx context.Context) bool {
 	return true
 }

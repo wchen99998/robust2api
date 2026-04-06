@@ -1251,7 +1251,10 @@ func strconvItoa(v int) string {
 }
 
 // shouldSkipOpsErrorLog determines if an error should be skipped from logging.
-// Uses hardcoded defaults matching the previous OpsAdvancedSettings defaults.
+// Only skips known-noisy errors (count_tokens 404, client disconnects) which
+// matches the old OpsAdvancedSettings defaults. The removed configurable rules
+// (no-available-accounts, invalid-api-key, insufficient-balance) all defaulted
+// to false (i.e. logged), so behavior is unchanged.
 func shouldSkipOpsErrorLog(_ context.Context, ops *service.OpsService, message, body, requestPath string) bool {
 	if ops == nil {
 		return false

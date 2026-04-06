@@ -1,9 +1,13 @@
-DROP TABLE IF EXISTS ops_system_log_cleanup_audits;
-DROP TABLE IF EXISTS ops_system_logs;
-DROP TABLE IF EXISTS ops_alert_silences;
-DROP TABLE IF EXISTS ops_alert_events;
-DROP TABLE IF EXISTS ops_alert_rules;
-DROP TABLE IF EXISTS ops_job_heartbeats;
-DROP TABLE IF EXISTS ops_system_metrics;
-DROP TABLE IF EXISTS ops_metrics_daily;
-DROP TABLE IF EXISTS ops_metrics_hourly;
+BEGIN;
+
+DROP TABLE IF EXISTS ops_system_log_cleanup_audits CASCADE;
+DROP TABLE IF EXISTS ops_system_logs CASCADE;
+DROP TABLE IF EXISTS ops_alert_silences CASCADE;
+DROP TABLE IF EXISTS ops_alert_events CASCADE;
+DROP TABLE IF EXISTS ops_alert_rules CASCADE;
+DROP TABLE IF EXISTS ops_job_heartbeats CASCADE;
+DROP TABLE IF EXISTS ops_system_metrics CASCADE;
+DROP TABLE IF EXISTS ops_metrics_daily CASCADE;
+DROP TABLE IF EXISTS ops_metrics_hourly CASCADE;
+
+COMMIT;
