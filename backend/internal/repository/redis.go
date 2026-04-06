@@ -2,6 +2,7 @@ package repository
 
 import (
 	"crypto/tls"
+	"log"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -24,9 +25,7 @@ func InitRedis(cfg *config.Config) *redis.Client {
 	client := redis.NewClient(buildRedisOptions(cfg))
 	// Add OpenTelemetry tracing hook — produces a child span per Redis command.
 	if err := redisotel.InstrumentTracing(client); err != nil {
-		// Non-fatal: tracing is best-effort. Log and continue.
-		// The client works fine without the hook.
-		_ = err
+		log.Printf("redisotel: failed to instrument tracing (best-effort, continuing): %v", err)
 	}
 	return client
 }
