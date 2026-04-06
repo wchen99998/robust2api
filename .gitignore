@@ -136,7 +136,6 @@ output/
 # Helm
 # ===================
 **/charts/*.tgz
-**/Chart.lock
 
 # ===================
 # Terraform

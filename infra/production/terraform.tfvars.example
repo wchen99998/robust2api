@@ -24,3 +24,13 @@ enable_managed_database = false
 # Creates Cloudflare R2 buckets for Tempo (traces) and Loki (logs)
 enable_observability_storage = false
 # cloudflare_account_id = "your_cloudflare_account_id"
+
+# Sub2API application (required)
+app_image_tag = "v0.1.1"
+# admin_email = "admin@sub2api.local"
+
+# Monitoring stack (optional, default false)
+# Requires enable_observability_storage = true for R2 buckets
+enable_monitoring = false
+# r2_access_key   = "your_r2_access_key"
+# r2_secret_key   = "your_r2_secret_key"

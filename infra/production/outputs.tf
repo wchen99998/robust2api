@@ -71,3 +71,41 @@ output "r2_s3_endpoint" {
   description = "R2 S3-compatible endpoint (empty if disabled)"
   value       = var.enable_observability_storage ? module.storage[0].s3_endpoint : ""
 }
+
+# --- Application ---
+
+output "app_url" {
+  description = "Sub2API application URL"
+  value       = "https://sub2api-${module.kubernetes.app_namespace}.${var.domain_suffix}"
+}
+
+output "admin_password" {
+  description = "Auto-generated admin password"
+  value       = random_password.admin_password.result
+  sensitive   = true
+}
+
+output "jwt_secret" {
+  description = "Auto-generated JWT signing secret"
+  value       = random_password.jwt_secret.result
+  sensitive   = true
+}
+
+output "totp_encryption_key" {
+  description = "Auto-generated TOTP encryption key (64 hex chars)"
+  value       = random_id.totp_encryption_key.hex
+  sensitive   = true
+}
+
+# --- Monitoring (conditional) ---
+
+output "grafana_url" {
+  description = "Grafana dashboard URL (empty if monitoring disabled)"
+  value       = var.enable_monitoring ? "https://grafana-monitoring.${var.domain_suffix}" : ""
+}
+
+output "grafana_admin_password" {
+  description = "Auto-generated Grafana admin password (empty if monitoring disabled)"
+  value       = var.enable_monitoring ? random_password.grafana_admin_password.result : ""
+  sensitive   = true
+}

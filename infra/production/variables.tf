@@ -102,3 +102,38 @@ variable "cloudflare_account_id" {
   type        = string
   default     = ""
 }
+
+# --- Sub2API application ---
+
+variable "app_image_tag" {
+  description = "Container image tag for the sub2api deployment"
+  type        = string
+}
+
+variable "admin_email" {
+  description = "Initial admin account email"
+  type        = string
+  default     = "admin@sub2api.local"
+}
+
+# --- Monitoring (optional) ---
+
+variable "enable_monitoring" {
+  description = "Deploy the LGTM monitoring stack via Helm"
+  type        = bool
+  default     = false
+}
+
+variable "r2_access_key" {
+  description = "Cloudflare R2 access key for Tempo/Loki storage (required when enable_monitoring=true)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "r2_secret_key" {
+  description = "Cloudflare R2 secret key for Tempo/Loki storage (required when enable_monitoring=true)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
