@@ -427,8 +427,10 @@ const exportToExcel = async () => {
   const c = new AbortController(); exportAbortController = c
   try {
     let p = 1; let total = pagination.total; let exportedCount = 0
-    const XLSX = await import('xlsx')
-    const headers = [
+    const ExcelJS = await import('exceljs')
+    const wb = new ExcelJS.Workbook()
+    const ws = wb.addWorksheet('Usage')
+    ws.addRow([
       t('usage.time'), t('admin.usage.user'), t('usage.apiKeyFilter'),
       t('admin.usage.account'), t('usage.model'), t('usage.upstreamModel'), t('usage.reasoningEffort'), t('admin.usage.group'),
       t('usage.inboundEndpoint'), t('usage.upstreamEndpoint'),
@@ -440,37 +442,34 @@ const exportToExcel = async () => {
       t('usage.rate'), t('usage.accountMultiplier'), t('usage.original'), t('usage.userBilled'), t('usage.accountBilled'),
       t('usage.firstToken'), t('usage.duration'),
       t('admin.usage.requestId'), t('usage.userAgent'), t('admin.usage.ipAddress')
-    ]
-    const ws = XLSX.utils.aoa_to_sheet([headers])
+    ])
     while (true) {
       const requestType = filters.value.request_type
       const legacyStream = requestType ? requestTypeToLegacyStream(requestType) : filters.value.stream
       const res = await adminUsageAPI.list({ page: p, page_size: 100, exact_total: true, ...filters.value, stream: legacyStream === null ? undefined : legacyStream }, { signal: c.signal })
       if (c.signal.aborted) break; if (p === 1) { total = res.total; exportProgress.total = total }
-      const rows = (res.items || []).map((log: AdminUsageLog) => [
-        log.created_at, log.user?.email || '', log.api_key?.name || '', log.account?.name || '', log.model,
-        log.upstream_model || '', formatReasoningEffort(log.reasoning_effort), log.group?.name || '',
-        log.inbound_endpoint || '', log.upstream_endpoint || '', getRequestTypeLabel(log),
-        log.input_tokens, log.output_tokens, log.cache_read_tokens, log.cache_creation_tokens,
-        log.input_cost?.toFixed(6) || '0.000000', log.output_cost?.toFixed(6) || '0.000000',
-        log.cache_read_cost?.toFixed(6) || '0.000000', log.cache_creation_cost?.toFixed(6) || '0.000000',
-        log.rate_multiplier?.toPrecision(4) || '1.00', (log.account_rate_multiplier ?? 1).toPrecision(4),
-        log.total_cost?.toFixed(6) || '0.000000', log.actual_cost?.toFixed(6) || '0.000000',
-        (log.total_cost * (log.account_rate_multiplier ?? 1)).toFixed(6), log.first_token_ms ?? '', log.duration_ms,
-        log.request_id || '', log.user_agent || '', log.ip_address || ''
-      ])
-      if (rows.length) {
-        XLSX.utils.sheet_add_aoa(ws, rows, { origin: -1 })
+      for (const log of (res.items || []) as AdminUsageLog[]) {
+        ws.addRow([
+          log.created_at, log.user?.email || '', log.api_key?.name || '', log.account?.name || '', log.model,
+          log.upstream_model || '', formatReasoningEffort(log.reasoning_effort), log.group?.name || '',
+          log.inbound_endpoint || '', log.upstream_endpoint || '', getRequestTypeLabel(log),
+          log.input_tokens, log.output_tokens, log.cache_read_tokens, log.cache_creation_tokens,
+          log.input_cost?.toFixed(6) || '0.000000', log.output_cost?.toFixed(6) || '0.000000',
+          log.cache_read_cost?.toFixed(6) || '0.000000', log.cache_creation_cost?.toFixed(6) || '0.000000',
+          log.rate_multiplier?.toPrecision(4) || '1.00', (log.account_rate_multiplier ?? 1).toPrecision(4),
+          log.total_cost?.toFixed(6) || '0.000000', log.actual_cost?.toFixed(6) || '0.000000',
+          (log.total_cost * (log.account_rate_multiplier ?? 1)).toFixed(6), log.first_token_ms ?? '', log.duration_ms,
+          log.request_id || '', log.user_agent || '', log.ip_address || ''
+        ])
       }
-      exportedCount += rows.length
+      exportedCount += (res.items || []).length
       exportProgress.current = exportedCount
       exportProgress.progress = total > 0 ? Math.min(100, Math.round(exportedCount / total * 100)) : 0
       if (exportedCount >= total || res.items.length < 100) break; p++
     }
     if(!c.signal.aborted) {
-      const wb = XLSX.utils.book_new()
-      XLSX.utils.book_append_sheet(wb, ws, 'Usage')
-      saveAs(new Blob([XLSX.write(wb, { bookType: 'xlsx', type: 'array' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `usage_${filters.value.start_date}_to_${filters.value.end_date}.xlsx`)
+      const buf = await wb.xlsx.writeBuffer()
+      saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `usage_${filters.value.start_date}_to_${filters.value.end_date}.xlsx`)
       appStore.showSuccess(t('usage.exportSuccess'))
     }
   } catch (error) { console.error('Failed to export:', error); appStore.showError('Export Failed') }
