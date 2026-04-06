@@ -182,5 +182,11 @@ func runMainServer() {
 		log.Fatalf("Server forced to shutdown: %v", err)
 	}
 
+	if app.MetricsServer != nil {
+		if err := app.MetricsServer.Shutdown(ctx); err != nil {
+			log.Printf("Metrics server forced to shutdown: %v", err)
+		}
+	}
+
 	log.Println("Server exited")
 }

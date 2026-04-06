@@ -120,7 +120,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	c.Request = c.Request.WithContext(ctx)
 
 	// 从context获取apiKey和user（ApiKeyAuth中间件已设置）
-	ctx, authSpan := tracer.Start(ctx, "gateway.authenticate")
+	_, authSpan := tracer.Start(ctx, "gateway.authenticate")
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
 		authSpan.End()
@@ -139,7 +139,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		attribute.Int64("api_key_id", apiKey.ID),
 	)
 	authSpan.End()
-	c.Request = c.Request.WithContext(ctx)
 	span.SetAttributes(
 		attribute.Int64("user_id", subject.UserID),
 		attribute.Int64("api_key_id", apiKey.ID),

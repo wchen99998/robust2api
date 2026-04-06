@@ -4299,7 +4299,7 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
-		ctx, upstreamSpan := tracer.Start(ctx, "gateway.upstream_request")
+		_, upstreamSpan := tracer.Start(ctx, "gateway.upstream_request")
 		upstreamSpan.SetAttributes(attribute.String("upstream_url", safeUpstreamURL(upstreamReq.URL.String())))
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
 		if resp != nil {
