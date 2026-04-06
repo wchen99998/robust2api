@@ -72,7 +72,7 @@ Uses **Google Wire** for compile-time DI. The wire graph is in `backend/cmd/serv
 - `internal/repository/` — data access with Ent queries + Redis caching
 - `internal/server/` — Gin router setup, middleware registration, route definitions
 - `internal/server/middleware/` — auth (JWT, API key), CORS, rate limiting, security headers
-- `internal/config/` — Viper-based config loading from YAML + env vars (prefix `SUB2API_`)
+- `internal/config/` — Viper-based config loading from YAML + env vars (no prefix; dots become underscores, e.g. `otel.enabled` → `OTEL_ENABLED`)
 - `internal/pkg/` — shared utilities (logger, HTTP client, OAuth, provider-specific API adapters)
 - `internal/model/` — custom types (error passthrough rules, TLS fingerprint profiles)
 - `internal/web/` — frontend asset embedding via `//go:embed` (build tag `embed`)
@@ -106,7 +106,7 @@ Always use `pnpm` (never `npm`). The `pnpm-lock.yaml` must be committed. CI uses
 ## Configuration
 
 - Config file: YAML loaded by Viper (see `deploy/config.example.yaml`)
-- Environment variable override: prefix `SUB2API_` (e.g., `SUB2API_SERVER_PORT=8080`)
+- Environment variable override: no prefix, dots replaced by underscores (e.g., `SERVER_PORT=8080`, `OTEL_ENABLED=true`)
 - Run modes: `standard` (full SaaS with billing) or `simple` (internal use)
 
 ## CI Requirements

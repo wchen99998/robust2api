@@ -1,0 +1,39 @@
+{{- if (index .Values "kube-prometheus-stack").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources-extra
+  namespace: {{ .Values.namespace }}
+  labels:
+    grafana_datasource: "true"
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Tempo
+        type: tempo
+        uid: tempo
+        url: http://{{ .Release.Name }}-tempo.{{ .Values.namespace }}.svc:3100
+        access: proxy
+        isDefault: false
+        jsonData:
+          tracesToLogsV2:
+            datasourceUid: loki
+            filterByTraceID: true
+            filterBySpanID: false
+          nodeGraph:
+            enabled: true
+      - name: Loki
+        type: loki
+        uid: loki
+        url: http://{{ .Release.Name }}-loki.{{ .Values.namespace }}.svc:3100
+        access: proxy
+        isDefault: false
+        jsonData:
+          derivedFields:
+            - datasourceUid: tempo
+              matcherRegex: '"trace_id":"(\w+)"'
+              name: TraceID
+              url: '$${__value.raw}'
+              urlDisplayLabel: View Trace
+{{- end }}

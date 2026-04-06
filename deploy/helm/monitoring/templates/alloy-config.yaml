@@ -1,0 +1,108 @@
+{{- if .Values.alloy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alloy-config
+  namespace: {{ .Values.namespace }}
+data:
+  config.alloy: |
+    // ============================================
+    // OTLP Receiver — accepts traces from the app
+    // ============================================
+    otelcol.receiver.otlp "default" {
+      http {
+        endpoint = "0.0.0.0:4318"
+      }
+      output {
+        traces  = [otelcol.exporter.otlphttp.tempo.input]
+        metrics = [otelcol.exporter.prometheus.default.input]
+      }
+    }
+
+    // ============================================
+    // Trace exporter → Tempo
+    // ============================================
+    otelcol.exporter.otlphttp "tempo" {
+      client {
+        endpoint = "http://{{ .Release.Name }}-tempo.{{ .Values.namespace }}.svc:4318"
+      }
+    }
+
+    // ============================================
+    // Metrics exporter → Prometheus remote write
+    // ============================================
+    otelcol.exporter.prometheus "default" {
+      forward_to = [prometheus.remote_write.default.receiver]
+    }
+
+    prometheus.remote_write "default" {
+      endpoint {
+        url = "http://{{ .Release.Name }}-kube-prometheus-stack-prometheus.{{ .Values.namespace }}.svc:9090/api/v1/write"
+      }
+    }
+
+    // ============================================
+    // Log collection → Loki
+    // ============================================
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
+
+    discovery.relabel "pod_logs" {
+      targets = discovery.kubernetes.pods.targets
+
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label  = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label  = "pod"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label  = "container"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+        target_label  = "app"
+      }
+    }
+
+    loki.source.kubernetes "pods" {
+      targets    = discovery.relabel.pod_logs.output
+      forward_to = [loki.process.json_parse.receiver]
+    }
+
+    loki.process "json_parse" {
+      stage.json {
+        expressions = {
+          level      = "level",
+          component  = "component",
+          trace_id   = "trace_id",
+          request_id = "request_id",
+          user_id    = "user_id",
+        }
+      }
+      stage.labels {
+        values = {
+          level = "",
+        }
+      }
+      stage.structured_metadata {
+        values = {
+          trace_id   = "",
+          request_id = "",
+          component  = "",
+          user_id    = "",
+        }
+      }
+      forward_to = [loki.write.default.receiver]
+    }
+
+    loki.write "default" {
+      endpoint {
+        url = "http://{{ .Release.Name }}-loki.{{ .Values.namespace }}.svc:3100/loki/api/v1/push"
+      }
+    }
+{{- end }}

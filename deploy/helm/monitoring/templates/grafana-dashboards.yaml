@@ -1,0 +1,198 @@
+{{- if (index .Values "kube-prometheus-stack").enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sub2api-grafana-dashboards
+  namespace: {{ .Values.namespace }}
+  labels:
+    grafana_dashboard: "true"
+data:
+  sub2api-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "title": "Sub2API Overview",
+      "uid": "sub2api-overview",
+      "version": 1,
+      "timezone": "browser",
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "templating": {
+        "list": [
+          {
+            "name": "platform",
+            "type": "query",
+            "datasource": { "type": "prometheus" },
+            "query": "label_values(sub2api_http_requests_total, platform)",
+            "includeAll": true,
+            "multi": true,
+            "current": { "text": "All", "value": "$__all" }
+          }
+        ]
+      },
+      "panels": [
+        {
+          "title": "Request Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(sub2api_http_requests_total{platform=~\"$platform\"}[5m]))",
+              "legendFormat": "Total RPS"
+            }
+          ]
+        },
+        {
+          "title": "Error Rate",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(sub2api_http_requests_total{http_status_code=~\"5..\",platform=~\"$platform\"}[5m])) / sum(rate(sub2api_http_requests_total{platform=~\"$platform\"}[5m]))",
+              "legendFormat": "5xx Error Rate"
+            }
+          ]
+        },
+        {
+          "title": "Latency Percentiles",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(sub2api_http_request_duration_seconds_bucket{platform=~\"$platform\"}[5m])) by (le))",
+              "legendFormat": "p50"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(sub2api_http_request_duration_seconds_bucket{platform=~\"$platform\"}[5m])) by (le))",
+              "legendFormat": "p95"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(sub2api_http_request_duration_seconds_bucket{platform=~\"$platform\"}[5m])) by (le))",
+              "legendFormat": "p99"
+            }
+          ]
+        },
+        {
+          "title": "TTFT (Time to First Token)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(sub2api_http_request_ttft_seconds_bucket{platform=~\"$platform\"}[5m])) by (le))",
+              "legendFormat": "p50 TTFT"
+            },
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(sub2api_http_request_ttft_seconds_bucket{platform=~\"$platform\"}[5m])) by (le))",
+              "legendFormat": "p95 TTFT"
+            }
+          ]
+        },
+        {
+          "title": "Token Throughput",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(sub2api_tokens_total{direction=\"input\",platform=~\"$platform\"}[5m]))",
+              "legendFormat": "Input TPS"
+            },
+            {
+              "expr": "sum(rate(sub2api_tokens_total{direction=\"output\",platform=~\"$platform\"}[5m]))",
+              "legendFormat": "Output TPS"
+            }
+          ]
+        },
+        {
+          "title": "Upstream Errors",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(rate(sub2api_upstream_errors_total{platform=~\"$platform\"}[5m])) by (error_kind)",
+              "legendFormat": "{{ "{{" }}error_kind{{ "}}" }}"
+            }
+          ]
+        },
+        {
+          "title": "Account Failovers",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 12, "x": 0, "y": 16 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(increase(sub2api_account_failovers_total{platform=~\"$platform\"}[1h]))",
+              "legendFormat": "Last Hour"
+            }
+          ]
+        },
+        {
+          "title": "Rate Limit Rejections",
+          "type": "stat",
+          "gridPos": { "h": 4, "w": 12, "x": 12, "y": 16 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(increase(sub2api_ratelimit_rejections_total[1h]))",
+              "legendFormat": "Last Hour"
+            }
+          ]
+        }
+      ]
+    }
+  sub2api-resources.json: |
+    {
+      "title": "Sub2API Resources",
+      "uid": "sub2api-resources",
+      "version": 1,
+      "timezone": "browser",
+      "refresh": "30s",
+      "time": { "from": "now-1h", "to": "now" },
+      "panels": [
+        {
+          "title": "Goroutines",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "go_goroutine_count{job=~\".*sub2api.*\"}",
+              "legendFormat": "Goroutines"
+            }
+          ]
+        },
+        {
+          "title": "Memory Usage",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "sum(go_memory_used_bytes{job=~\".*sub2api.*\"}) by (memory_type) / 1024 / 1024",
+              "legendFormat": "{{ "{{" }}memory_type{{ "}}" }} Used (MB)"
+            },
+            {
+              "expr": "sum(go_memory_gc_goal_bytes{job=~\".*sub2api.*\"}) / 1024 / 1024",
+              "legendFormat": "GC Goal (MB)"
+            }
+          ]
+        },
+        {
+          "title": "GC Pause Duration",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+          "datasource": { "type": "prometheus" },
+          "targets": [
+            {
+              "expr": "rate(go_gc_duration_seconds_sum{job=~\".*sub2api.*\"}[5m]) * 1000",
+              "legendFormat": "GC Pause (ms/s)"
+            }
+          ]
+        }
+      ]
+    }
+{{- end }}

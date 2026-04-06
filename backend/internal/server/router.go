@@ -15,6 +15,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
 const frameSrcRefreshTimeout = 5 * time.Second
@@ -53,6 +54,11 @@ func SetupRouter(
 	// 应用中间件
 	r.Use(middleware2.RequestLogger())
 	r.Use(middleware2.Logger())
+	if cfg.Otel.Enabled {
+		r.Use(otelgin.Middleware("sub2api"))
+		r.Use(middleware2.TraceIDHeader())
+		r.Use(middleware2.RequestMetrics())
+	}
 	r.Use(middleware2.CORS(cfg.CORS))
 	r.Use(middleware2.SecurityHeaders(cfg.Security.CSP, func() []string {
 		if p := cachedFrameOrigins.Load(); p != nil {
