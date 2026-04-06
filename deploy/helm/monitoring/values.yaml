@@ -6,6 +6,7 @@ kube-prometheus-stack:
   enabled: true
   prometheus:
     prometheusSpec:
+      enableRemoteWriteReceiver: true
       retention: 15d
       storageSpec:
         volumeClaimTemplate:
