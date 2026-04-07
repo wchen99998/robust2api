@@ -38,7 +38,7 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('@/api/admin/system', () => ({
-  checkUpdates: vi.fn(),
+  getVersion: vi.fn(),
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -77,7 +77,7 @@ function simulateGuard(
       return authState.isAdmin ? '/admin/dashboard' : '/dashboard'
     }
     if (authState.backendModeEnabled && !authState.isAuthenticated) {
-      const allowed = ['/login', '/key-usage', '/setup']
+      const allowed = ['/login', '/key-usage']
       if (!allowed.some((path) => toPath === path || toPath.startsWith(path))) {
         return '/login'
       }
@@ -114,7 +114,7 @@ function simulateGuard(
     if (authState.isAuthenticated && authState.isAdmin) {
       return null
     }
-    const allowed = ['/login', '/key-usage', '/setup']
+    const allowed = ['/login', '/key-usage']
     if (!allowed.some((path) => toPath === path || toPath.startsWith(path))) {
       return '/login'
     }
@@ -329,7 +329,7 @@ describe('路由守卫逻辑', () => {
       expect(redirect).toBeNull()
     })
 
-    it('unauthenticated: /setup is allowed', () => {
+    it('unauthenticated: /setup is blocked', () => {
       const authState: MockAuthState = {
         isAuthenticated: false,
         isAdmin: false,
@@ -337,7 +337,7 @@ describe('路由守卫逻辑', () => {
         backendModeEnabled: true,
       }
       const redirect = simulateGuard('/setup', { requiresAuth: false }, authState)
-      expect(redirect).toBeNull()
+      expect(redirect).toBe('/login')
     })
 
     it('admin: /admin/dashboard is allowed', () => {

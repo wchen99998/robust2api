@@ -49,7 +49,6 @@ func initMiddlewareTestLoggerWithLevel(t *testing.T, level string) *testLogSink 
 		Environment: "test",
 		Output: logger.OutputOptions{
 			ToStdout: false,
-			ToFile:   false,
 		},
 	}); err != nil {
 		t.Fatalf("init logger: %v", err)
@@ -180,24 +179,24 @@ func TestLogger_AccessLogIncludesCoreFields(t *testing.T) {
 	}
 }
 
-func TestLogger_HealthPathSkipped(t *testing.T) {
+func TestLogger_ProbePathSkipped(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	sink := initMiddlewareTestLogger(t)
 
 	r := gin.New()
 	r.Use(Logger())
-	r.GET("/health", func(c *gin.Context) {
+	r.GET("/livez", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
 
 	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
+	req := httptest.NewRequest(http.MethodGet, "/livez", nil)
 	r.ServeHTTP(w, req)
 	if w.Code != http.StatusOK {
 		t.Fatalf("status=%d", w.Code)
 	}
 	if len(sink.list()) != 0 {
-		t.Fatalf("health endpoint should not write access log")
+		t.Fatalf("probe endpoint should not write access log")
 	}
 }
 

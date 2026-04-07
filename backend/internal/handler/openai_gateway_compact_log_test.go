@@ -77,7 +77,6 @@ func captureHandlerStructuredLog(t *testing.T) (*handlerInMemoryLogSink, func())
 		Environment: "test",
 		Output: logger.OutputOptions{
 			ToStdout: true,
-			ToFile:   false,
 		},
 		Sampling: logger.SamplingOptions{Enabled: false},
 	})

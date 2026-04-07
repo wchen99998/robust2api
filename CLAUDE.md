@@ -107,9 +107,10 @@ Always use `pnpm` (never `npm`). The `pnpm-lock.yaml` must be committed. CI uses
 
 ## Configuration
 
-- Config file: YAML loaded by Viper (see `deploy/config.example.yaml`)
+- Config file: YAML loaded by Viper from `/etc/sub2api/config.yaml`
 - Environment variable override: no prefix, dots replaced by underscores (e.g., `SERVER_PORT=8080`, `OTEL_ENABLED=true`)
 - Run modes: `standard` (full SaaS with billing) or `simple` (internal use)
+- Bootstrap: `backend/cmd/bootstrap` runs migrations and optional initial admin seeding from environment variables
 
 ## CI Requirements
 

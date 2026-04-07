@@ -6,7 +6,6 @@ import NavigationProgress from '@/components/common/NavigationProgress.vue'
 import { resolveDocumentTitle } from '@/router/title'
 import AnnouncementPopup from '@/components/common/AnnouncementPopup.vue'
 import { useAppStore, useAuthStore, useSubscriptionStore, useAnnouncementStore } from '@/stores'
-import { getSetupStatus } from '@/api/setup'
 
 const router = useRouter()
 const route = useRoute()
@@ -92,17 +91,6 @@ onBeforeUnmount(() => {
 })
 
 onMounted(async () => {
-  // Check if setup is needed
-  try {
-    const status = await getSetupStatus()
-    if (status.needs_setup && route.path !== '/setup') {
-      router.replace('/setup')
-      return
-    }
-  } catch {
-    // If setup endpoint fails, assume normal mode and continue
-  }
-
   // Load public settings into appStore (will be cached for other components)
   await appStore.fetchPublicSettings()
 

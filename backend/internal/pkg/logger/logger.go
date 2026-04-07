@@ -7,7 +7,6 @@ import (
 	"log"
 	"log/slog"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -15,7 +14,6 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 type Level = zapcore.Level
@@ -264,7 +262,7 @@ func buildLogger(options InitOptions) (*zap.Logger, zap.AtomicLevel, error) {
 	}
 
 	sinkCore := newSinkCore()
-	cores := make([]zapcore.Core, 0, 3)
+	cores := make([]zapcore.Core, 0, 2)
 
 	if options.Output.ToStdout {
 		infoPriority := zap.LevelEnablerFunc(func(lvl zapcore.Level) bool {
@@ -275,19 +273,6 @@ func buildLogger(options InitOptions) (*zap.Logger, zap.AtomicLevel, error) {
 		})
 		cores = append(cores, zapcore.NewCore(enc, zapcore.Lock(os.Stdout), infoPriority))
 		cores = append(cores, zapcore.NewCore(enc, zapcore.Lock(os.Stderr), errPriority))
-	}
-
-	if options.Output.ToFile {
-		fileCore, filePath, fileErr := buildFileCore(enc, atomic, options)
-		if fileErr != nil {
-			_, _ = fmt.Fprintf(os.Stderr, "time=%s level=WARN msg=\"日志文件输出初始化失败，降级为仅标准输出\" path=%s err=%v\n",
-				time.Now().Format(time.RFC3339Nano),
-				filePath,
-				fileErr,
-			)
-		} else {
-			cores = append(cores, fileCore)
-		}
 	}
 
 	if len(cores) == 0 {
@@ -314,27 +299,6 @@ func buildLogger(options InitOptions) (*zap.Logger, zap.AtomicLevel, error) {
 		zap.String("env", options.Environment),
 	)
 	return logger, atomic, nil
-}
-
-func buildFileCore(enc zapcore.Encoder, atomic zap.AtomicLevel, options InitOptions) (zapcore.Core, string, error) {
-	filePath := options.Output.FilePath
-	if strings.TrimSpace(filePath) == "" {
-		filePath = resolveLogFilePath("")
-	}
-
-	dir := filepath.Dir(filePath)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, filePath, err
-	}
-	lj := &lumberjack.Logger{
-		Filename:   filePath,
-		MaxSize:    options.Rotation.MaxSizeMB,
-		MaxBackups: options.Rotation.MaxBackups,
-		MaxAge:     options.Rotation.MaxAgeDays,
-		Compress:   options.Rotation.Compress,
-		LocalTime:  options.Rotation.LocalTime,
-	}
-	return zapcore.NewCore(enc, zapcore.AddSync(lj), atomic), filePath, nil
 }
 
 type sinkCore struct {

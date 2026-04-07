@@ -17,6 +17,7 @@ api:
   pdb:
     enabled: false
     minAvailable: 1
+  topologySpreadConstraints: []
   probes:
     startup:
       path: /startupz
@@ -123,8 +124,6 @@ config:
     urlAllowlistAllowInsecureHTTP: false
     urlAllowlistAllowPrivateHosts: false
     urlAllowlistUpstreamHosts: ""
-
-  updateProxyURL: ""
 
 # -- Extra environment variables added to ConfigMap (key-value pairs)
 extraEnv: {}

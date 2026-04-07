@@ -3,7 +3,9 @@ package routes
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +15,7 @@ func RegisterAdminRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
 	adminAuth middleware.AdminAuthMiddleware,
+	buildInfo service.BuildInfo,
 ) {
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
@@ -57,7 +60,7 @@ func RegisterAdminRoutes(
 		registerOpsRoutes(admin, h)
 
 		// 系统管理
-		registerSystemRoutes(admin, h)
+		registerSystemRoutes(admin, buildInfo)
 
 		// 订阅管理
 		registerSubscriptionRoutes(admin, h)
@@ -347,14 +350,12 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+func registerSystemRoutes(admin *gin.RouterGroup, buildInfo service.BuildInfo) {
 	system := admin.Group("/system")
 	{
-		system.GET("/version", h.Admin.System.GetVersion)
-		system.GET("/check-updates", h.Admin.System.CheckUpdates)
-		system.POST("/update", h.Admin.System.PerformUpdate)
-		system.POST("/rollback", h.Admin.System.Rollback)
-		system.POST("/restart", h.Admin.System.RestartService)
+		system.GET("/version", func(c *gin.Context) {
+			response.Success(c, gin.H{"version": buildInfo.Version})
+		})
 	}
 }
 

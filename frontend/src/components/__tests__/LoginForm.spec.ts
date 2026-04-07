@@ -2,7 +2,7 @@
  * LoginView 组件核心逻辑测试
  * 测试登录表单提交、验证、2FA 等场景
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { defineComponent, reactive, ref } from 'vue'
@@ -26,7 +26,7 @@ vi.mock('@/api', () => ({
 }))
 
 vi.mock('@/api/admin/system', () => ({
-  checkUpdates: vi.fn(),
+  getVersion: vi.fn(),
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -89,6 +89,24 @@ describe('LoginForm 核心逻辑', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
+
+    const storage = new Map<string, string>()
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage.set(key, value)
+      }),
+      removeItem: vi.fn((key: string) => {
+        storage.delete(key)
+      }),
+      clear: vi.fn(() => {
+        storage.clear()
+      }),
+    })
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('成功登录后跳转到 dashboard', async () => {

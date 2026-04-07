@@ -37,11 +37,6 @@ func ProvideAPIPricingService(cfg *config.Config, remoteClient PricingRemoteClie
 	return svc, nil
 }
 
-// ProvideUpdateService creates UpdateService with BuildInfo
-func ProvideUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, buildInfo BuildInfo) *UpdateService {
-	return NewUpdateService(cache, githubClient, buildInfo.Version, buildInfo.BuildType)
-}
-
 // ProvideEmailQueueService creates EmailQueueService with default worker count
 func ProvideEmailQueueService(emailService *EmailService) *EmailQueueService {
 	return NewEmailQueueService(emailService, 3)
@@ -257,10 +252,6 @@ func ProvideIdempotencyCoordinator(repo IdempotencyRepository, cfg *config.Confi
 	return coordinator
 }
 
-func ProvideSystemOperationLockService(repo IdempotencyRepository, cfg *config.Config) *SystemOperationLockService {
-	return NewSystemOperationLockService(repo, buildIdempotencyConfig(cfg))
-}
-
 func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
 	svc := NewIdempotencyCleanupService(repo, cfg)
 	svc.Start()
@@ -403,7 +394,6 @@ var SharedProviderSet = wire.NewSet(
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	NewIdentityService,
 	NewCRSSyncService,
-	ProvideUpdateService,
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,
 	NewUsageCache,
@@ -412,7 +402,6 @@ var SharedProviderSet = wire.NewSet(
 	NewTLSFingerprintProfileService,
 	NewDigestSessionStore,
 	ProvideIdempotencyCoordinator,
-	ProvideSystemOperationLockService,
 	ProvideScheduledTestService,
 	NewGroupCapacityService,
 	NewChannelService,

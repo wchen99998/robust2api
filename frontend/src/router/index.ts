@@ -15,17 +15,6 @@ import { resolveDocumentTitle } from './title'
  * Route definitions with lazy loading
  */
 const routes: RouteRecordRaw[] = [
-  // ==================== Setup Routes ====================
-  {
-    path: '/setup',
-    name: 'Setup',
-    component: () => import('@/views/setup/SetupWizardView.vue'),
-    meta: {
-      requiresAuth: false,
-      title: 'Setup'
-    }
-  },
-
   // ==================== Public Routes ====================
   {
     path: '/home',
@@ -411,7 +400,7 @@ let authInitialized = false
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
-const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage', '/setup']
+const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage']
 
 router.beforeEach((to, _from, next) => {
   // 开始导航加载状态
@@ -462,7 +451,7 @@ router.beforeEach((to, _from, next) => {
       next(authStore.isAdmin ? '/admin/dashboard' : '/dashboard')
       return
     }
-    // Backend mode: block public pages for unauthenticated users (except login, key-usage, setup)
+    // Backend mode: block public pages for unauthenticated users (except login, key-usage)
     if (appStore.backendModeEnabled && !authStore.isAuthenticated) {
       const isAllowed = BACKEND_MODE_ALLOWED_PATHS.some((p) => to.path === p || to.path.startsWith(p))
       if (!isAllowed) {

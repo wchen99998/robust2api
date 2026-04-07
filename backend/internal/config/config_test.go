@@ -1,6 +1,8 @@
 package config
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -604,6 +606,50 @@ func TestGetServerAddressFromEnv(t *testing.T) {
 	if address != "127.0.0.1:9090" {
 		t.Fatalf("GetServerAddress() = %q", address)
 	}
+}
+
+func TestLoadReadsOnlyConfiguredPath(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	oldPaths := configSearchPaths
+	configDir := t.TempDir()
+	configSearchPaths = []string{configDir}
+	t.Cleanup(func() {
+		configSearchPaths = oldPaths
+	})
+
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	cwd := t.TempDir()
+	require.NoError(t, os.Chdir(cwd))
+	t.Cleanup(func() {
+		_ = os.Chdir(wd)
+	})
+
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "config.yaml"), []byte("server:\n  port: 19090\n"), 0o600))
+	require.NoError(t, os.Mkdir(filepath.Join(cwd, "config"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(cwd, "config", "config.yaml"), []byte("server:\n  port: 19191\n"), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, "config.yaml"), []byte("server:\n  port: 18080\n"), 0o600))
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, 18080, cfg.Server.Port)
+}
+
+func TestLoadFallsBackToEnvWithoutConfigFile(t *testing.T) {
+	resetViperWithJWTSecret(t)
+
+	oldPaths := configSearchPaths
+	configSearchPaths = []string{t.TempDir()}
+	t.Cleanup(func() {
+		configSearchPaths = oldPaths
+	})
+
+	t.Setenv("SERVER_PORT", "19090")
+
+	cfg, err := Load()
+	require.NoError(t, err)
+	require.Equal(t, 19090, cfg.Server.Port)
 }
 
 func TestValidateAbsoluteHTTPURL(t *testing.T) {
@@ -1255,14 +1301,8 @@ func TestValidateConfigErrors(t *testing.T) {
 			name: "log output disabled",
 			mutate: func(c *Config) {
 				c.Log.Output.ToStdout = false
-				c.Log.Output.ToFile = false
 			},
-			wantErr: "log.output.to_stdout and log.output.to_file cannot both be false",
-		},
-		{
-			name:    "log rotation size",
-			mutate:  func(c *Config) { c.Log.Rotation.MaxSizeMB = 0 },
-			wantErr: "log.rotation.max_size_mb",
+			wantErr: "log.output.to_stdout must be true",
 		},
 		{
 			name: "log sampling enabled invalid",
@@ -1498,20 +1538,6 @@ func TestValidateConfig_LogRequiredAndRotationBounds(t *testing.T) {
 				c.Log.StacktraceLevel = ""
 			},
 			wantErr: "log.stacktrace_level is required",
-		},
-		{
-			name: "log max backups non-negative",
-			mutate: func(c *Config) {
-				c.Log.Rotation.MaxBackups = -1
-			},
-			wantErr: "log.rotation.max_backups must be non-negative",
-		},
-		{
-			name: "log max age non-negative",
-			mutate: func(c *Config) {
-				c.Log.Rotation.MaxAgeDays = -1
-			},
-			wantErr: "log.rotation.max_age_days must be non-negative",
 		},
 		{
 			name: "sampling thereafter non-negative when disabled",

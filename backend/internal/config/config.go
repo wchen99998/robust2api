@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -18,6 +17,8 @@ const (
 	RunModeStandard = "standard"
 	RunModeSimple   = "simple"
 )
+
+var configSearchPaths = []string{"/etc/sub2api"}
 
 // 使用量记录队列溢出策略
 const (
@@ -96,22 +97,11 @@ type LogConfig struct {
 	Caller          bool              `mapstructure:"caller"`
 	StacktraceLevel string            `mapstructure:"stacktrace_level"`
 	Output          LogOutputConfig   `mapstructure:"output"`
-	Rotation        LogRotationConfig `mapstructure:"rotation"`
 	Sampling        LogSamplingConfig `mapstructure:"sampling"`
 }
 
 type LogOutputConfig struct {
-	ToStdout bool   `mapstructure:"to_stdout"`
-	ToFile   bool   `mapstructure:"to_file"`
-	FilePath string `mapstructure:"file_path"`
-}
-
-type LogRotationConfig struct {
-	MaxSizeMB  int  `mapstructure:"max_size_mb"`
-	MaxBackups int  `mapstructure:"max_backups"`
-	MaxAgeDays int  `mapstructure:"max_age_days"`
-	Compress   bool `mapstructure:"compress"`
-	LocalTime  bool `mapstructure:"local_time"`
+	ToStdout bool `mapstructure:"to_stdout"`
 }
 
 type LogSamplingConfig struct {
@@ -894,19 +884,9 @@ func load() (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 
-	// Add config paths in priority order
-	// 1. DATA_DIR environment variable (highest priority)
-	if dataDir := os.Getenv("DATA_DIR"); dataDir != "" {
-		viper.AddConfigPath(dataDir)
+	for _, configPath := range configSearchPaths {
+		viper.AddConfigPath(configPath)
 	}
-	// 2. Docker data directory
-	viper.AddConfigPath("/app/data")
-	// 3. Current directory
-	viper.AddConfigPath(".")
-	// 4. Config subdirectory
-	viper.AddConfigPath("./config")
-	// 5. System config directory
-	viper.AddConfigPath("/etc/sub2api")
 
 	// 环境变量支持
 	viper.AutomaticEnv()
@@ -956,7 +936,7 @@ func load() (*Config, error) {
 	cfg.Log.ServiceName = strings.TrimSpace(cfg.Log.ServiceName)
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
-	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
+	cfg.Log.Output.ToStdout = true
 
 	// 兼容旧键 gateway.openai_ws.sticky_previous_response_ttl_seconds。
 	// 新键未配置（<=0）时回退旧键；新键优先。
@@ -1027,13 +1007,6 @@ func setDefaults() {
 	viper.SetDefault("log.caller", true)
 	viper.SetDefault("log.stacktrace_level", "error")
 	viper.SetDefault("log.output.to_stdout", true)
-	viper.SetDefault("log.output.to_file", true)
-	viper.SetDefault("log.output.file_path", "")
-	viper.SetDefault("log.rotation.max_size_mb", 100)
-	viper.SetDefault("log.rotation.max_backups", 10)
-	viper.SetDefault("log.rotation.max_age_days", 7)
-	viper.SetDefault("log.rotation.compress", true)
-	viper.SetDefault("log.rotation.local_time", true)
 	viper.SetDefault("log.sampling.enabled", false)
 	viper.SetDefault("log.sampling.initial", 100)
 	viper.SetDefault("log.sampling.thereafter", 100)
@@ -1399,17 +1372,8 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("log.stacktrace_level must be one of: none/error/fatal")
 	}
-	if !c.Log.Output.ToStdout && !c.Log.Output.ToFile {
-		return fmt.Errorf("log.output.to_stdout and log.output.to_file cannot both be false")
-	}
-	if c.Log.Rotation.MaxSizeMB <= 0 {
-		return fmt.Errorf("log.rotation.max_size_mb must be positive")
-	}
-	if c.Log.Rotation.MaxBackups < 0 {
-		return fmt.Errorf("log.rotation.max_backups must be non-negative")
-	}
-	if c.Log.Rotation.MaxAgeDays < 0 {
-		return fmt.Errorf("log.rotation.max_age_days must be non-negative")
+	if !c.Log.Output.ToStdout {
+		return fmt.Errorf("log.output.to_stdout must be true")
 	}
 	if c.Log.Sampling.Enabled {
 		if c.Log.Sampling.Initial <= 0 {
@@ -2054,16 +2018,14 @@ func generateJWTSecret(byteLength int) (string, error) {
 }
 
 // GetServerAddress returns the server address (host:port) from config file or environment variable.
-// This is a lightweight function that can be used before full config validation,
-// such as during setup wizard startup.
-// Priority: config.yaml > environment variables > defaults
+// This is a lightweight function that can be used before full config validation.
 func GetServerAddress() string {
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
-	v.AddConfigPath("./config")
-	v.AddConfigPath("/etc/sub2api")
+	for _, configPath := range configSearchPaths {
+		v.AddConfigPath(configPath)
+	}
 
 	// Support SERVER_HOST and SERVER_PORT environment variables
 	v.AutomaticEnv()

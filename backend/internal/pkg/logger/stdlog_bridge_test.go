@@ -67,7 +67,6 @@ func TestStdLogBridgeRoutesLevels(t *testing.T) {
 		Environment: "test",
 		Output: OutputOptions{
 			ToStdout: true,
-			ToFile:   false,
 		},
 		Sampling: SamplingOptions{Enabled: false},
 	}); err != nil {
@@ -129,7 +128,6 @@ func TestLegacyPrintfRoutesLevels(t *testing.T) {
 		Environment: "test",
 		Output: OutputOptions{
 			ToStdout: true,
-			ToFile:   false,
 		},
 		Sampling: SamplingOptions{Enabled: false},
 	}); err != nil {

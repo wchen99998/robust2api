@@ -28,6 +28,13 @@ api:
     limits:
       cpu: "2"
       memory: 2Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
 
 worker:
   replicaCount: 1

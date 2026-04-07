@@ -33,6 +33,7 @@ func SetupRouter(
 	subscriptionService *service.SubscriptionService,
 	opsService *service.OpsService,
 	settingService *service.SettingService,
+	buildInfo service.BuildInfo,
 	cfg *config.Config,
 	redisClient *redis.Client,
 	healthChecker *health.Checker,
@@ -61,7 +62,7 @@ func SetupRouter(
 		r.Use(otelgin.Middleware("sub2api",
 			otelgin.WithFilter(func(r *http.Request) bool {
 				p := r.URL.Path
-				return p != "/health" && p != "/livez" && p != "/readyz" && p != "/startupz" && p != "/setup/status"
+				return p != "/livez" && p != "/readyz" && p != "/startupz"
 			}),
 		))
 	}
@@ -99,7 +100,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, healthChecker)
+	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, buildInfo, cfg, redisClient, healthChecker)
 
 	return r
 }
@@ -115,6 +116,7 @@ func registerRoutes(
 	subscriptionService *service.SubscriptionService,
 	opsService *service.OpsService,
 	settingService *service.SettingService,
+	buildInfo service.BuildInfo,
 	cfg *config.Config,
 	redisClient *redis.Client,
 	healthChecker *health.Checker,
@@ -128,6 +130,6 @@ func registerRoutes(
 	// 注册各模块路由
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, redisClient, settingService)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, settingService)
-	routes.RegisterAdminRoutes(v1, h, adminAuth)
+	routes.RegisterAdminRoutes(v1, h, adminAuth, buildInfo)
 	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
 }
