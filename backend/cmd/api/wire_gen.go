@@ -226,7 +226,7 @@ func initializeAPIApplication(buildInfo handler.BuildInfo) (*APIApplication, err
 		return nil, err
 	}
 	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
-	v := provideAPICleanup(client, redisClient, provider, metricsServer, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, pricingService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
+	v := provideAPICleanup(client, redisClient, provider, metricsServer, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, pricingService, deferredService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
 	apiApplication := &APIApplication{
 		Server:        httpServer,
 		MetricsServer: metricsServer,
@@ -267,6 +267,7 @@ func provideAPICleanup(
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
 	pricing *service.PricingService,
+	deferred *service.DeferredService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
@@ -301,6 +302,10 @@ func provideAPICleanup(
 				if subscriptionService != nil {
 					subscriptionService.Stop()
 				}
+				return nil
+			}},
+			{"DeferredService", func() error {
+				deferred.Stop()
 				return nil
 			}},
 			{"PricingService", func() error {

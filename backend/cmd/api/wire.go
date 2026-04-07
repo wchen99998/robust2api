@@ -82,6 +82,7 @@ func provideAPICleanup(
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
 	pricing *service.PricingService,
+	deferred *service.DeferredService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
@@ -116,6 +117,10 @@ func provideAPICleanup(
 				if subscriptionService != nil {
 					subscriptionService.Stop()
 				}
+				return nil
+			}},
+			{"DeferredService", func() error {
+				deferred.Stop()
 				return nil
 			}},
 			{"PricingService", func() error {

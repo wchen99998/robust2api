@@ -26,12 +26,13 @@ func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient)
 	return svc, nil
 }
 
-// ProvideAPIPricingService creates PricingService with data loading only (no background update scheduler).
+// ProvideAPIPricingService creates PricingService with data loading and the background update scheduler.
+// Pricing data is stored in-process, so each API pod needs its own refresh loop to stay current.
 // Used by APIProviderSet.
 func ProvideAPIPricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
-	if err := svc.LoadPricingData(); err != nil {
-		println("[Service] Warning: Pricing service data loading failed:", err.Error())
+	if err := svc.Initialize(); err != nil {
+		println("[Service] Warning: Pricing service initialization failed:", err.Error())
 	}
 	return svc, nil
 }
@@ -334,9 +335,13 @@ func ProvideAPITimingWheelService() (*TimingWheelService, error) {
 	return NewTimingWheelService()
 }
 
-// ProvideAPIDeferredService constructs DeferredService without calling Start() (no recurring flush schedule).
+// ProvideAPIDeferredService constructs DeferredService and starts the recurring flush timer.
+// The API request path enqueues ScheduleLastUsedUpdate on every account use; the timer
+// must run to flush those updates to the database periodically.
 func ProvideAPIDeferredService(accountRepo AccountRepository, timingWheel *TimingWheelService) *DeferredService {
-	return NewDeferredService(accountRepo, timingWheel, 10*time.Second)
+	svc := NewDeferredService(accountRepo, timingWheel, 10*time.Second)
+	svc.Start()
+	return svc
 }
 
 // ProvideAPIIdempotencyCleanupService constructs IdempotencyCleanupService without calling Start().
