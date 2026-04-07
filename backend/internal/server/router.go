@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"log"
+	"net/http"
 	"sync/atomic"
 	"time"
 
@@ -52,10 +53,19 @@ func SetupRouter(
 	refreshFrameOrigins() // 启动时初始化
 
 	// 应用中间件
+	// OTel middleware MUST run before logging middleware so that trace_id/span_id
+	// are available in structured log output for Loki→Tempo correlation.
+	if cfg.Otel.Enabled {
+		r.Use(otelgin.Middleware("sub2api",
+			otelgin.WithFilter(func(r *http.Request) bool {
+				p := r.URL.Path
+				return p != "/health" && p != "/setup/status"
+			}),
+		))
+	}
 	r.Use(middleware2.RequestLogger())
 	r.Use(middleware2.Logger())
 	if cfg.Otel.Enabled {
-		r.Use(otelgin.Middleware("sub2api"))
 		r.Use(middleware2.TraceIDHeader())
 		r.Use(middleware2.RequestMetrics())
 	}

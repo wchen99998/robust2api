@@ -14,8 +14,7 @@ data:
         endpoint = "0.0.0.0:4317"
       }
       output {
-        traces  = [otelcol.exporter.otlphttp.tempo.input]
-        metrics = [otelcol.exporter.prometheus.default.input]
+        traces = [otelcol.exporter.otlphttp.tempo.input]
       }
     }
 
@@ -25,19 +24,6 @@ data:
     otelcol.exporter.otlphttp "tempo" {
       client {
         endpoint = "http://{{ .Release.Name }}-tempo.{{ .Values.namespace }}.svc:4318"
-      }
-    }
-
-    // ============================================
-    // Metrics exporter → Prometheus remote write
-    // ============================================
-    otelcol.exporter.prometheus "default" {
-      forward_to = [prometheus.remote_write.default.receiver]
-    }
-
-    prometheus.remote_write "default" {
-      endpoint {
-        url = "http://{{ .Release.Name }}-kube-prometheus-prometheus.{{ .Values.namespace }}.svc:9090/api/v1/write"
       }
     }
 
