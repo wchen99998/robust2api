@@ -24,8 +24,8 @@ spec:
       restartPolicy: OnFailure
       containers:
         - name: bootstrap
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.image.bootstrap.repository }}:{{ .Values.image.bootstrap.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.bootstrap.pullPolicy }}
           command: ["/app/sub2api-bootstrap"]
           envFrom:
             - configMapRef:

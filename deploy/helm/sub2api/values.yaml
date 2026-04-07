@@ -2,12 +2,20 @@
 replicaCount: 1
 
 image:
-  # -- Container image repository
-  repository: ghcr.io/wchen99998/robust2api
-  # -- Image tag (defaults to Chart appVersion)
-  tag: ""
-  # -- Image pull policy
-  pullPolicy: IfNotPresent
+  server:
+    # -- Server container image repository
+    repository: ghcr.io/wchen99998/sub2api/server
+    # -- Image tag (defaults to Chart appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  bootstrap:
+    # -- Bootstrap container image repository
+    repository: ghcr.io/wchen99998/sub2api/bootstrap
+    # -- Image tag (defaults to Chart appVersion)
+    tag: ""
+    # -- Image pull policy
+    pullPolicy: IfNotPresent
 
 # -- Image pull secrets for private registries
 imagePullSecrets: []
