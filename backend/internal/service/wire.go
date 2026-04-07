@@ -15,11 +15,23 @@ type BuildInfo struct {
 	BuildType string
 }
 
-// ProvidePricingService creates and initializes PricingService
+// ProvidePricingService creates and initializes PricingService (loads data + starts update scheduler).
+// Used by WorkerProviderSet.
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
 	if err := svc.Initialize(); err != nil {
 		// Pricing service initialization failure should not block startup, use fallback prices
+		println("[Service] Warning: Pricing service initialization failed:", err.Error())
+	}
+	return svc, nil
+}
+
+// ProvideAPIPricingService creates PricingService with data loading and the background update scheduler.
+// Pricing data is stored in-process, so each API pod needs its own refresh loop to stay current.
+// Used by APIProviderSet.
+func ProvideAPIPricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
+	svc := NewPricingService(cfg, remoteClient)
+	if err := svc.Initialize(); err != nil {
 		println("[Service] Warning: Pricing service initialization failed:", err.Error())
 	}
 	return svc, nil
@@ -290,13 +302,70 @@ func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupReposit
 	return svc
 }
 
-// ProviderSet is the Wire provider set for all services
-var ProviderSet = wire.NewSet(
+// --- API-specific provider functions (no background loops) ---
+
+// ProvideAPISchedulerSnapshotService constructs SchedulerSnapshotService without calling Start().
+func ProvideAPISchedulerSnapshotService(
+	cache SchedulerCache,
+	outboxRepo SchedulerOutboxRepository,
+	accountRepo AccountRepository,
+	groupRepo GroupRepository,
+	cfg *config.Config,
+) *SchedulerSnapshotService {
+	return NewSchedulerSnapshotService(cache, outboxRepo, accountRepo, groupRepo, cfg)
+}
+
+// ProvideAPIConcurrencyService constructs ConcurrencyService without startup cleanup.
+// CleanupStaleProcessSlots removes slots whose request-ID prefix doesn't match the
+// current process, which in a multi-replica deployment would wipe live slots owned by
+// other pods. Only the singleton worker runs this cleanup.
+func ProvideAPIConcurrencyService(cache ConcurrencyCache, cfg *config.Config) *ConcurrencyService {
+	return NewConcurrencyService(cache)
+}
+
+// ProvideAPIUserMessageQueueService constructs UserMessageQueueService without the cleanup worker.
+func ProvideAPIUserMessageQueueService(cache UserMsgQueueCache, rpmCache RPMCache, cfg *config.Config) *UserMessageQueueService {
+	return NewUserMessageQueueService(cache, rpmCache, &cfg.Gateway.UserMessageQueue)
+}
+
+// ProvideAPITimingWheelService constructs TimingWheelService without calling Start() (Start is a no-op log line;
+// go-zero's TimingWheel starts internally on construction).
+func ProvideAPITimingWheelService() (*TimingWheelService, error) {
+	return NewTimingWheelService()
+}
+
+// ProvideAPIDeferredService constructs DeferredService and starts the recurring flush timer.
+// The API request path enqueues ScheduleLastUsedUpdate on every account use; the timer
+// must run to flush those updates to the database periodically.
+func ProvideAPIDeferredService(accountRepo AccountRepository, timingWheel *TimingWheelService) *DeferredService {
+	svc := NewDeferredService(accountRepo, timingWheel, 10*time.Second)
+	svc.Start()
+	return svc
+}
+
+// ProvideAPIIdempotencyCleanupService constructs IdempotencyCleanupService without calling Start().
+func ProvideAPIIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
+	return NewIdempotencyCleanupService(repo, cfg)
+}
+
+// ProvideAPIDashboardAggregationService constructs DashboardAggregationService without calling Start().
+// The API instance serves admin dashboard queries but does not run the background aggregation loop.
+func ProvideAPIDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config) *DashboardAggregationService {
+	return NewDashboardAggregationService(repo, timingWheel, cfg)
+}
+
+// ProvideAPIUsageCleanupService constructs UsageCleanupService without calling Start().
+// The API instance serves the admin usage cleanup endpoint but does not run the background cleanup loop.
+func ProvideAPIUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
+	return NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
+}
+
+// SharedProviderSet contains pure constructors with no background goroutines (no Start() calls).
+var SharedProviderSet = wire.NewSet(
 	// Core services
 	NewAuthService,
 	NewUserService,
 	NewAPIKeyService,
-	ProvideAPIKeyAuthCacheInvalidator,
 	NewGroupService,
 	NewAccountService,
 	NewProxyService,
@@ -304,9 +373,7 @@ var ProviderSet = wire.NewSet(
 	NewPromoService,
 	NewUsageService,
 	NewDashboardService,
-	ProvidePricingService,
 	NewBillingService,
-	NewBillingCacheService,
 	NewAnnouncementService,
 	NewAdminService,
 	NewGatewayService,
@@ -331,24 +398,12 @@ var ProviderSet = wire.NewSet(
 	ProvideSettingService,
 	NewOpsService,
 	NewEmailService,
-	ProvideEmailQueueService,
 	NewTurnstileService,
 	NewSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
-	ProvideConcurrencyService,
-	ProvideUserMessageQueueService,
-	NewUsageRecordWorkerPool,
-	ProvideSchedulerSnapshotService,
 	NewIdentityService,
 	NewCRSSyncService,
 	ProvideUpdateService,
-	ProvideTokenRefreshService,
-	ProvideAccountExpiryService,
-	ProvideSubscriptionExpiryService,
-	ProvideTimingWheelService,
-	ProvideDashboardAggregationService,
-	ProvideUsageCleanupService,
-	ProvideDeferredService,
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,
 	NewUsageCache,
@@ -358,10 +413,59 @@ var ProviderSet = wire.NewSet(
 	NewDigestSessionStore,
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
-	ProvideIdempotencyCleanupService,
 	ProvideScheduledTestService,
-	ProvideScheduledTestRunnerService,
 	NewGroupCapacityService,
 	NewChannelService,
 	NewModelPricingResolver,
+)
+
+// APIProviderSet is for API/HTTP-serving instances. It includes shared services plus
+// request-path async workers and API-specific providers that skip background maintenance loops.
+var APIProviderSet = wire.NewSet(
+	SharedProviderSet,
+	// API-specific providers (no background loops)
+	ProvideAPIPricingService,
+	ProvideAPISchedulerSnapshotService,
+	ProvideAPIConcurrencyService,
+	ProvideAPIUserMessageQueueService,
+	ProvideAPITimingWheelService,
+	ProvideAPIDeferredService,
+	ProvideAPIIdempotencyCleanupService,
+	// Admin data-query providers (no background loops)
+	ProvideAPIDashboardAggregationService,
+	ProvideAPIUsageCleanupService,
+	// Request-path async workers (must stay in API for request processing)
+	ProvideEmailQueueService,
+	NewBillingCacheService,
+	NewUsageRecordWorkerPool,
+	// Cache invalidation (must run on every API instance for L1 cache consistency)
+	ProvideAPIKeyAuthCacheInvalidator,
+)
+
+// WorkerProviderSet is for background worker instances. It includes shared services plus
+// all maintenance loops and background schedulers.
+var WorkerProviderSet = wire.NewSet(
+	SharedProviderSet,
+	// Worker-specific providers (with Start / background loops)
+	ProvidePricingService,
+	ProvideSchedulerSnapshotService,
+	ProvideConcurrencyService,
+	ProvideUserMessageQueueService,
+	ProvideTimingWheelService,
+	ProvideDeferredService,
+	ProvideIdempotencyCleanupService,
+	// Maintenance loops
+	ProvideTokenRefreshService,
+	ProvideDashboardAggregationService,
+	ProvideUsageCleanupService,
+	ProvideAccountExpiryService,
+	ProvideSubscriptionExpiryService,
+	ProvideScheduledTestRunnerService,
+	// Worker needs these because some shared services depend on them transitively.
+	// The goroutines they start (cache writers, email workers) are a known compromise —
+	// they run idle in the Worker since no HTTP requests generate work for them.
+	ProvideEmailQueueService,
+	NewBillingCacheService,
+	NewUsageRecordWorkerPool,
+	ProvideAPIKeyAuthCacheInvalidator,
 )

@@ -6,57 +6,45 @@ package main
 import (
 	"context"
 	"log"
-	"net/http"
 	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/health"
 	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
-	"github.com/Wei-Shaw/sub2api/internal/server"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 )
 
-type Application struct {
-	Server        *http.Server
-	MetricsServer *appelotel.MetricsServer
-	Cleanup       func()
+// WorkerApplication is the top-level struct for the worker binary.
+type WorkerApplication struct {
+	Health  *health.Checker
+	Cleanup func()
 }
 
-func initializeApplication(buildInfo handler.BuildInfo) (*Application, error) {
+func initializeWorkerApplication() (*WorkerApplication, error) {
 	wire.Build(
-		// Infrastructure layer ProviderSets
+		// Infrastructure
 		config.ProviderSet,
-
-		// OpenTelemetry providers
 		appelotel.ProviderSet,
-
-		// Business layer ProviderSets
 		repository.ProviderSet,
-		service.ProviderSet,
-		middleware.ProviderSet,
-		handler.ProviderSet,
 
-		// Server layer ProviderSet
-		server.ProviderSet,
+		// Business logic — Worker role
+		service.WorkerProviderSet,
 
-		// Privacy client factory for OpenAI training opt-out
+		// Health probes
+		health.NewChecker,
+
+		// Local helpers
 		providePrivacyClientFactory,
+		provideWorkerCleanup,
 
-		// BuildInfo provider
-		provideServiceBuildInfo,
-
-		// Cleanup function provider
-		provideCleanup,
-
-		// Application struct
-		wire.Struct(new(Application), "Server", "MetricsServer", "Cleanup"),
+		// Wire struct binding
+		wire.Struct(new(WorkerApplication), "Health", "Cleanup"),
 	)
 	return nil, nil
 }
@@ -65,18 +53,12 @@ func providePrivacyClientFactory() service.PrivacyClientFactory {
 	return repository.CreatePrivacyReqClient
 }
 
-func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
-	return service.BuildInfo{
-		Version:   buildInfo.Version,
-		BuildType: buildInfo.BuildType,
-	}
-}
-
-func provideCleanup(
+func provideWorkerCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
 	otelProvider *appelotel.Provider,
 	metricsServer *appelotel.MetricsServer,
+	_ *service.ConcurrencyService,
 	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
@@ -84,19 +66,19 @@ func provideCleanup(
 	usageCleanup *service.UsageCleanupService,
 	idempotencyCleanup *service.IdempotencyCleanupService,
 	pricing *service.PricingService,
+	scheduledTestRunner *service.ScheduledTestRunnerService,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
+	userMsgQueue *service.UserMessageQueueService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
-	openAIGateway *service.OpenAIGatewayService,
-	scheduledTestRunner *service.ScheduledTestRunnerService,
 ) func() {
 	return func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 
 		type cleanupStep struct {
@@ -104,23 +86,10 @@ func provideCleanup(
 			fn   func() error
 		}
 
-		// 应用层清理步骤可并行执行，基础设施资源（Redis/Ent）最后按顺序关闭。
 		parallelSteps := []cleanupStep{
 			{"SchedulerSnapshotService", func() error {
 				if schedulerSnapshot != nil {
 					schedulerSnapshot.Stop()
-				}
-				return nil
-			}},
-			{"UsageCleanupService", func() error {
-				if usageCleanup != nil {
-					usageCleanup.Stop()
-				}
-				return nil
-			}},
-			{"IdempotencyCleanupService", func() error {
-				if idempotencyCleanup != nil {
-					idempotencyCleanup.Stop()
 				}
 				return nil
 			}},
@@ -136,14 +105,26 @@ func provideCleanup(
 				subscriptionExpiry.Stop()
 				return nil
 			}},
-			{"SubscriptionService", func() error {
-				if subscriptionService != nil {
-					subscriptionService.Stop()
+			{"UsageCleanupService", func() error {
+				if usageCleanup != nil {
+					usageCleanup.Stop()
+				}
+				return nil
+			}},
+			{"IdempotencyCleanupService", func() error {
+				if idempotencyCleanup != nil {
+					idempotencyCleanup.Stop()
 				}
 				return nil
 			}},
 			{"PricingService", func() error {
 				pricing.Stop()
+				return nil
+			}},
+			{"ScheduledTestRunnerService", func() error {
+				if scheduledTestRunner != nil {
+					scheduledTestRunner.Stop()
+				}
 				return nil
 			}},
 			{"EmailQueueService", func() error {
@@ -157,6 +138,18 @@ func provideCleanup(
 			{"UsageRecordWorkerPool", func() error {
 				if usageRecordWorkerPool != nil {
 					usageRecordWorkerPool.Stop()
+				}
+				return nil
+			}},
+			{"SubscriptionService", func() error {
+				if subscriptionService != nil {
+					subscriptionService.Stop()
+				}
+				return nil
+			}},
+			{"UserMessageQueueService", func() error {
+				if userMsgQueue != nil {
+					userMsgQueue.Stop()
 				}
 				return nil
 			}},
@@ -174,18 +167,6 @@ func provideCleanup(
 			}},
 			{"AntigravityOAuthService", func() error {
 				antigravityOAuth.Stop()
-				return nil
-			}},
-			{"OpenAIWSPool", func() error {
-				if openAIGateway != nil {
-					openAIGateway.CloseOpenAIWSPool()
-				}
-				return nil
-			}},
-			{"ScheduledTestRunnerService", func() error {
-				if scheduledTestRunner != nil {
-					scheduledTestRunner.Stop()
-				}
 				return nil
 			}},
 		}
@@ -235,7 +216,7 @@ func provideCleanup(
 
 		runParallel(parallelSteps)
 
-		// Shutdown OTel after services stop (flushes remaining spans/metrics)
+		// Shutdown OTel after services stop
 		if otelProvider != nil {
 			if err := otelProvider.Shutdown(ctx); err != nil {
 				log.Printf("OTel provider shutdown error: %v", err)
@@ -249,10 +230,9 @@ func provideCleanup(
 
 		runSequential(infraSteps)
 
-		// Check if context timed out
 		select {
 		case <-ctx.Done():
-			log.Printf("[Cleanup] Warning: cleanup timed out after 10 seconds")
+			log.Printf("[Cleanup] Warning: cleanup timed out after 30 seconds")
 		default:
 			log.Printf("[Cleanup] All cleanup steps completed")
 		}

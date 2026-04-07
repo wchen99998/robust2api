@@ -53,7 +53,7 @@ func (c *redeemCache) IncrementRedeemAttemptCount(ctx context.Context, userID in
 
 func (c *redeemCache) AcquireRedeemLock(ctx context.Context, code string, ttl time.Duration) (bool, error) {
 	key := redeemLockKey(code)
-	return c.rdb.SetNX(ctx, key, 1, ttl).Result()
+	return c.rdb.SetNX(ctx, key, 1, ttl).Result() //nolint:staticcheck // SetNX is cleaner for lock acquire pattern
 }
 
 func (c *redeemCache) ReleaseRedeemLock(ctx context.Context, code string) error {

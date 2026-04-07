@@ -1,9 +1,10 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "sub2api.fullname" . }}
+  name: {{ include "sub2api.fullname" . }}-api
   labels:
     {{- include "sub2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
 spec:
   type: {{ .Values.service.type }}
   ports:
@@ -18,4 +19,4 @@ spec:
       name: metrics
   {{- end }}
   selector:
-    {{- include "sub2api.selectorLabels" . | nindent 4 }}
+    {{- include "sub2api.api.selectorLabels" . | nindent 4 }}

@@ -123,8 +123,9 @@ func NewPricingService(cfg *config.Config, remoteClient PricingRemoteClient) *Pr
 	return s
 }
 
-// Initialize 初始化价格服务
-func (s *PricingService) Initialize() error {
+// LoadPricingData loads pricing data from local/remote sources without starting the
+// background update scheduler. Suitable for API-only instances that just need read access.
+func (s *PricingService) LoadPricingData() error {
 	// 确保数据目录存在
 	if err := os.MkdirAll(s.cfg.Pricing.DataDir, 0755); err != nil {
 		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to create data directory: %v", err)
@@ -138,10 +139,20 @@ func (s *PricingService) Initialize() error {
 		}
 	}
 
+	logger.LegacyPrintf("service.pricing", "[Pricing] Pricing data loaded with %d models", len(s.pricingData))
+	return nil
+}
+
+// Initialize 初始化价格服务 (loads data + starts update scheduler)
+func (s *PricingService) Initialize() error {
+	if err := s.LoadPricingData(); err != nil {
+		return err
+	}
+
 	// 启动定时更新
 	s.startUpdateScheduler()
 
-	logger.LegacyPrintf("service.pricing", "[Pricing] Service initialized with %d models", len(s.pricingData))
+	logger.LegacyPrintf("service.pricing", "[Pricing] Service initialized with %d models (scheduler started)", len(s.pricingData))
 	return nil
 }
 

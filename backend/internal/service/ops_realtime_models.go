@@ -88,4 +88,3 @@ type AccountAvailability struct {
 	ErrorMessage           string     `json:"error_message"`
 	TempUnschedulableUntil *time.Time `json:"temp_unschedulable_until,omitempty"`
 }
-

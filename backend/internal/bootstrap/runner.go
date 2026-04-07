@@ -49,7 +49,7 @@ func Run(ctx context.Context, env BootstrapEnv) error {
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Verify connectivity with a short timeout.
 	pingCtx, pingCancel := context.WithTimeout(ctx, 10*time.Second)
@@ -71,7 +71,7 @@ func Run(ctx context.Context, env BootstrapEnv) error {
 		return fmt.Errorf("open ent driver: %w", err)
 	}
 	client := ent.NewClient(ent.Driver(drv))
-	defer client.Close()
+	defer func() { _ = client.Close() }()
 
 	steps := []step{
 		{name: "persist JWT secret", fn: func() error {

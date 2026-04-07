@@ -13,8 +13,9 @@ Sub2API is an AI API Gateway Platform for subscription quota distribution. It co
 ### Backend (run from `backend/`)
 
 ```bash
-go run ./cmd/server/                    # Run dev server
-make build                              # Build binary to bin/server
+go run ./cmd/api/                       # Run API server
+go run ./cmd/worker/                    # Run background worker
+make build                              # Build binaries to bin/api and bin/worker
 make generate                           # Regenerate Ent ORM + Wire DI code
 go test -tags=unit ./...                # Unit tests
 go test -tags=integration ./...         # Integration tests (needs DB/Redis)
@@ -57,15 +58,16 @@ PostgreSQL
 
 ### Dependency Injection
 
-Uses **Google Wire** for compile-time DI. The wire graph is in `backend/cmd/server/wire.go`. After changing provider sets, run `make generate` from `backend/`.
+Uses **Google Wire** for compile-time DI. The wire graph is in `backend/cmd/api/wire.go` (API server) and `backend/cmd/worker/wire.go` (background worker). After changing provider sets, run `make generate` from `backend/`.
 
 ### Entry Point
 
-`backend/cmd/server/main.go` — initializes config (Viper), DB (Ent), Redis, wires services, starts Gin HTTP server with graceful shutdown.
+`backend/cmd/api/main.go` — initializes config (Viper), DB (Ent), Redis, wires services, starts Gin HTTP server with graceful shutdown. `backend/cmd/worker/main.go` — runs background workers (usage recording, billing).
 
 ### Key Backend Packages
 
-- `cmd/server/` — main entry, Wire DI setup, version embedding
+- `cmd/api/` — API server entry, Wire DI setup, version embedding
+- `cmd/worker/` — background worker entry, Wire DI setup
 - `ent/schema/` — database schema definitions (source of truth for DB models)
 - `internal/handler/` — HTTP handlers, grouped by domain; DTOs in `handler/dto/`
 - `internal/service/` — business logic; `GatewayService` is the core API proxy

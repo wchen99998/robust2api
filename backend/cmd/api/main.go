@@ -33,12 +33,9 @@ var (
 )
 
 func init() {
-	// 如果 Version 已通过 ldflags 注入（例如 -X main.Version=...），则不要覆盖。
 	if strings.TrimSpace(Version) != "" {
 		return
 	}
-
-	// 默认从 embedded VERSION 文件读取版本号（编译期打包进二进制）。
 	Version = strings.TrimSpace(embeddedVersion)
 	if Version == "" {
 		Version = "0.0.0-dev"
@@ -53,14 +50,14 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		log.Printf("Sub2API API %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
 
-	runMainServer()
+	runAPIServer()
 }
 
-func runMainServer() {
+func runAPIServer() {
 	cfg, err := config.Load()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
@@ -69,7 +66,7 @@ func runMainServer() {
 		log.Fatalf("Failed to initialize logger: %v", err)
 	}
 	if cfg.RunMode == config.RunModeSimple {
-		log.Println("⚠️  WARNING: Running in SIMPLE mode - billing and quota checks are DISABLED")
+		log.Println("WARNING: Running in SIMPLE mode - billing and quota checks are DISABLED")
 	}
 
 	buildInfo := handler.BuildInfo{
@@ -77,13 +74,16 @@ func runMainServer() {
 		BuildType: BuildType,
 	}
 
-	app, err := initializeApplication(buildInfo)
+	app, err := initializeAPIApplication(buildInfo)
 	if err != nil {
-		log.Fatalf("Failed to initialize application: %v", err)
+		log.Fatalf("Failed to initialize API application: %v", err)
 	}
 	defer app.Cleanup()
 
-	// 启动服务器
+	// Mark as ready after successful initialization
+	app.Health.SetReady()
+
+	// Start HTTP server
 	go func() {
 		if err := app.Server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("Failed to start server: %v", err)
@@ -98,14 +98,14 @@ func runMainServer() {
 		}()
 	}
 
-	log.Printf("Server started on %s", app.Server.Addr)
+	log.Printf("API server started on %s", app.Server.Addr)
 
-	// 等待中断信号
+	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down server...")
+	log.Println("Shutting down API server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -120,5 +120,5 @@ func runMainServer() {
 		}
 	}
 
-	log.Println("Server exited")
+	log.Println("API server exited")
 }
