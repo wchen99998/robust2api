@@ -15,12 +15,23 @@ type BuildInfo struct {
 	BuildType string
 }
 
-// ProvidePricingService creates and initializes PricingService
+// ProvidePricingService creates and initializes PricingService (loads data + starts update scheduler).
+// Used by WorkerProviderSet.
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
 	svc := NewPricingService(cfg, remoteClient)
 	if err := svc.Initialize(); err != nil {
 		// Pricing service initialization failure should not block startup, use fallback prices
 		println("[Service] Warning: Pricing service initialization failed:", err.Error())
+	}
+	return svc, nil
+}
+
+// ProvideAPIPricingService creates PricingService with data loading only (no background update scheduler).
+// Used by APIProviderSet.
+func ProvideAPIPricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
+	svc := NewPricingService(cfg, remoteClient)
+	if err := svc.LoadPricingData(); err != nil {
+		println("[Service] Warning: Pricing service data loading failed:", err.Error())
 	}
 	return svc, nil
 }
@@ -290,13 +301,55 @@ func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupReposit
 	return svc
 }
 
-// ProviderSet is the Wire provider set for all services
-var ProviderSet = wire.NewSet(
+// --- API-specific provider functions (no background loops) ---
+
+// ProvideAPISchedulerSnapshotService constructs SchedulerSnapshotService without calling Start().
+func ProvideAPISchedulerSnapshotService(
+	cache SchedulerCache,
+	outboxRepo SchedulerOutboxRepository,
+	accountRepo AccountRepository,
+	groupRepo GroupRepository,
+	cfg *config.Config,
+) *SchedulerSnapshotService {
+	return NewSchedulerSnapshotService(cache, outboxRepo, accountRepo, groupRepo, cfg)
+}
+
+// ProvideAPIConcurrencyService constructs ConcurrencyService with startup cleanup but no periodic cleanup worker.
+func ProvideAPIConcurrencyService(cache ConcurrencyCache, cfg *config.Config) *ConcurrencyService {
+	svc := NewConcurrencyService(cache)
+	if err := svc.CleanupStaleProcessSlots(context.Background()); err != nil {
+		logger.LegacyPrintf("service.concurrency", "Warning: startup cleanup stale process slots failed: %v", err)
+	}
+	return svc
+}
+
+// ProvideAPIUserMessageQueueService constructs UserMessageQueueService without the cleanup worker.
+func ProvideAPIUserMessageQueueService(cache UserMsgQueueCache, rpmCache RPMCache, cfg *config.Config) *UserMessageQueueService {
+	return NewUserMessageQueueService(cache, rpmCache, &cfg.Gateway.UserMessageQueue)
+}
+
+// ProvideAPITimingWheelService constructs TimingWheelService without calling Start() (Start is a no-op log line;
+// go-zero's TimingWheel starts internally on construction).
+func ProvideAPITimingWheelService() (*TimingWheelService, error) {
+	return NewTimingWheelService()
+}
+
+// ProvideAPIDeferredService constructs DeferredService without calling Start() (no recurring flush schedule).
+func ProvideAPIDeferredService(accountRepo AccountRepository, timingWheel *TimingWheelService) *DeferredService {
+	return NewDeferredService(accountRepo, timingWheel, 10*time.Second)
+}
+
+// ProvideAPIIdempotencyCleanupService constructs IdempotencyCleanupService without calling Start().
+func ProvideAPIIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
+	return NewIdempotencyCleanupService(repo, cfg)
+}
+
+// SharedProviderSet contains pure constructors with no background goroutines (no Start() calls).
+var SharedProviderSet = wire.NewSet(
 	// Core services
 	NewAuthService,
 	NewUserService,
 	NewAPIKeyService,
-	ProvideAPIKeyAuthCacheInvalidator,
 	NewGroupService,
 	NewAccountService,
 	NewProxyService,
@@ -304,9 +357,7 @@ var ProviderSet = wire.NewSet(
 	NewPromoService,
 	NewUsageService,
 	NewDashboardService,
-	ProvidePricingService,
 	NewBillingService,
-	NewBillingCacheService,
 	NewAnnouncementService,
 	NewAdminService,
 	NewGatewayService,
@@ -331,24 +382,12 @@ var ProviderSet = wire.NewSet(
 	ProvideSettingService,
 	NewOpsService,
 	NewEmailService,
-	ProvideEmailQueueService,
 	NewTurnstileService,
 	NewSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
-	ProvideConcurrencyService,
-	ProvideUserMessageQueueService,
-	NewUsageRecordWorkerPool,
-	ProvideSchedulerSnapshotService,
 	NewIdentityService,
 	NewCRSSyncService,
 	ProvideUpdateService,
-	ProvideTokenRefreshService,
-	ProvideAccountExpiryService,
-	ProvideSubscriptionExpiryService,
-	ProvideTimingWheelService,
-	ProvideDashboardAggregationService,
-	ProvideUsageCleanupService,
-	ProvideDeferredService,
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,
 	NewUsageCache,
@@ -358,10 +397,61 @@ var ProviderSet = wire.NewSet(
 	NewDigestSessionStore,
 	ProvideIdempotencyCoordinator,
 	ProvideSystemOperationLockService,
-	ProvideIdempotencyCleanupService,
 	ProvideScheduledTestService,
-	ProvideScheduledTestRunnerService,
 	NewGroupCapacityService,
 	NewChannelService,
 	NewModelPricingResolver,
 )
+
+// APIProviderSet is for API/HTTP-serving instances. It includes shared services plus
+// request-path async workers and API-specific providers that skip background maintenance loops.
+var APIProviderSet = wire.NewSet(
+	SharedProviderSet,
+	// API-specific providers (no background loops)
+	ProvideAPIPricingService,
+	ProvideAPISchedulerSnapshotService,
+	ProvideAPIConcurrencyService,
+	ProvideAPIUserMessageQueueService,
+	ProvideAPITimingWheelService,
+	ProvideAPIDeferredService,
+	ProvideAPIIdempotencyCleanupService,
+	// Request-path async workers (must stay in API for request processing)
+	ProvideEmailQueueService,
+	NewBillingCacheService,
+	NewUsageRecordWorkerPool,
+	// Cache invalidation (must run on every API instance for L1 cache consistency)
+	ProvideAPIKeyAuthCacheInvalidator,
+)
+
+// WorkerProviderSet is for background worker instances. It includes shared services plus
+// all maintenance loops and background schedulers.
+var WorkerProviderSet = wire.NewSet(
+	SharedProviderSet,
+	// Worker-specific providers (with Start / background loops)
+	ProvidePricingService,
+	ProvideSchedulerSnapshotService,
+	ProvideConcurrencyService,
+	ProvideUserMessageQueueService,
+	ProvideTimingWheelService,
+	ProvideDeferredService,
+	ProvideIdempotencyCleanupService,
+	// Maintenance loops
+	ProvideTokenRefreshService,
+	ProvideDashboardAggregationService,
+	ProvideUsageCleanupService,
+	ProvideAccountExpiryService,
+	ProvideSubscriptionExpiryService,
+	ProvideScheduledTestRunnerService,
+	ProvideBackupService,
+	// Worker needs these because some shared services depend on them transitively.
+	// The goroutines they start (cache writers, email workers) are a known compromise —
+	// they run idle in the Worker since no HTTP requests generate work for them.
+	ProvideEmailQueueService,
+	NewBillingCacheService,
+	NewUsageRecordWorkerPool,
+	ProvideAPIKeyAuthCacheInvalidator,
+)
+
+// ProviderSet is DEPRECATED — use APIProviderSet or WorkerProviderSet.
+// Kept as an alias to APIProviderSet so existing cmd/server/wire.go compiles during migration.
+var ProviderSet = APIProviderSet
