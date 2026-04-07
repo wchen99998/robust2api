@@ -315,13 +315,12 @@ func ProvideAPISchedulerSnapshotService(
 	return NewSchedulerSnapshotService(cache, outboxRepo, accountRepo, groupRepo, cfg)
 }
 
-// ProvideAPIConcurrencyService constructs ConcurrencyService with startup cleanup but no periodic cleanup worker.
+// ProvideAPIConcurrencyService constructs ConcurrencyService without startup cleanup.
+// CleanupStaleProcessSlots removes slots whose request-ID prefix doesn't match the
+// current process, which in a multi-replica deployment would wipe live slots owned by
+// other pods. Only the singleton worker runs this cleanup.
 func ProvideAPIConcurrencyService(cache ConcurrencyCache, cfg *config.Config) *ConcurrencyService {
-	svc := NewConcurrencyService(cache)
-	if err := svc.CleanupStaleProcessSlots(context.Background()); err != nil {
-		logger.LegacyPrintf("service.concurrency", "Warning: startup cleanup stale process slots failed: %v", err)
-	}
-	return svc
+	return NewConcurrencyService(cache)
 }
 
 // ProvideAPIUserMessageQueueService constructs UserMessageQueueService without the cleanup worker.
