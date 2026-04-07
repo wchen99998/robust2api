@@ -479,7 +479,3 @@ var WorkerProviderSet = wire.NewSet(
 	NewUsageRecordWorkerPool,
 	ProvideAPIKeyAuthCacheInvalidator,
 )
-
-// ProviderSet is DEPRECATED — use APIProviderSet or WorkerProviderSet.
-// Kept as an alias to APIProviderSet so existing cmd/server/wire.go compiles during migration.
-var ProviderSet = APIProviderSet
