@@ -53,12 +53,6 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
-		// 数据管理
-		registerDataManagementRoutes(admin, h)
-
-		// 数据库备份恢复
-		registerBackupRoutes(admin, h)
-
 		// 运维监控（Ops）
 		registerOpsRoutes(admin, h)
 
@@ -350,53 +344,6 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		// Beta 策略配置
 		adminSettings.GET("/beta-policy", h.Admin.Setting.GetBetaPolicySettings)
 		adminSettings.PUT("/beta-policy", h.Admin.Setting.UpdateBetaPolicySettings)
-	}
-}
-
-func registerDataManagementRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	dataManagement := admin.Group("/data-management")
-	{
-		dataManagement.GET("/agent/health", h.Admin.DataManagement.GetAgentHealth)
-		dataManagement.GET("/config", h.Admin.DataManagement.GetConfig)
-		dataManagement.PUT("/config", h.Admin.DataManagement.UpdateConfig)
-		dataManagement.GET("/sources/:source_type/profiles", h.Admin.DataManagement.ListSourceProfiles)
-		dataManagement.POST("/sources/:source_type/profiles", h.Admin.DataManagement.CreateSourceProfile)
-		dataManagement.PUT("/sources/:source_type/profiles/:profile_id", h.Admin.DataManagement.UpdateSourceProfile)
-		dataManagement.DELETE("/sources/:source_type/profiles/:profile_id", h.Admin.DataManagement.DeleteSourceProfile)
-		dataManagement.POST("/sources/:source_type/profiles/:profile_id/activate", h.Admin.DataManagement.SetActiveSourceProfile)
-		dataManagement.POST("/s3/test", h.Admin.DataManagement.TestS3)
-		dataManagement.GET("/s3/profiles", h.Admin.DataManagement.ListS3Profiles)
-		dataManagement.POST("/s3/profiles", h.Admin.DataManagement.CreateS3Profile)
-		dataManagement.PUT("/s3/profiles/:profile_id", h.Admin.DataManagement.UpdateS3Profile)
-		dataManagement.DELETE("/s3/profiles/:profile_id", h.Admin.DataManagement.DeleteS3Profile)
-		dataManagement.POST("/s3/profiles/:profile_id/activate", h.Admin.DataManagement.SetActiveS3Profile)
-		dataManagement.POST("/backups", h.Admin.DataManagement.CreateBackupJob)
-		dataManagement.GET("/backups", h.Admin.DataManagement.ListBackupJobs)
-		dataManagement.GET("/backups/:job_id", h.Admin.DataManagement.GetBackupJob)
-	}
-}
-
-func registerBackupRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	backup := admin.Group("/backups")
-	{
-		// S3 存储配置
-		backup.GET("/s3-config", h.Admin.Backup.GetS3Config)
-		backup.PUT("/s3-config", h.Admin.Backup.UpdateS3Config)
-		backup.POST("/s3-config/test", h.Admin.Backup.TestS3Connection)
-
-		// 定时备份配置
-		backup.GET("/schedule", h.Admin.Backup.GetSchedule)
-		backup.PUT("/schedule", h.Admin.Backup.UpdateSchedule)
-
-		// 备份操作
-		backup.POST("", h.Admin.Backup.CreateBackup)
-		backup.GET("", h.Admin.Backup.ListBackups)
-		backup.GET("/:id", h.Admin.Backup.GetBackup)
-		backup.DELETE("/:id", h.Admin.Backup.DeleteBackup)
-		backup.GET("/:id/download-url", h.Admin.Backup.GetDownloadURL)
-
-		// 恢复操作
-		backup.POST("/:id/restore", h.Admin.Backup.RestoreBackup)
 	}
 }
 

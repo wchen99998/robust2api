@@ -283,19 +283,6 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthC
 	return apiKeyService
 }
 
-// ProvideBackupService creates and starts BackupService
-func ProvideBackupService(
-	settingRepo SettingRepository,
-	cfg *config.Config,
-	encryptor SecretEncryptor,
-	storeFactory BackupObjectStoreFactory,
-	dumper DBDumper,
-) *BackupService {
-	svc := NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
-	svc.Start()
-	return svc
-}
-
 // ProvideSettingService wires SettingService with group reader for default subscription validation.
 func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, cfg *config.Config) *SettingService {
 	svc := NewSettingService(settingRepo, cfg)
@@ -342,8 +329,6 @@ var ProviderSet = wire.NewSet(
 	NewAccountUsageService,
 	NewAccountTestService,
 	ProvideSettingService,
-	NewDataManagementService,
-	ProvideBackupService,
 	NewOpsService,
 	NewEmailService,
 	ProvideEmailQueueService,

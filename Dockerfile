@@ -2,13 +2,12 @@
 # Sub2API Server — Multi-Stage Dockerfile
 # =============================================================================
 # Builds the server binary with embedded frontend assets.
-# Produces a minimal image with pg_dump/psql for backup support.
+# Produces a minimal runtime image.
 # =============================================================================
 
 ARG NODE_IMAGE=node:24-alpine
 ARG GOLANG_IMAGE=golang:1.26.1-alpine
 ARG ALPINE_IMAGE=alpine:3.21
-ARG POSTGRES_IMAGE=postgres:18-alpine
 ARG GOPROXY=https://goproxy.cn,direct
 ARG GOSUMDB=sum.golang.google.cn
 
@@ -63,12 +62,7 @@ RUN VERSION_VALUE="${VERSION}" && \
     ./cmd/server
 
 # -----------------------------------------------------------------------------
-# Stage 3: PostgreSQL Client
-# -----------------------------------------------------------------------------
-FROM ${POSTGRES_IMAGE} AS pg-client
-
-# -----------------------------------------------------------------------------
-# Stage 4: Final Runtime Image
+# Stage 3: Final Runtime Image
 # -----------------------------------------------------------------------------
 FROM ${ALPINE_IMAGE}
 
@@ -79,17 +73,7 @@ LABEL org.opencontainers.image.source="https://github.com/wchen99998/sub2api"
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
-    libpq \
-    zstd-libs \
-    lz4-libs \
-    krb5-libs \
-    libldap \
-    libedit \
     && rm -rf /var/cache/apk/*
-
-COPY --from=pg-client /usr/local/bin/pg_dump /usr/local/bin/pg_dump
-COPY --from=pg-client /usr/local/bin/psql /usr/local/bin/psql
-COPY --from=pg-client /usr/local/lib/libpq.so.5* /usr/local/lib/
 
 RUN addgroup -g 1000 sub2api && \
     adduser -u 1000 -G sub2api -s /bin/sh -D sub2api

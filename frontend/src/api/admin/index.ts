@@ -20,10 +20,8 @@ import antigravityAPI from './antigravity'
 import userAttributesAPI from './userAttributes'
 import opsAPI from './ops'
 import errorPassthroughAPI from './errorPassthrough'
-import dataManagementAPI from './dataManagement'
 import apiKeysAPI from './apiKeys'
 import scheduledTestsAPI from './scheduledTests'
-import backupAPI from './backup'
 import tlsFingerprintProfileAPI from './tlsFingerprintProfile'
 import channelsAPI from './channels'
 
@@ -48,10 +46,8 @@ export const adminAPI = {
   userAttributes: userAttributesAPI,
   ops: opsAPI,
   errorPassthrough: errorPassthroughAPI,
-  dataManagement: dataManagementAPI,
   apiKeys: apiKeysAPI,
   scheduledTests: scheduledTestsAPI,
-  backup: backupAPI,
   tlsFingerprintProfiles: tlsFingerprintProfileAPI,
   channels: channelsAPI
 }
@@ -74,10 +70,8 @@ export {
   userAttributesAPI,
   opsAPI,
   errorPassthroughAPI,
-  dataManagementAPI,
   apiKeysAPI,
   scheduledTestsAPI,
-  backupAPI,
   tlsFingerprintProfileAPI,
   channelsAPI
 }
@@ -87,5 +81,4 @@ export default adminAPI
 // Re-export types used by components
 export type { BalanceHistoryItem } from './users'
 export type { ErrorPassthroughRule, CreateRuleRequest, UpdateRuleRequest } from './errorPassthrough'
-export type { BackupAgentHealth, DataManagementConfig } from './dataManagement'
 export type { TLSFingerprintProfile, CreateProfileRequest, UpdateProfileRequest } from './tlsFingerprintProfile'
