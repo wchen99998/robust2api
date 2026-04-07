@@ -1,0 +1,31 @@
+# =============================================================================
+# Sub2API Bootstrap — GoReleaser Dockerfile
+# =============================================================================
+# Packages the pre-built bootstrap binary. No compilation needed.
+# =============================================================================
+
+ARG ALPINE_IMAGE=alpine:3.21
+
+FROM ${ALPINE_IMAGE}
+
+LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
+LABEL description="Sub2API Bootstrap - DB Migration & Seeding"
+LABEL org.opencontainers.image.source="https://github.com/Wei-Shaw/sub2api"
+
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+RUN addgroup -g 1000 sub2api && \
+    adduser -u 1000 -G sub2api -s /bin/sh -D sub2api
+
+WORKDIR /app
+
+COPY sub2api-bootstrap /app/sub2api-bootstrap
+
+RUN chown -R sub2api:sub2api /app
+
+USER sub2api
+
+ENTRYPOINT ["/app/sub2api-bootstrap"]
