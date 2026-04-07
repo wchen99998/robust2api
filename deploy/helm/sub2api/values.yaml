@@ -56,21 +56,21 @@ worker:
 image:
   api:
     # -- API container image repository
-    repository: ghcr.io/wchen99998/sub2api/api
+    repository: ghcr.io/wchen99998/robust2api/api
     # -- Image tag (defaults to Chart appVersion)
     tag: ""
     # -- Image pull policy
     pullPolicy: IfNotPresent
   worker:
     # -- Worker container image repository
-    repository: ghcr.io/wchen99998/sub2api/worker
+    repository: ghcr.io/wchen99998/robust2api/worker
     # -- Image tag (defaults to Chart appVersion)
     tag: ""
     # -- Image pull policy
     pullPolicy: IfNotPresent
   bootstrap:
     # -- Bootstrap container image repository
-    repository: ghcr.io/wchen99998/sub2api/bootstrap
+    repository: ghcr.io/wchen99998/robust2api/bootstrap
     # -- Image tag (defaults to Chart appVersion)
     tag: ""
     # -- Image pull policy
