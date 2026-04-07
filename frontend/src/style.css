@@ -133,6 +133,11 @@
     @apply hover:opacity-85;
   }
 
+  .btn-outline-danger {
+    @apply border border-status-red/20 bg-status-red/[0.04] text-status-red dark:border-status-red-dark/30 dark:bg-status-red-dark/[0.08] dark:text-status-red-dark;
+    @apply hover:bg-status-red/[0.1] dark:hover:bg-status-red-dark/[0.14];
+  }
+
   .btn-success {
     @apply bg-status-green text-white;
     @apply hover:opacity-85;
@@ -328,7 +333,7 @@
   /* ============ 下拉菜单 ============ */
   .dropdown {
     @apply absolute z-50;
-    @apply bg-white dark:bg-dark-800;
+    @apply bg-white/95 dark:bg-[#2c2b2a]/95 backdrop-blur-xl;
     @apply rounded-mica-lg;
     @apply border border-black/[0.06] dark:border-white/[0.08];
     @apply shadow-mica-popover;
@@ -354,7 +359,7 @@
   .modal-content {
     @apply w-full;
     @apply max-h-[95vh] sm:max-h-[90vh];
-    @apply bg-white dark:bg-dark-800;
+    @apply bg-white/95 dark:bg-[#2c2b2a]/95 backdrop-blur-xl;
     @apply rounded-mica-lg shadow-mica-popover;
     @apply border border-black/[0.06] dark:border-white/[0.08];
     @apply flex flex-col;
@@ -546,6 +551,117 @@
 
   .page-description {
     @apply mt-1 text-mica-subhead text-mica-text-secondary dark:text-mica-text-secondary-dark;
+  }
+
+  .account-page {
+    @apply mx-auto flex w-full max-w-[1240px] flex-col gap-5;
+  }
+
+  .account-page-wide {
+    @apply max-w-[1320px];
+  }
+
+  .account-page-header {
+    @apply flex flex-col gap-3;
+  }
+
+  .account-page-eyebrow {
+    @apply text-mica-caption uppercase tracking-[0.32em] text-mica-text-tertiary dark:text-mica-text-tertiary-dark;
+  }
+
+  .account-page-heading {
+    @apply flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between;
+  }
+
+  .account-page-title {
+    @apply text-mica-large-title text-mica-text-primary dark:text-mica-text-primary-dark;
+  }
+
+  .account-page-subtitle {
+    @apply mt-1 max-w-2xl text-mica-body text-mica-text-secondary dark:text-mica-text-secondary-dark;
+  }
+
+  .account-page-actions {
+    @apply flex flex-wrap items-center gap-2 sm:justify-end;
+  }
+
+  .account-page-meta {
+    @apply flex flex-wrap items-center gap-2 text-mica-subhead text-mica-text-secondary dark:text-mica-text-secondary-dark;
+  }
+
+  .grouped-surface {
+    @apply overflow-hidden rounded-mica-lg border border-black/[0.06] bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05];
+  }
+
+  .grouped-surface-header {
+    @apply flex items-center justify-between gap-3 px-5 py-4;
+    @apply border-b border-black/[0.06] dark:border-white/[0.08];
+  }
+
+  .grouped-surface-title {
+    @apply text-mica-headline text-mica-text-primary dark:text-mica-text-primary-dark;
+  }
+
+  .grouped-surface-description {
+    @apply mt-1 text-mica-subhead text-mica-text-secondary dark:text-mica-text-secondary-dark;
+  }
+
+  .grouped-surface-body {
+    @apply px-5 py-4;
+  }
+
+  .grouped-list {
+    @apply overflow-hidden rounded-mica-lg border border-black/[0.06] bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05];
+  }
+
+  .grouped-list-row {
+    @apply flex items-center justify-between gap-4 px-5 py-3.5;
+    @apply border-b border-black/[0.06] transition-colors dark:border-white/[0.08];
+    @apply hover:bg-white/90 dark:hover:bg-white/[0.08];
+  }
+
+  .grouped-list-row:last-child {
+    @apply border-b-0;
+  }
+
+  .grouped-list-label {
+    @apply text-mica-body text-mica-text-primary dark:text-mica-text-primary-dark;
+  }
+
+  .grouped-list-value {
+    @apply text-right text-mica-body text-mica-text-secondary dark:text-mica-text-secondary-dark;
+  }
+
+  .metric-strip {
+    @apply grid gap-3 sm:grid-cols-2 xl:grid-cols-4;
+  }
+
+  .metric-panel {
+    @apply rounded-mica-lg border border-black/[0.06] bg-white/65 px-4 py-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05];
+  }
+
+  .metric-panel-label {
+    @apply text-mica-caption uppercase tracking-[0.2em] text-mica-text-tertiary dark:text-mica-text-tertiary-dark;
+  }
+
+  .metric-panel-value {
+    @apply mt-2 text-[26px] font-semibold tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark;
+  }
+
+  .metric-panel-detail {
+    @apply mt-1 text-mica-subhead text-mica-text-secondary dark:text-mica-text-secondary-dark;
+  }
+
+  .segmented-surface {
+    @apply flex flex-wrap items-center gap-2 rounded-mica-lg border border-black/[0.06] bg-white/60 px-3 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.04];
+  }
+
+  .muted-pill {
+    @apply inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5 text-mica-subhead text-mica-text-secondary backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-mica-text-secondary-dark;
+  }
+
+  .section-kicker {
+    @apply mb-2 text-mica-caption uppercase tracking-[0.24em] text-mica-text-tertiary dark:text-mica-text-tertiary-dark;
   }
 
   /* ============ 空状态 ============ */

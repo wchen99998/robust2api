@@ -1,94 +1,81 @@
 <template>
   <AppLayout>
-    <TablePageLayout>
+    <div class="account-page account-page-wide">
+      <div class="account-page-header">
+        <div class="account-page-eyebrow">My Account</div>
+        <div class="account-page-heading">
+          <div>
+            <h1 class="account-page-title">{{ t('usage.title') }}</h1>
+            <p class="account-page-subtitle">{{ t('usage.description') }}</p>
+          </div>
+          <div class="account-page-meta">
+            <span class="muted-pill">{{ pagination.total }} {{ t('common.total').toLowerCase() }}</span>
+            <span class="muted-pill">{{ startDate }} → {{ endDate }}</span>
+          </div>
+        </div>
+      </div>
+
+      <TablePageLayout>
       <template #actions>
-        <div class="grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div class="metric-strip">
           <!-- Total Requests -->
-          <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-blue-100 p-2 dark:bg-blue-900/30">
-              <Icon name="document" size="md" class="text-blue-600 dark:text-blue-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalRequests') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ usageStats?.total_requests?.toLocaleString() || '0' }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.inSelectedRange') }}
-              </p>
-            </div>
+          <div class="metric-panel">
+            <p class="metric-panel-label">
+              {{ t('usage.totalRequests') }}
+            </p>
+            <p class="metric-panel-value">
+              {{ usageStats?.total_requests?.toLocaleString() || '0' }}
+            </p>
+            <p class="metric-panel-detail">
+              {{ t('usage.inSelectedRange') }}
+            </p>
           </div>
-        </div>
 
-        <!-- Total Tokens -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-amber-100 p-2 dark:bg-amber-900/30">
-              <Icon name="cube" size="md" class="text-amber-600 dark:text-amber-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalTokens') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ formatTokens(usageStats?.total_tokens || 0) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.in') }}: {{ formatTokens(usageStats?.total_input_tokens || 0) }} /
-                {{ t('usage.out') }}: {{ formatTokens(usageStats?.total_output_tokens || 0) }}
-              </p>
-            </div>
+          <!-- Total Tokens -->
+          <div class="metric-panel">
+            <p class="metric-panel-label">
+              {{ t('usage.totalTokens') }}
+            </p>
+            <p class="metric-panel-value">
+              {{ formatTokens(usageStats?.total_tokens || 0) }}
+            </p>
+            <p class="metric-panel-detail">
+              {{ t('usage.in') }}: {{ formatTokens(usageStats?.total_input_tokens || 0) }} /
+              {{ t('usage.out') }}: {{ formatTokens(usageStats?.total_output_tokens || 0) }}
+            </p>
           </div>
-        </div>
 
-        <!-- Total Cost -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-green-100 p-2 dark:bg-green-900/30">
-              <Icon name="dollar" size="md" class="text-green-600 dark:text-green-400" />
-            </div>
-            <div class="min-w-0 flex-1">
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.totalCost') }}
-              </p>
-              <p class="text-xl font-bold text-green-600 dark:text-green-400">
-                ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">
-                {{ t('usage.actualCost') }} /
-                <span class="line-through">${{ (usageStats?.total_cost || 0).toFixed(4) }}</span>
-                {{ t('usage.standardCost') }}
-              </p>
-            </div>
+          <!-- Total Cost -->
+          <div class="metric-panel">
+            <p class="metric-panel-label">
+              {{ t('usage.totalCost') }}
+            </p>
+            <p class="metric-panel-value">
+              ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
+            </p>
+            <p class="metric-panel-detail">
+              ${{ (usageStats?.total_cost || 0).toFixed(4) }} {{ t('usage.standardCost') }}
+            </p>
           </div>
-        </div>
 
-        <!-- Average Duration -->
-        <div class="card p-4">
-          <div class="flex items-center gap-3">
-            <div class="rounded-lg bg-purple-100 p-2 dark:bg-purple-900/30">
-              <Icon name="clock" size="md" class="text-purple-600 dark:text-purple-400" />
-            </div>
-            <div>
-              <p class="text-xs font-medium text-gray-500 dark:text-gray-400">
-                {{ t('usage.avgDuration') }}
-              </p>
-              <p class="text-xl font-bold text-gray-900 dark:text-white">
-                {{ formatDuration(usageStats?.average_duration_ms || 0) }}
-              </p>
-              <p class="text-xs text-gray-500 dark:text-gray-400">{{ t('usage.perRequest') }}</p>
-            </div>
+          <!-- Average Duration -->
+          <div class="metric-panel">
+            <p class="metric-panel-label">
+              {{ t('usage.avgDuration') }}
+            </p>
+            <p class="metric-panel-value">
+              {{ formatDuration(usageStats?.average_duration_ms || 0) }}
+            </p>
+            <p class="metric-panel-detail">
+              {{ t('usage.perRequest') }}
+            </p>
           </div>
-        </div>
         </div>
       </template>
 
       <template #filters>
-        <div class="card">
-          <div class="px-6 py-4">
+        <div class="grouped-surface">
+          <div class="grouped-surface-body">
           <div class="flex flex-wrap items-end gap-4">
             <!-- API Key Filter -->
             <div class="min-w-[180px]">
@@ -151,41 +138,37 @@
       <template #table>
         <DataTable :columns="columns" :data="usageLogs" :loading="loading">
           <template #cell-api_key="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">{{
-              row.api_key?.name || '-'
-            }}</span>
+            <div>
+              <div class="font-medium text-mica-text-primary dark:text-mica-text-primary-dark">
+                {{ row.api_key?.name || '-' }}
+              </div>
+              <div class="mt-0.5 text-[11px] text-mica-text-tertiary dark:text-mica-text-tertiary-dark font-mono">
+                {{ row.api_key?.key ? row.api_key.key.slice(0, 10) + '...' : '' }}
+              </div>
+            </div>
           </template>
 
-          <template #cell-model="{ value }">
-            <span class="font-medium text-gray-900 dark:text-white">{{ value }}</span>
+          <template #cell-model="{ value, row }">
+            <div>
+              <div class="font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ value }}</div>
+              <div v-if="formatReasoningEffort(row.reasoning_effort)" class="mt-0.5 text-[11px] text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+                {{ formatReasoningEffort(row.reasoning_effort) }}
+              </div>
+            </div>
           </template>
 
-          <template #cell-reasoning_effort="{ row }">
-            <span class="text-sm text-gray-900 dark:text-white">
-              {{ formatReasoningEffort(row.reasoning_effort) }}
-            </span>
-          </template>
-
-          <template #cell-endpoint="{ row }">
-            <span class="text-sm text-gray-600 dark:text-gray-300 block max-w-[320px] whitespace-normal break-all">
-              {{ formatUsageEndpoints(row) }}
-            </span>
-          </template>
-
-          <template #cell-stream="{ row }">
-            <span
-              class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium"
-              :class="getRequestTypeBadgeClass(row)"
-            >
-              {{ getRequestTypeLabel(row) }}
-            </span>
-          </template>
-
-          <template #cell-billing_mode="{ row }">
-            <span class="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium"
-                  :class="getBillingModeBadgeClass(row.billing_mode)">
-              {{ getBillingModeLabel(row.billing_mode) }}
-            </span>
+          <template #cell-request="{ row }">
+            <div>
+              <div class="text-sm text-mica-text-primary dark:text-mica-text-primary-dark break-all">
+                {{ formatUsageEndpoints(row) }}
+              </div>
+              <div class="mt-1.5 flex flex-wrap items-center gap-1">
+                <span class="badge badge-gray">{{ getRequestTypeLabel(row) }}</span>
+                <span class="badge badge-gray">{{ getBillingModeLabel(row.billing_mode) }}</span>
+                <span class="text-[11px] tabular-nums text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ formatDuration(row.duration_ms) }}</span>
+                <span v-if="row.first_token_ms != null" class="text-[11px] tabular-nums text-mica-text-tertiary dark:text-mica-text-tertiary-dark">· {{ formatDuration(row.first_token_ms) }}</span>
+              </div>
+            </div>
           </template>
 
           <template #cell-tokens="{ row }">
@@ -204,50 +187,36 @@
                   d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                 />
               </svg>
-              <span class="font-medium text-gray-900 dark:text-white">{{ row.image_count }}{{ $t('usage.imageUnit') }}</span>
-              <span class="text-gray-400">({{ row.image_size || '2K' }})</span>
+              <span class="font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ row.image_count }}{{ $t('usage.imageUnit') }}</span>
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">({{ row.image_size || '2K' }})</span>
             </div>
             <!-- Token 请求 -->
-            <div v-else class="flex items-center gap-1.5">
-              <div class="space-y-1.5 text-sm">
+            <div v-else class="flex items-center gap-2">
+              <div class="text-sm tabular-nums">
                 <!-- Input / Output Tokens -->
-                <div class="flex items-center gap-2">
-                  <!-- Input -->
-                  <div class="inline-flex items-center gap-1">
-                    <Icon name="arrowDown" size="sm" class="text-emerald-500" />
-                    <span class="font-medium text-gray-900 dark:text-white">{{
-                      row.input_tokens.toLocaleString()
-                    }}</span>
-                  </div>
-                  <!-- Output -->
-                  <div class="inline-flex items-center gap-1">
-                    <Icon name="arrowUp" size="sm" class="text-violet-500" />
-                    <span class="font-medium text-gray-900 dark:text-white">{{
-                      row.output_tokens.toLocaleString()
-                    }}</span>
-                  </div>
+                <div class="flex items-center gap-3">
+                  <span class="text-mica-text-secondary dark:text-mica-text-secondary-dark">
+                    <span class="text-[10px] uppercase tracking-wider text-mica-text-tertiary dark:text-mica-text-tertiary-dark">in</span>
+                    <span class="ml-1 font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ row.input_tokens.toLocaleString() }}</span>
+                  </span>
+                  <span class="text-mica-text-secondary dark:text-mica-text-secondary-dark">
+                    <span class="text-[10px] uppercase tracking-wider text-mica-text-tertiary dark:text-mica-text-tertiary-dark">out</span>
+                    <span class="ml-1 font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ row.output_tokens.toLocaleString() }}</span>
+                  </span>
                 </div>
                 <!-- Cache Tokens (Read + Write) -->
                 <div
                   v-if="row.cache_read_tokens > 0 || row.cache_creation_tokens > 0"
-                  class="flex items-center gap-2"
+                  class="mt-1 flex items-center gap-3 text-[11px] text-mica-text-tertiary dark:text-mica-text-tertiary-dark"
                 >
-                  <!-- Cache Read -->
-                  <div v-if="row.cache_read_tokens > 0" class="inline-flex items-center gap-1">
-                    <Icon name="inbox" size="sm" class="text-sky-500" />
-                    <span class="font-medium text-sky-600 dark:text-sky-400">{{
-                      formatCacheTokens(row.cache_read_tokens)
-                    }}</span>
-                  </div>
-                  <!-- Cache Write -->
-                  <div v-if="row.cache_creation_tokens > 0" class="inline-flex items-center gap-1">
-                    <Icon name="edit" size="sm" class="text-amber-500" />
-                    <span class="font-medium text-amber-600 dark:text-amber-400">{{
-                      formatCacheTokens(row.cache_creation_tokens)
-                    }}</span>
-                    <span v-if="row.cache_creation_1h_tokens > 0" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-100 text-orange-600 ring-1 ring-inset ring-orange-200 dark:bg-orange-500/20 dark:text-orange-400 dark:ring-orange-500/30">1h</span>
-                    <span v-if="row.cache_ttl_overridden" :title="t('usage.cacheTtlOverriddenHint')" class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200 dark:bg-rose-500/20 dark:text-rose-400 dark:ring-rose-500/30 cursor-help">R</span>
-                  </div>
+                  <span v-if="row.cache_read_tokens > 0">
+                    cache {{ formatCacheTokens(row.cache_read_tokens) }}
+                  </span>
+                  <span v-if="row.cache_creation_tokens > 0">
+                    write {{ formatCacheTokens(row.cache_creation_tokens) }}
+                    <span v-if="row.cache_creation_1h_tokens > 0" class="badge badge-gray ml-0.5 !text-[9px] !px-1 !py-0">1h</span>
+                    <span v-if="row.cache_ttl_overridden" :title="t('usage.cacheTtlOverriddenHint')" class="badge badge-gray ml-0.5 !text-[9px] !px-1 !py-0 cursor-help">R</span>
+                  </span>
                 </div>
               </div>
               <!-- Token Detail Tooltip -->
@@ -257,12 +226,12 @@
                 @mouseleave="hideTokenTooltip"
               >
                 <div
-                  class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
+                  class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-black/[0.04] transition-colors group-hover:bg-black/[0.08] dark:bg-white/[0.06] dark:group-hover:bg-white/[0.1]"
                 >
                   <Icon
                     name="infoCircle"
                     size="xs"
-                    class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
+                    class="text-mica-text-tertiary group-hover:text-mica-text-secondary dark:text-mica-text-tertiary-dark dark:group-hover:text-mica-text-secondary-dark"
                   />
                 </div>
               </div>
@@ -270,8 +239,8 @@
           </template>
 
           <template #cell-cost="{ row }">
-            <div class="flex items-center gap-1.5 text-sm">
-              <span class="font-medium text-green-600 dark:text-green-400">
+            <div class="flex items-center justify-end gap-1.5 text-sm">
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">
                 ${{ row.actual_cost.toFixed(6) }}
               </span>
               <!-- Cost Detail Tooltip -->
@@ -281,12 +250,12 @@
                 @mouseleave="hideTooltip"
               >
                 <div
-                  class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-gray-100 transition-colors group-hover:bg-blue-100 dark:bg-gray-700 dark:group-hover:bg-blue-900/50"
+                  class="flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-black/[0.04] transition-colors group-hover:bg-black/[0.08] dark:bg-white/[0.06] dark:group-hover:bg-white/[0.1]"
                 >
                   <Icon
                     name="infoCircle"
                     size="xs"
-                    class="text-gray-400 group-hover:text-blue-500 dark:text-gray-500 dark:group-hover:text-blue-400"
+                    class="text-mica-text-tertiary group-hover:text-mica-text-secondary dark:text-mica-text-tertiary-dark dark:group-hover:text-mica-text-secondary-dark"
                   />
                 </div>
               </div>
@@ -296,28 +265,23 @@
           <template #cell-first_token="{ row }">
             <span
               v-if="row.first_token_ms != null"
-              class="text-sm text-gray-600 dark:text-gray-400"
+              class="text-sm text-mica-text-secondary dark:text-mica-text-secondary-dark"
             >
               {{ formatDuration(row.first_token_ms) }}
             </span>
-            <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
+            <span v-else class="text-sm text-mica-text-tertiary dark:text-mica-text-tertiary-dark">-</span>
           </template>
 
           <template #cell-duration="{ row }">
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{
+            <span class="text-sm text-mica-text-secondary dark:text-mica-text-secondary-dark">{{
               formatDuration(row.duration_ms)
             }}</span>
           </template>
 
           <template #cell-created_at="{ value }">
-            <span class="text-sm text-gray-600 dark:text-gray-400">{{
+            <span class="block min-w-[146px] text-sm text-mica-text-secondary dark:text-mica-text-secondary-dark">{{
               formatDateTime(value)
             }}</span>
-          </template>
-
-          <template #cell-user_agent="{ row }">
-            <span v-if="row.user_agent" class="text-sm text-gray-600 dark:text-gray-400 block max-w-[320px] whitespace-normal break-all" :title="row.user_agent">{{ formatUserAgent(row.user_agent) }}</span>
-            <span v-else class="text-sm text-gray-400 dark:text-gray-500">-</span>
           </template>
 
           <template #empty>
@@ -336,7 +300,8 @@
           @update:pageSize="handlePageSizeChange"
         />
       </template>
-    </TablePageLayout>
+      </TablePageLayout>
+    </div>
   </AppLayout>
 
   <!-- Token Tooltip Portal -->
@@ -528,18 +493,12 @@ const tokenTooltipData = ref<UsageLog | null>(null)
 const usageStats = ref<UsageStatsResponse | null>(null)
 
 const columns = computed<Column[]>(() => [
-  { key: 'api_key', label: t('usage.apiKeyFilter'), sortable: false },
-  { key: 'model', label: t('usage.model'), sortable: true },
-  { key: 'reasoning_effort', label: t('usage.reasoningEffort'), sortable: false },
-  { key: 'endpoint', label: t('usage.endpoint'), sortable: false },
-  { key: 'stream', label: t('usage.type'), sortable: false },
-  { key: 'billing_mode', label: t('admin.usage.billingMode'), sortable: false },
-  { key: 'tokens', label: t('usage.tokens'), sortable: false },
-  { key: 'cost', label: t('usage.cost'), sortable: false },
-  { key: 'first_token', label: t('usage.firstToken'), sortable: false },
-  { key: 'duration', label: t('usage.duration'), sortable: false },
-  { key: 'created_at', label: t('usage.time'), sortable: true },
-  { key: 'user_agent', label: t('usage.userAgent'), sortable: false }
+  { key: 'api_key', label: t('usage.apiKeyFilter'), sortable: false, class: 'min-w-[120px]' },
+  { key: 'model', label: t('usage.model'), sortable: true, class: 'min-w-[140px]' },
+  { key: 'request', label: t('usage.endpoint'), sortable: false, class: 'min-w-[180px]' },
+  { key: 'tokens', label: t('usage.tokens'), sortable: false, class: 'min-w-[160px]' },
+  { key: 'cost', label: t('usage.cost'), sortable: false, class: 'min-w-[100px] text-right' },
+  { key: 'created_at', label: t('usage.time'), sortable: true, class: 'min-w-[130px]' }
 ])
 
 const usageLogs = ref<UsageLog[]>([])
@@ -604,10 +563,6 @@ const formatDuration = (ms: number): string => {
   return `${(ms / 1000).toFixed(2)}s`
 }
 
-const formatUserAgent = (ua: string): string => {
-  return ua
-}
-
 const getRequestTypeLabel = (log: UsageLog): string => {
   const requestType = resolveUsageRequestType(log)
   if (requestType === 'ws_v2') return t('usage.ws')
@@ -616,24 +571,10 @@ const getRequestTypeLabel = (log: UsageLog): string => {
   return t('usage.unknown')
 }
 
-const getRequestTypeBadgeClass = (log: UsageLog): string => {
-  const requestType = resolveUsageRequestType(log)
-  if (requestType === 'ws_v2') return 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-200'
-  if (requestType === 'stream') return 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
-  if (requestType === 'sync') return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200'
-  return 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
-}
-
 const getBillingModeLabel = (mode: string | null | undefined): string => {
   if (mode === 'per_request') return t('admin.usage.billingModePerRequest')
   if (mode === 'image') return t('admin.usage.billingModeImage')
   return t('admin.usage.billingModeToken')
-}
-
-const getBillingModeBadgeClass = (mode: string | null | undefined): string => {
-  if (mode === 'per_request') return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-200'
-  if (mode === 'image') return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-200'
-  return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
 }
 
 const getRequestTypeExportText = (log: UsageLog): string => {

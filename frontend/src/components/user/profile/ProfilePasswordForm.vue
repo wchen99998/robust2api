@@ -1,11 +1,14 @@
 <template>
-  <div class="card">
-    <div class="border-b border-gray-100 px-6 py-4 dark:border-dark-700">
-      <h2 class="text-lg font-medium text-gray-900 dark:text-white">
+  <div class="grouped-surface">
+    <div class="grouped-surface-header">
+      <div>
+        <div class="section-kicker">Security</div>
+        <h2 class="grouped-surface-title">
         {{ t('profile.changePassword') }}
-      </h2>
+        </h2>
+      </div>
     </div>
-    <div class="px-6 py-6">
+    <div class="grouped-surface-body">
       <form @submit.prevent="handleChangePassword" class="space-y-4">
         <div>
           <label for="old_password" class="input-label">
@@ -58,7 +61,7 @@
           </p>
         </div>
 
-        <div class="flex justify-end pt-4">
+        <div class="flex justify-end pt-2">
           <button type="submit" :disabled="loading" class="btn btn-primary">
             {{ loading ? t('profile.changingPassword') : t('profile.changePasswordButton') }}
           </button>

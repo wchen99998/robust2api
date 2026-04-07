@@ -46,8 +46,8 @@ onUnmounted(() => {
 <style scoped>
 /* 桌面端：Flexbox 布局 */
 .table-page-layout {
-  @apply flex flex-col gap-6;
-  height: calc(100vh - 64px - 4rem); /* 减去 header + lg:p-8 的上下padding */
+  @apply flex flex-col gap-4 lg:gap-5;
+  min-height: calc(100vh - 56px - 4rem);
 }
 
 .layout-section-fixed {
@@ -60,7 +60,7 @@ onUnmounted(() => {
 
 /* 表格滚动容器 - 增强版表体滚动方案 */
 .table-scroll-container {
-  @apply flex flex-col overflow-hidden h-full bg-white dark:bg-dark-800 rounded-2xl border border-gray-200 dark:border-dark-700 shadow-sm;
+  @apply flex h-full flex-col overflow-hidden rounded-mica-lg border border-black/[0.06] bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05];
 }
 
 .table-scroll-container :deep(.table-wrapper) {
@@ -76,7 +76,7 @@ onUnmounted(() => {
 }
 
 .table-scroll-container :deep(thead) {
-  @apply bg-gray-50/80 dark:bg-dark-800/80 backdrop-blur-sm;
+  @apply bg-black/[0.02] dark:bg-white/[0.02] backdrop-blur-sm;
 }
 
 .table-scroll-container :deep(tbody) {
@@ -84,16 +84,18 @@ onUnmounted(() => {
 }
 
 .table-scroll-container :deep(th) {
-  @apply px-5 py-4 text-left text-sm font-medium text-gray-600 dark:text-dark-300 border-b border-gray-200 dark:border-dark-700;
+  @apply border-b border-black/[0.06] py-3 text-[11px] font-medium uppercase tracking-[0.18em] text-mica-text-tertiary dark:border-white/[0.08] dark:text-mica-text-tertiary-dark;
+  /* padding-x is managed by DataTable's getAdaptivePaddingClass() */
 }
 
 .table-scroll-container :deep(td) {
-  @apply px-5 py-4 text-sm text-gray-700 dark:text-gray-300 border-b border-gray-100 dark:border-dark-800;
+  @apply border-b border-black/[0.06] py-3.5 text-sm text-mica-text-primary dark:border-white/[0.08] dark:text-mica-text-primary-dark;
+  /* padding-x is managed by DataTable's getAdaptivePaddingClass() */
 }
 
 /* 移动端：恢复正常滚动 */
 .table-page-layout.mobile-mode .table-scroll-container {
-  @apply h-auto overflow-visible border-none shadow-none bg-transparent;
+  @apply h-auto overflow-visible border-none bg-transparent backdrop-blur-none;
 }
 
 .table-page-layout.mobile-mode .layout-section-scrollable {

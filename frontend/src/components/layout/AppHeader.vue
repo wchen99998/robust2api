@@ -1,8 +1,8 @@
 <template>
-  <header class="sticky top-0 z-30 border-b border-black/[0.06] dark:border-white/[0.08] bg-canvas/80 dark:bg-canvas-dark/80 backdrop-blur-xl">
-    <div class="flex h-[52px] items-center justify-between px-4 md:px-6">
+  <header class="sticky top-0 z-30 border-b border-black/[0.06] bg-canvas/84 backdrop-blur-xl dark:border-white/[0.08] dark:bg-canvas-dark/84">
+    <div class="mx-auto flex h-[56px] max-w-[1520px] items-center justify-between gap-3 px-4 md:px-6 lg:px-8">
       <!-- Left: Mobile Menu Toggle + Page Title -->
-      <div class="flex items-center gap-4">
+      <div class="min-w-0 flex items-center gap-3">
         <button
           @click="toggleMobileSidebar"
           class="btn-ghost btn-icon lg:hidden"
@@ -11,20 +11,28 @@
           <Icon name="menu" size="md" />
         </button>
 
-        <div class="hidden lg:block">
+        <div class="min-w-0">
+          <div class="lg:hidden min-w-0">
+            <h1 class="truncate text-mica-headline text-mica-text-primary dark:text-mica-text-primary-dark">
+              {{ pageTitle }}
+            </h1>
+          </div>
+
+          <div class="hidden lg:block">
           <h1 class="text-mica-headline text-mica-text-primary dark:text-mica-text-primary-dark">
             {{ pageTitle }}
           </h1>
           <p v-if="pageDescription" class="text-mica-caption text-mica-text-secondary dark:text-mica-text-secondary-dark">
             {{ pageDescription }}
           </p>
+          </div>
         </div>
       </div>
 
       <!-- Right: Announcements + Docs + Language + Subscriptions + Balance + User Dropdown -->
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2 md:gap-3">
         <!-- Announcement Bell -->
-        <AnnouncementBell v-if="user" />
+        <AnnouncementBell v-if="user" class="hidden sm:flex" />
 
         <!-- Docs Link -->
         <a
@@ -32,7 +40,7 @@
           :href="docUrl"
           target="_blank"
           rel="noopener noreferrer"
-          class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-mica-text-secondary dark:text-mica-text-secondary-dark transition-colors hover:bg-black/[0.03] dark:hover:bg-white/[0.03] hover:text-mica-text-primary dark:hover:text-mica-text-primary-dark"
+          class="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-medium text-mica-text-secondary transition-colors hover:bg-black/[0.03] hover:text-mica-text-primary dark:text-mica-text-secondary-dark dark:hover:bg-white/[0.03] dark:hover:text-mica-text-primary-dark xl:flex"
         >
           <Icon name="book" size="sm" />
           <span class="hidden sm:inline">{{ t('nav.docs') }}</span>
@@ -42,12 +50,12 @@
         <LocaleSwitcher />
 
         <!-- Subscription Progress (for users with active subscriptions) -->
-        <SubscriptionProgressMini v-if="user" />
+        <SubscriptionProgressMini v-if="user" class="hidden xl:flex" />
 
         <!-- Balance Display -->
         <div
           v-if="user"
-          class="hidden items-center gap-2 rounded-full bg-black/[0.04] dark:bg-white/[0.06] px-3 py-1 sm:flex"
+          class="hidden items-center gap-2 rounded-full border border-black/[0.06] bg-white/70 px-3 py-1 backdrop-blur-xl sm:flex dark:border-white/[0.08] dark:bg-white/[0.05]"
         >
           <span class="text-mica-subhead font-semibold text-mica-text-primary dark:text-mica-text-primary-dark">
             ${{ user.balance?.toFixed(2) || '0.00' }}

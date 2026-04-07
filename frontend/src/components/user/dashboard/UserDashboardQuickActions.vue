@@ -1,54 +1,37 @@
 <template>
-  <div class="rounded-mica-lg bg-white/70 dark:bg-white/[0.05] backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08]">
-    <div class="border-b border-black/[0.06] dark:border-white/[0.08] px-5 py-4">
-      <h2 class="text-mica-headline text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.quickActions') }}</h2>
+  <div class="rounded-mica-lg bg-white/70 dark:bg-white/[0.05] backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] overflow-hidden">
+    <div class="px-5 py-3">
+      <p class="text-mica-caption uppercase tracking-wide text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+        {{ t('dashboard.quickActions') }}
+      </p>
     </div>
-    <div class="space-y-3 p-4">
-      <button @click="router.push('/keys')" class="group flex w-full items-center gap-4 rounded-mica-lg p-4 text-left transition-all duration-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.03]">
-        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-mica-lg bg-black/[0.04] dark:bg-white/[0.06]">
-          <Icon name="key" size="lg" class="text-mica-text-primary dark:text-mica-text-primary-dark" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.createApiKey') }}</p>
-          <p class="text-xs text-mica-text-secondary dark:text-mica-text-secondary-dark">{{ t('dashboard.generateNewKey') }}</p>
-        </div>
-        <Icon
-          name="chevronRight"
-          size="md"
-          class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark"
-        />
-      </button>
 
-      <button @click="router.push('/usage')" class="group flex w-full items-center gap-4 rounded-mica-lg p-4 text-left transition-all duration-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.03]">
-        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-mica-lg bg-black/[0.04] dark:bg-white/[0.06]">
-          <Icon name="chart" size="lg" class="text-mica-text-primary dark:text-mica-text-primary-dark" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.viewUsage') }}</p>
-          <p class="text-xs text-mica-text-secondary dark:text-mica-text-secondary-dark">{{ t('dashboard.checkDetailedLogs') }}</p>
-        </div>
-        <Icon
-          name="chevronRight"
-          size="md"
-          class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark"
-        />
-      </button>
+    <button
+      @click="router.push('/keys')"
+      class="flex w-full items-center gap-3.5 border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-3 text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+    >
+      <Icon name="key" size="md" class="flex-shrink-0 text-mica-text-secondary dark:text-mica-text-secondary-dark" />
+      <span class="flex-1 text-mica-body text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.createApiKey') }}</span>
+      <Icon name="chevronRight" size="sm" class="flex-shrink-0 text-mica-text-tertiary dark:text-mica-text-tertiary-dark" />
+    </button>
 
-      <button @click="router.push('/redeem')" class="group flex w-full items-center gap-4 rounded-mica-lg p-4 text-left transition-all duration-200 hover:bg-black/[0.03] dark:hover:bg-white/[0.03]">
-        <div class="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-mica-lg bg-black/[0.04] dark:bg-white/[0.06]">
-          <Icon name="gift" size="lg" class="text-mica-text-primary dark:text-mica-text-primary-dark" />
-        </div>
-        <div class="min-w-0 flex-1">
-          <p class="text-sm font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.redeemCode') }}</p>
-          <p class="text-xs text-mica-text-secondary dark:text-mica-text-secondary-dark">{{ t('dashboard.addBalanceWithCode') }}</p>
-        </div>
-        <Icon
-          name="chevronRight"
-          size="md"
-          class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark"
-        />
-      </button>
-    </div>
+    <button
+      @click="router.push('/usage')"
+      class="flex w-full items-center gap-3.5 border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-3 text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+    >
+      <Icon name="chart" size="md" class="flex-shrink-0 text-mica-text-secondary dark:text-mica-text-secondary-dark" />
+      <span class="flex-1 text-mica-body text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.viewUsage') }}</span>
+      <Icon name="chevronRight" size="sm" class="flex-shrink-0 text-mica-text-tertiary dark:text-mica-text-tertiary-dark" />
+    </button>
+
+    <button
+      @click="router.push('/redeem')"
+      class="flex w-full items-center gap-3.5 border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-3 text-left transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+    >
+      <Icon name="gift" size="md" class="flex-shrink-0 text-mica-text-secondary dark:text-mica-text-secondary-dark" />
+      <span class="flex-1 text-mica-body text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.redeemCode') }}</span>
+      <Icon name="chevronRight" size="sm" class="flex-shrink-0 text-mica-text-tertiary dark:text-mica-text-tertiary-dark" />
+    </button>
   </div>
 </template>
 

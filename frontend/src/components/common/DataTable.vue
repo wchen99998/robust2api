@@ -76,8 +76,9 @@
             :key="column.key"
             scope="col"
             :class="[
-              'sticky-header-cell py-3 text-left text-xs font-medium uppercase tracking-wider text-mica-text-tertiary dark:text-mica-text-tertiary-dark',
+              'sticky-header-cell py-3 text-xs font-medium uppercase tracking-wider text-mica-text-tertiary dark:text-mica-text-tertiary-dark',
               getAdaptivePaddingClass(),
+              column.class?.includes('text-right') ? '' : 'text-left',
               { 'cursor-pointer hover:bg-black/[0.04] dark:hover:bg-white/[0.04]': column.sortable },
               getStickyColumnClass(column, index),
               column.class
@@ -90,7 +91,7 @@
               :sort-key="sortKey"
               :sort-order="sortOrder"
             >
-              <div class="flex items-center space-x-1">
+              <div :class="['flex items-center space-x-1', column.class?.includes('text-right') ? 'justify-end' : '']">
                 <span>{{ column.label }}</span>
                 <span v-if="column.sortable" class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
                   <svg
@@ -167,7 +168,7 @@
               v-for="(column, colIndex) in columns"
               :key="column.key"
               :class="[
-                'whitespace-nowrap py-4 text-sm text-mica-text-primary dark:text-mica-text-primary-dark',
+                'py-3.5 align-middle text-sm text-mica-text-primary dark:text-mica-text-primary-dark',
                 getAdaptivePaddingClass(),
                 getStickyColumnClass(column, colIndex),
                 column.class
@@ -328,8 +329,8 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   loading: false,
-  stickyFirstColumn: true,
-  stickyActionsColumn: true,
+  stickyFirstColumn: false,
+  stickyActionsColumn: false,
   expandableActions: true,
   defaultSortOrder: 'asc',
   serverSideSort: false
@@ -591,15 +592,15 @@ const getStickyColumnClass = (column: Column, index: number) => {
 const getAdaptivePaddingClass = () => {
   const columnCount = props.columns.length
 
-  // 列数越多，内边距越小
+  // HIG: generous padding even at higher column counts
   if (columnCount >= 10) {
-    return 'px-2' // 8px
-  } else if (columnCount >= 7) {
     return 'px-3' // 12px
+  } else if (columnCount >= 7) {
+    return 'px-3.5' // 14px
   } else if (columnCount >= 5) {
     return 'px-4' // 16px
   } else {
-    return 'px-6' // 24px (原始值)
+    return 'px-5' // 20px
   }
 }
 
@@ -747,53 +748,46 @@ tbody tr:hover .sticky-col {
   background-color: rgba(255,255,255,0.03);
 }
 
-/* 阴影只在可滚动时显示 */
-/* 单列固定右侧阴影 */
+/* HIG: subtle 1px border instead of gradient shadow for sticky column edges */
 .is-scrollable .sticky-col-left::after {
   content: '';
   position: absolute;
   top: 0;
-  right: 0;
+  right: -1px;
   bottom: 0;
-  width: 10px;
-  transform: translateX(100%);
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent);
+  width: 1px;
+  background: rgba(0, 0, 0, 0.06);
   pointer-events: none;
 }
 
-/* 双列固定：只在第二列显示阴影 */
 .is-scrollable .sticky-col-left-second::after {
   content: '';
   position: absolute;
   top: 0;
-  right: 0;
+  right: -1px;
   bottom: 0;
-  width: 10px;
-  transform: translateX(100%);
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.08), transparent);
+  width: 1px;
+  background: rgba(0, 0, 0, 0.06);
   pointer-events: none;
 }
 
-/* 操作列左侧阴影 */
 .is-scrollable .sticky-col-right::before {
   content: '';
   position: absolute;
   top: 0;
-  left: 0;
+  left: -1px;
   bottom: 0;
-  width: 10px;
-  transform: translateX(-100%);
-  background: linear-gradient(to left, rgba(0, 0, 0, 0.08), transparent);
+  width: 1px;
+  background: rgba(0, 0, 0, 0.06);
   pointer-events: none;
 }
 
-/* 暗色模式阴影 */
 .dark .is-scrollable .sticky-col-left::after,
 .dark .is-scrollable .sticky-col-left-second::after {
-  background: linear-gradient(to right, rgba(0, 0, 0, 0.2), transparent);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .dark .is-scrollable .sticky-col-right::before {
-  background: linear-gradient(to left, rgba(0, 0, 0, 0.2), transparent);
+  background: rgba(255, 255, 255, 0.08);
 }
 </style>

@@ -1,42 +1,52 @@
 <template>
-  <div class="rounded-mica-lg bg-white/70 dark:bg-white/[0.05] backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08]">
-    <div class="flex items-center justify-between border-b border-black/[0.06] dark:border-white/[0.08] px-6 py-4">
-      <h2 class="text-mica-headline text-mica-text-primary dark:text-mica-text-primary-dark">{{ t('dashboard.recentUsage') }}</h2>
-      <span class="badge badge-gray">{{ t('dashboard.last7Days') }}</span>
+  <div class="rounded-mica-lg bg-white/70 dark:bg-white/[0.05] backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] overflow-hidden">
+    <div class="flex items-center justify-between px-5 py-3">
+      <p class="text-mica-caption uppercase tracking-wide text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+        {{ t('dashboard.recentUsage') }}
+      </p>
+      <span class="text-mica-caption text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+        {{ t('dashboard.last7Days') }}
+      </span>
     </div>
-    <div class="p-6">
-      <div v-if="loading" class="flex items-center justify-center py-12">
-        <LoadingSpinner size="lg" />
-      </div>
-      <div v-else-if="data.length === 0" class="py-8">
-        <EmptyState :title="t('dashboard.noUsageRecords')" :description="t('dashboard.startUsingApi')" />
-      </div>
-      <div v-else class="space-y-3">
-        <div v-for="log in data" :key="log.id" class="flex items-center justify-between rounded-mica-lg bg-black/[0.02] dark:bg-white/[0.03] p-4 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05]">
-          <div class="flex items-center gap-4">
-            <div class="flex h-10 w-10 items-center justify-center rounded-mica-lg bg-black/[0.04] dark:bg-white/[0.06]">
-              <Icon name="beaker" size="md" class="text-mica-text-primary dark:text-mica-text-primary-dark" />
-            </div>
-            <div>
-              <p class="text-sm font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ log.model }}</p>
-              <p class="text-xs text-mica-text-secondary dark:text-mica-text-secondary-dark">{{ formatDateTime(log.created_at) }}</p>
-            </div>
-          </div>
-          <div class="text-right">
-            <p class="text-sm font-semibold">
-              <span class="text-status-green dark:text-status-green-dark" :title="t('dashboard.actual')">${{ formatCost(log.actual_cost) }}</span>
-              <span class="font-normal text-mica-text-tertiary dark:text-mica-text-tertiary-dark" :title="t('dashboard.standard')"> / ${{ formatCost(log.total_cost) }}</span>
-            </p>
-            <p class="text-xs text-mica-text-secondary dark:text-mica-text-secondary-dark">{{ (log.input_tokens + log.output_tokens).toLocaleString() }} tokens</p>
-          </div>
-        </div>
 
-        <router-link to="/usage" class="flex items-center justify-center gap-2 py-3 text-sm font-medium text-primary-600 transition-colors hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300">
+    <div v-if="loading" class="flex items-center justify-center border-t border-black/[0.06] dark:border-white/[0.08] py-12">
+      <LoadingSpinner size="lg" />
+    </div>
+
+    <div v-else-if="data.length === 0" class="border-t border-black/[0.06] dark:border-white/[0.08] py-8">
+      <EmptyState :title="t('dashboard.noUsageRecords')" :description="t('dashboard.startUsingApi')" />
+    </div>
+
+    <template v-else>
+      <div
+        v-for="log in data"
+        :key="log.id"
+        class="flex items-center justify-between border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-3 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]"
+      >
+        <div class="min-w-0">
+          <p class="text-mica-body font-medium text-mica-text-primary dark:text-mica-text-primary-dark">{{ log.model }}</p>
+          <p class="mt-0.5 text-[11px] text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ formatDateTime(log.created_at) }}</p>
+        </div>
+        <div class="text-right flex-shrink-0 pl-4">
+          <p class="text-mica-body font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">
+            ${{ formatCost(log.actual_cost) }}
+          </p>
+          <p class="mt-0.5 text-[11px] tabular-nums text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+            {{ (log.input_tokens + log.output_tokens).toLocaleString() }} tokens
+          </p>
+        </div>
+      </div>
+
+      <div class="border-t border-black/[0.06] dark:border-white/[0.08]">
+        <router-link
+          to="/usage"
+          class="flex items-center justify-center gap-1.5 px-5 py-3 text-mica-subhead font-medium text-status-blue dark:text-status-blue-dark transition-colors hover:bg-status-blue/[0.04] dark:hover:bg-status-blue-dark/[0.06]"
+        >
           {{ t('dashboard.viewAllUsage') }}
           <Icon name="arrowRight" size="sm" />
         </router-link>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 

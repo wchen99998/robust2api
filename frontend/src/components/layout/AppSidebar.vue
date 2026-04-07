@@ -1,13 +1,13 @@
 <template>
   <aside
-    class="fixed inset-y-0 left-0 z-40 flex flex-col bg-white/50 dark:bg-white/[0.03] backdrop-blur-[30px] border-r border-black/[0.06] dark:border-white/[0.08] transition-all duration-300"
+    class="fixed inset-y-0 left-0 z-40 flex flex-col border-r border-black/[0.06] bg-white/42 backdrop-blur-[32px] transition-all duration-300 dark:border-white/[0.08] dark:bg-white/[0.03]"
     :class="[
       sidebarCollapsed ? 'w-[64px]' : 'w-[220px]',
       { '-translate-x-full lg:translate-x-0': !mobileOpen }
     ]"
   >
     <!-- Logo/Brand -->
-    <div class="h-[52px] px-4 flex items-center gap-2 border-b border-black/[0.06] dark:border-white/[0.08]">
+    <div class="flex h-[56px] items-center gap-2 border-b border-black/[0.06] px-4 dark:border-white/[0.08]">
       <!-- Custom Logo or Default Logo -->
       <div class="flex h-9 w-9 items-center justify-center overflow-hidden rounded-[7px]">
         <img v-if="settingsLoaded" :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
@@ -24,7 +24,7 @@
     </div>
 
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto px-2 py-3 scrollbar-hide">
+    <nav class="scrollbar-hide flex-1 overflow-y-auto px-2 py-4">
       <!-- Admin View: Admin menu first, then personal menu -->
       <template v-if="isAdmin">
         <!-- Admin Section -->
@@ -57,7 +57,7 @@
 
         <!-- Personal Section for Admin (hidden in simple mode) -->
         <div v-if="!authStore.isSimpleMode" class="sidebar-section">
-          <div v-if="!sidebarCollapsed" class="mb-1.5 px-2.5 text-mica-caption uppercase text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+          <div v-if="!sidebarCollapsed" class="mb-2 px-2.5 text-mica-caption uppercase tracking-[0.24em] text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
             {{ t('nav.myAccount') }}
           </div>
           <div v-else class="mx-2 my-2 h-px bg-black/[0.06] dark:bg-white/[0.08]"></div>
@@ -105,7 +105,7 @@
     </nav>
 
     <!-- Bottom Section -->
-    <div class="mt-auto border-t border-black/[0.06] dark:border-white/[0.08] p-2">
+    <div class="mt-auto border-t border-black/[0.06] p-2 dark:border-white/[0.08]">
       <!-- Theme Toggle -->
       <button
         @click="toggleTheme"

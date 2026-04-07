@@ -16,7 +16,7 @@
       <!-- Row 2: description with top spacing -->
       <span
         v-if="description"
-        class="mt-1.5 w-full text-left text-xs leading-relaxed text-gray-500 dark:text-gray-400 line-clamp-2"
+        class="mt-1.5 w-full text-left text-xs leading-relaxed text-mica-text-tertiary dark:text-mica-text-tertiary-dark line-clamp-2"
       >
         {{ description }}
       </span>
@@ -37,7 +37,7 @@
       <!-- Checkmark -->
       <svg
         v-if="showCheckmark && selected"
-        class="h-4 w-4 shrink-0 text-primary-600 dark:text-primary-400"
+        class="h-4 w-4 shrink-0 text-mica-text-primary dark:text-mica-text-primary-dark"
         fill="none"
         stroke="currentColor"
         viewBox="0 0 24 24"
@@ -82,18 +82,9 @@ const hasCustomRate = computed(() => {
   )
 })
 
-// Rate pill color matches platform badge color
+// Rate pill — neutral Mica styling (platform color already conveyed by GroupBadge icon)
 const ratePillClass = computed(() => {
-  switch (props.platform) {
-    case 'anthropic':
-      return 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
-    case 'openai':
-      return 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-    case 'gemini':
-      return 'bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400'
-    default: // antigravity and others
-      return 'bg-violet-50 text-violet-700 dark:bg-violet-900/20 dark:text-violet-400'
-  }
+  return 'bg-black/[0.04] text-mica-text-secondary dark:bg-white/[0.06] dark:text-mica-text-secondary-dark'
 })
 </script>
 
