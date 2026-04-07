@@ -6,10 +6,10 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/XSAM/otelsql"
 	"github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/XSAM/otelsql"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"

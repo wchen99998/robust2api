@@ -40,7 +40,7 @@ func (c *geminiTokenCache) DeleteAccessToken(ctx context.Context, cacheKey strin
 
 func (c *geminiTokenCache) AcquireRefreshLock(ctx context.Context, cacheKey string, ttl time.Duration) (bool, error) {
 	key := fmt.Sprintf("%s%s", oauthRefreshLockKeyPrefix, cacheKey)
-	return c.rdb.SetNX(ctx, key, 1, ttl).Result()
+	return c.rdb.SetNX(ctx, key, 1, ttl).Result() //nolint:staticcheck // SetNX is cleaner for lock acquire pattern
 }
 
 func (c *geminiTokenCache) ReleaseRefreshLock(ctx context.Context, cacheKey string) error {

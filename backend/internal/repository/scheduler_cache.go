@@ -206,7 +206,7 @@ func (c *schedulerCache) UpdateLastUsed(ctx context.Context, updates map[int64]t
 
 func (c *schedulerCache) TryLockBucket(ctx context.Context, bucket service.SchedulerBucket, ttl time.Duration) (bool, error) {
 	key := schedulerBucketKey(schedulerLockPrefix, bucket)
-	return c.rdb.SetNX(ctx, key, time.Now().UnixNano(), ttl).Result()
+	return c.rdb.SetNX(ctx, key, time.Now().UnixNano(), ttl).Result() //nolint:staticcheck // SetNX is cleaner for lock acquire pattern
 }
 
 func (c *schedulerCache) ListBuckets(ctx context.Context) ([]service.SchedulerBucket, error) {
