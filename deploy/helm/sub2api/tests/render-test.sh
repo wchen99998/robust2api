@@ -43,7 +43,15 @@ echo "$RENDERED" | grep -q 'mountPath: /app/data' && { echo "FAIL — volume mou
 echo -n "Server Deployment exists... "
 echo "$RENDERED" | grep -q 'kind: Deployment' && echo "PASS" || { echo "FAIL"; exit 1; }
 
-# Test 9: existingSecret mode works
+# Test 9: Deployment uses server image
+echo -n "Deployment uses server image... "
+echo "$RENDERED" | grep -q 'image:.*sub2api/server:' && echo "PASS" || { echo "FAIL"; exit 1; }
+
+# Test 10: Bootstrap Job uses bootstrap image
+echo -n "Bootstrap Job uses bootstrap image... "
+echo "$BOOTSTRAP_JOB" | grep -q 'image:.*sub2api/bootstrap:' && echo "PASS" || { echo "FAIL"; exit 1; }
+
+# Test 11: existingSecret mode works
 RENDERED_EXT=$(helm template test "$CHART_DIR" --set existingSecret=my-secret --set secrets.jwtSecret=test-secret-that-is-at-least-32-bytes --set secrets.totpEncryptionKey=test-totp-key-that-is-at-least-32-bytes-long 2>&1)
 echo -n "existingSecret mode renders... "
 echo "$RENDERED_EXT" | grep -q 'my-secret' && echo "PASS" || { echo "FAIL"; exit 1; }
