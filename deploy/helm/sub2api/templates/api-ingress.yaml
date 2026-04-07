@@ -10,6 +10,7 @@ metadata:
     external-dns.alpha.kubernetes.io/hostname: >-
       {{ .Values.ingress.host }}{{ range .Values.ingress.extraHosts }},{{ .host }}{{ end }}
     external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ .Values.ingress.cloudflareProxied | quote }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ .Values.ingress.maxBodySize | quote }}
     {{- with .Values.ingress.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

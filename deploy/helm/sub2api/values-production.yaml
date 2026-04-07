@@ -47,6 +47,9 @@ worker:
       memory: 1Gi
 
 config:
+  # Set this to your Grafana ingress/base URL when monitoring is enabled so
+  # the admin dashboard can embed Grafana directly.
+  # grafanaUrl: https://grafana.example.com
   database:
     maxOpenConns: 256
     maxIdleConns: 128

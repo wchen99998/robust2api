@@ -106,6 +106,9 @@ config:
   serverMode: "release"
   runMode: "standard"
   timezone: "Asia/Shanghai"
+  # Public Grafana base URL exposed to the app for the admin dashboard iframe.
+  # Example: https://grafana-monitoring.example.com
+  grafanaUrl: ""
 
   database:
     maxOpenConns: 50
@@ -170,9 +173,11 @@ ingress:
   host: sub2api.local
   # Cloudflare proxy mode (set to "false" for DNS-only / grey-cloud)
   cloudflareProxied: "true"
+  # Maximum request body size (maps to nginx proxy-body-size annotation).
+  # Pulled out of annotations so it can't be accidentally dropped by overrides.
+  maxBodySize: "50m"
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
-    nginx.ingress.kubernetes.io/proxy-body-size: 50m
   tls:
     enabled: false
     secretName: ""

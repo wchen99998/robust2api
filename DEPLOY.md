@@ -158,6 +158,7 @@ helm upgrade --install sub2api deploy/helm/sub2api \
   --set ingress.host=api-sub2api.do-prod.yourdomain.com \
   --set ingress.tls.enabled=true \
   --set ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/ssl-redirect=true \
+  --set config.grafanaUrl=https://grafana-monitoring.do-prod.yourdomain.com \
   --set secrets.jwtSecret="$JWT_SECRET" \
   --set secrets.totpEncryptionKey="$TOTP_KEY" \
   --set secrets.adminEmail="admin@sub2api.local" \
@@ -173,6 +174,7 @@ This path uses:
 - The chart-managed PostgreSQL subchart for the application database
 - The chart-managed Redis subchart for caching / coordination
 - The default ingress naming pattern `api-sub2api.<domain_suffix>`
+- A Grafana URL passed into the app chart so `/admin/dashboard` can embed the monitoring dashboard
 - Helm as the source of truth for future app upgrades
 
 Because the bundled PostgreSQL and Redis instances are created by the `sub2api` chart in the `sub2api` namespace, treat them as application components, not Terraform-managed infrastructure.
@@ -180,6 +182,8 @@ Because the bundled PostgreSQL and Redis instances are created by the `sub2api` 
 > **Important:** `TOTP_KEY` must be a 64-character hex key. `openssl rand -hex 32` is correct. Do not use a 32-character random string.
 
 > **Important:** `deploy/helm/sub2api/values-production.yaml` is for external database / external Redis style deployments. Do not include it for the default bundled PostgreSQL + Redis installation above.
+
+> **Important:** `config.grafanaUrl` should point at the externally reachable Grafana base URL for this cluster. If you enable monitoring later, update the existing `sub2api` release with the same setting so the admin dashboard can load Grafana.
 
 > **Cloudflare SSL:** Set your Cloudflare SSL/TLS mode to **"Full (Strict)"** in the dashboard (SSL/TLS -> Overview). This ensures end-to-end encryption: client -> Cloudflare -> HTTPS -> nginx (Let's Encrypt cert) -> app. Using "Flexible" mode will cause a 308 redirect loop because nginx forces HTTPS.
 
@@ -334,6 +338,8 @@ This creates:
 - The `monitoring` Helm release
 - Grafana ingress at `grafana.<domain_suffix>`
 
+Use that Grafana ingress URL as the app chart's `config.grafanaUrl` value.
+
 ### Create an R2 API token
 
 Create an R2-scoped API token from the [Cloudflare dashboard](https://dash.cloudflare.com) -> R2 -> Manage R2 API Tokens. This gives you S3-compatible credentials (access key ID + secret) that Tempo and Loki use.
@@ -351,6 +357,7 @@ Once the monitoring stack is running, enable OTel in the app with Helm:
 ```bash
 helm upgrade sub2api deploy/helm/sub2api \
   -n sub2api --reuse-values \
+  --set config.grafanaUrl="https://grafana.<domain_suffix>" \
   --set observability.enabled=true \
   --set observability.otel.serviceName=sub2api \
   --set observability.otel.endpoint="monitoring-alloy.monitoring.svc:4317" \
