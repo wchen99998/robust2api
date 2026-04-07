@@ -1,0 +1,62 @@
+# =============================================================================
+# Sub2API Bootstrap — Multi-Stage Dockerfile
+# =============================================================================
+# Builds the bootstrap binary for DB migration and seeding.
+# Produces a minimal image with only the binary and TLS/timezone support.
+# =============================================================================
+
+ARG GOLANG_IMAGE=golang:1.26.1-alpine
+ARG ALPINE_IMAGE=alpine:3.21
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.google.cn
+
+# -----------------------------------------------------------------------------
+# Stage 1: Backend Builder
+# -----------------------------------------------------------------------------
+FROM ${GOLANG_IMAGE} AS backend-builder
+
+ARG GOPROXY
+ARG GOSUMDB
+
+ENV GOPROXY=${GOPROXY}
+ENV GOSUMDB=${GOSUMDB}
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /app/backend
+
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ ./
+
+RUN CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w" \
+    -trimpath \
+    -o /app/sub2api-bootstrap \
+    ./cmd/bootstrap
+
+# -----------------------------------------------------------------------------
+# Stage 2: Final Runtime Image
+# -----------------------------------------------------------------------------
+FROM ${ALPINE_IMAGE}
+
+LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
+LABEL description="Sub2API Bootstrap - DB Migration & Seeding"
+LABEL org.opencontainers.image.source="https://github.com/Wei-Shaw/sub2api"
+
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+RUN addgroup -g 1000 sub2api && \
+    adduser -u 1000 -G sub2api -s /bin/sh -D sub2api
+
+WORKDIR /app
+
+COPY --from=backend-builder --chown=sub2api:sub2api /app/sub2api-bootstrap /app/sub2api-bootstrap
+
+USER sub2api
+
+ENTRYPOINT ["/app/sub2api-bootstrap"]
