@@ -70,6 +70,7 @@ func provideWorkerCleanup(
 	billingCache *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
+	userMsgQueue *service.UserMessageQueueService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
@@ -142,6 +143,12 @@ func provideWorkerCleanup(
 			{"SubscriptionService", func() error {
 				if subscriptionService != nil {
 					subscriptionService.Stop()
+				}
+				return nil
+			}},
+			{"UserMessageQueueService", func() error {
+				if userMsgQueue != nil {
+					userMsgQueue.Stop()
 				}
 				return nil
 			}},

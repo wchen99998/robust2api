@@ -115,7 +115,10 @@ func initializeWorkerApplication() (*WorkerApplication, error) {
 	billingCacheService := service.NewBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, configConfig)
 	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
 	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService, client, configConfig)
-	v := provideWorkerCleanup(client, redisClient, provider, metricsServer, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, scheduledTestRunnerService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
+	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
+	rpmCache := repository.NewRPMCache(redisClient)
+	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
+	v := provideWorkerCleanup(client, redisClient, provider, metricsServer, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, scheduledTestRunnerService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, userMessageQueueService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
 	workerApplication := &WorkerApplication{
 		Health:  checker,
 		Cleanup: v,
@@ -152,6 +155,7 @@ func provideWorkerCleanup(
 	billingCache *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
+	userMsgQueue *service.UserMessageQueueService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
@@ -224,6 +228,12 @@ func provideWorkerCleanup(
 			{"SubscriptionService", func() error {
 				if subscriptionService != nil {
 					subscriptionService.Stop()
+				}
+				return nil
+			}},
+			{"UserMessageQueueService", func() error {
+				if userMsgQueue != nil {
+					userMsgQueue.Stop()
 				}
 				return nil
 			}},

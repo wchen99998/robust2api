@@ -15,8 +15,9 @@ func RegisterCommonRoutes(r *gin.Engine, healthChecker *health.Checker) {
 	r.GET("/readyz", gin.WrapF(healthChecker.Readyz))
 	r.GET("/startupz", gin.WrapF(healthChecker.Startupz))
 
-	// Backward-compatible alias
-	r.GET("/health", gin.WrapF(healthChecker.Readyz))
+	// Backward-compatible liveness alias — Caddy and the frontend VersionBadge poll
+	// /health and expect an unconditional 200 even during transient DB/Redis issues.
+	r.GET("/health", gin.WrapF(healthChecker.Livez))
 
 	// Claude Code 遥测日志（忽略，直接返回200）
 	r.POST("/api/event_logging/batch", func(c *gin.Context) {
