@@ -28,7 +28,7 @@ spec:
       serviceAccountName: {{ include "sub2api.serviceAccountName" . }}
       securityContext:
         fsGroup: 1000
-      terminationGracePeriodSeconds: {{ default 5 .Values.api.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ default 20 .Values.api.terminationGracePeriodSeconds }}
       containers:
         - name: api
           image: "{{ .Values.image.api.repository }}:{{ .Values.image.api.tag | default .Chart.AppVersion }}"

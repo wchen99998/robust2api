@@ -69,7 +69,6 @@ func runWorker() {
 	if err != nil {
 		log.Fatalf("Failed to initialize worker application: %v", err)
 	}
-	defer app.Cleanup()
 
 	// Mark as ready after successful initialization
 	app.Health.SetReady()
@@ -102,9 +101,14 @@ func runWorker() {
 
 	log.Println("Shutting down worker...")
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Use a single shared timeout budget for the entire shutdown sequence.
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Second)
 	defer cancel()
 
+	// 1. Stop all background services first (the main cleanup work).
+	app.Cleanup()
+
+	// 2. Shut down the health server last (fast, just closes the listener).
 	if err := healthServer.Shutdown(ctx); err != nil {
 		log.Printf("Health server forced to shutdown: %v", err)
 	}

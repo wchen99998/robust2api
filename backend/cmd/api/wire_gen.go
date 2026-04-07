@@ -218,14 +218,14 @@ func initializeAPIApplication(buildInfo handler.BuildInfo) (*APIApplication, err
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
-	engine := server.ProvideRouter(configConfig, handlers, jwtAuthMiddleware, adminAuthMiddleware, apiKeyAuthMiddleware, apiKeyService, subscriptionService, opsService, settingService, redisClient)
+	checker := health.NewChecker(db, redisClient)
+	engine := server.ProvideRouter(configConfig, handlers, jwtAuthMiddleware, adminAuthMiddleware, apiKeyAuthMiddleware, apiKeyService, subscriptionService, opsService, settingService, redisClient, checker)
 	httpServer := server.ProvideHTTPServer(configConfig, engine)
 	provider, err := otel.ProvideOtel(configConfig)
 	if err != nil {
 		return nil, err
 	}
 	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
-	checker := health.NewChecker(db, redisClient)
 	v := provideAPICleanup(client, redisClient, provider, metricsServer, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, pricingService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
 	apiApplication := &APIApplication{
 		Server:        httpServer,

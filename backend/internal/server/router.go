@@ -9,6 +9,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/health"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -34,6 +35,7 @@ func SetupRouter(
 	settingService *service.SettingService,
 	cfg *config.Config,
 	redisClient *redis.Client,
+	healthChecker *health.Checker,
 ) *gin.Engine {
 	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
 	var cachedFrameOrigins atomic.Pointer[[]string]
@@ -59,7 +61,7 @@ func SetupRouter(
 		r.Use(otelgin.Middleware("sub2api",
 			otelgin.WithFilter(func(r *http.Request) bool {
 				p := r.URL.Path
-				return p != "/health" && p != "/setup/status"
+				return p != "/health" && p != "/livez" && p != "/readyz" && p != "/startupz" && p != "/setup/status"
 			}),
 		))
 	}
@@ -97,7 +99,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient)
+	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg, redisClient, healthChecker)
 
 	return r
 }
@@ -115,9 +117,10 @@ func registerRoutes(
 	settingService *service.SettingService,
 	cfg *config.Config,
 	redisClient *redis.Client,
+	healthChecker *health.Checker,
 ) {
 	// 通用路由（健康检查、状态等）
-	routes.RegisterCommonRoutes(r)
+	routes.RegisterCommonRoutes(r, healthChecker)
 
 	// API v1
 	v1 := r.Group("/api/v1")

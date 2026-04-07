@@ -53,12 +53,16 @@ func (c *Checker) Readyz(w http.ResponseWriter, r *http.Request) {
 	if c.db != nil {
 		err := c.db.PingContext(ctx)
 		results = append(results, checkResult{"postgresql", err == nil})
+	} else {
+		results = append(results, checkResult{"postgresql", false})
 	}
 
 	// Check Redis
 	if c.rdb != nil {
 		err := c.rdb.Ping(ctx).Err()
 		results = append(results, checkResult{"redis", err == nil})
+	} else {
+		results = append(results, checkResult{"redis", false})
 	}
 
 	allOK := true

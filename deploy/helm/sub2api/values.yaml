@@ -1,7 +1,7 @@
 # -- API Configuration
 api:
   replicaCount: 1
-  terminationGracePeriodSeconds: 5
+  terminationGracePeriodSeconds: 20
   resources:
     requests:
       cpu: 250m
@@ -32,6 +32,7 @@ api:
 # -- Worker Configuration
 worker:
   replicaCount: 1
+  healthPort: 8081
   terminationGracePeriodSeconds: 30
   resources:
     requests:

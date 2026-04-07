@@ -33,7 +33,7 @@ spec:
           imagePullPolicy: {{ .Values.image.worker.pullPolicy }}
           ports:
             - name: health
-              containerPort: 8081
+              containerPort: {{ .Values.worker.healthPort }}
               protocol: TCP
           envFrom:
             - configMapRef:
