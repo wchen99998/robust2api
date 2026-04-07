@@ -72,9 +72,9 @@ FROM ${POSTGRES_IMAGE} AS pg-client
 # -----------------------------------------------------------------------------
 FROM ${ALPINE_IMAGE}
 
-LABEL maintainer="Wei-Shaw <github.com/Wei-Shaw>"
+LABEL maintainer="Wccccc <github.com/wchen99998>"
 LABEL description="Sub2API Server - AI API Gateway Platform"
-LABEL org.opencontainers.image.source="https://github.com/Wei-Shaw/sub2api"
+LABEL org.opencontainers.image.source="https://github.com/wchen99998/sub2api"
 
 RUN apk add --no-cache \
     ca-certificates \
