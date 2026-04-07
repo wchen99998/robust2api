@@ -356,18 +356,6 @@ func ProvideAPIUsageCleanupService(repo UsageCleanupRepository, timingWheel *Tim
 	return NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
 }
 
-// ProvideAPIBackupService constructs BackupService without calling Start().
-// The API instance serves backup management endpoints but does not run the scheduled backup loop.
-func ProvideAPIBackupService(
-	settingRepo SettingRepository,
-	cfg *config.Config,
-	encryptor SecretEncryptor,
-	storeFactory BackupObjectStoreFactory,
-	dumper DBDumper,
-) *BackupService {
-	return NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
-}
-
 // SharedProviderSet contains pure constructors with no background goroutines (no Start() calls).
 var SharedProviderSet = wire.NewSet(
 	// Core services
@@ -442,7 +430,6 @@ var APIProviderSet = wire.NewSet(
 	// Admin data-query providers (no background loops)
 	ProvideAPIDashboardAggregationService,
 	ProvideAPIUsageCleanupService,
-	ProvideAPIBackupService,
 	// Request-path async workers (must stay in API for request processing)
 	ProvideEmailQueueService,
 	NewBillingCacheService,
@@ -470,7 +457,6 @@ var WorkerProviderSet = wire.NewSet(
 	ProvideAccountExpiryService,
 	ProvideSubscriptionExpiryService,
 	ProvideScheduledTestRunnerService,
-	ProvideBackupService,
 	// Worker needs these because some shared services depend on them transitively.
 	// The goroutines they start (cache writers, email workers) are a known compromise —
 	// they run idle in the Worker since no HTTP requests generate work for them.
