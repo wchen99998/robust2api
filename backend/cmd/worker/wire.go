@@ -58,6 +58,7 @@ func provideWorkerCleanup(
 	rdb *redis.Client,
 	otelProvider *appelotel.Provider,
 	metricsServer *appelotel.MetricsServer,
+	_ *service.ConcurrencyService,
 	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,

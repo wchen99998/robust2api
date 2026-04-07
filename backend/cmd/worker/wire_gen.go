@@ -47,9 +47,11 @@ func initializeWorkerApplication() (*WorkerApplication, error) {
 		return nil, err
 	}
 	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
+	concurrencyCache := repository.ProvideConcurrencyCache(redisClient, configConfig)
 	schedulerCache := repository.NewSchedulerCache(redisClient)
-	schedulerOutboxRepository := repository.NewSchedulerOutboxRepository(db)
 	accountRepository := repository.NewAccountRepository(client, db, schedulerCache)
+	concurrencyService := service.ProvideConcurrencyService(concurrencyCache, accountRepository, configConfig)
+	schedulerOutboxRepository := repository.NewSchedulerOutboxRepository(db)
 	groupRepository := repository.NewGroupRepository(client, db)
 	schedulerSnapshotService := service.ProvideSchedulerSnapshotService(schedulerCache, schedulerOutboxRepository, accountRepository, groupRepository, configConfig)
 	proxyRepository := repository.NewProxyRepository(client, db)
@@ -118,7 +120,7 @@ func initializeWorkerApplication() (*WorkerApplication, error) {
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
 	rpmCache := repository.NewRPMCache(redisClient)
 	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
-	v := provideWorkerCleanup(client, redisClient, provider, metricsServer, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, scheduledTestRunnerService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, userMessageQueueService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
+	v := provideWorkerCleanup(client, redisClient, provider, metricsServer, concurrencyService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, scheduledTestRunnerService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, userMessageQueueService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
 	workerApplication := &WorkerApplication{
 		Health:  checker,
 		Cleanup: v,
@@ -143,6 +145,7 @@ func provideWorkerCleanup(
 	rdb *redis.Client,
 	otelProvider *otel.Provider,
 	metricsServer *otel.MetricsServer,
+	_ *service.ConcurrencyService,
 	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
 	accountExpiry *service.AccountExpiryService,
