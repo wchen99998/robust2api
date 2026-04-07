@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "sub2api.fullname" . }}-api
+  labels:
+    {{- include "sub2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  {{- if not .Values.api.autoscaling.enabled }}
+  replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "sub2api.api.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "sub2api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sub2api.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: {{ default 5 .Values.api.terminationGracePeriodSeconds }}
+      containers:
+        - name: api
+          image: "{{ .Values.image.api.repository }}:{{ .Values.image.api.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.api.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+            {{- if ((.Values.observability).enabled) }}
+            - name: metrics
+              containerPort: {{ .Values.observability.otel.metricsPort }}
+              protocol: TCP
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "sub2api.fullname" . }}
+            - secretRef:
+                name: {{ include "sub2api.secretName" . }}
+          startupProbe:
+            httpGet:
+              path: {{ default "/startupz" .Values.api.probes.startup.path }}
+              port: http
+            failureThreshold: {{ default 30 .Values.api.probes.startup.failureThreshold }}
+            periodSeconds: {{ default 2 .Values.api.probes.startup.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ default "/livez" .Values.api.probes.liveness.path }}
+              port: http
+            periodSeconds: {{ default 30 .Values.api.probes.liveness.periodSeconds }}
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: {{ default "/readyz" .Values.api.probes.readiness.path }}
+              port: http
+            periodSeconds: {{ default 10 .Values.api.probes.readiness.periodSeconds }}
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

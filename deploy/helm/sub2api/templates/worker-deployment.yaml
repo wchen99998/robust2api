@@ -1,14 +1,15 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sub2api.fullname" . }}
+  name: {{ include "sub2api.fullname" . }}-worker
   labels:
     {{- include "sub2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.worker.replicaCount }}
   selector:
     matchLabels:
-      {{- include "sub2api.selectorLabels" . | nindent 6 }}
+      {{- include "sub2api.worker.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -16,6 +17,7 @@ spec:
         checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
       labels:
         {{- include "sub2api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -24,20 +26,15 @@ spec:
       serviceAccountName: {{ include "sub2api.serviceAccountName" . }}
       securityContext:
         fsGroup: 1000
-      terminationGracePeriodSeconds: 30
+      terminationGracePeriodSeconds: {{ default 30 .Values.worker.terminationGracePeriodSeconds }}
       containers:
-        - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.server.repository }}:{{ .Values.image.server.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.server.pullPolicy }}
+        - name: worker
+          image: "{{ .Values.image.worker.repository }}:{{ .Values.image.worker.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.worker.pullPolicy }}
           ports:
-            - name: http
-              containerPort: 8080
+            - name: health
+              containerPort: 8081
               protocol: TCP
-            {{- if ((.Values.observability).enabled) }}
-            - name: metrics
-              containerPort: {{ .Values.observability.otel.metricsPort }}
-              protocol: TCP
-            {{- end }}
           envFrom:
             - configMapRef:
                 name: {{ include "sub2api.fullname" . }}
@@ -45,24 +42,24 @@ spec:
                 name: {{ include "sub2api.secretName" . }}
           startupProbe:
             httpGet:
-              path: /health
-              port: http
-            failureThreshold: 30
-            periodSeconds: 2
+              path: {{ default "/startupz" .Values.worker.probes.startup.path }}
+              port: health
+            failureThreshold: {{ default 30 .Values.worker.probes.startup.failureThreshold }}
+            periodSeconds: {{ default 2 .Values.worker.probes.startup.periodSeconds }}
           livenessProbe:
             httpGet:
-              path: /health
-              port: http
-            periodSeconds: 30
+              path: {{ default "/livez" .Values.worker.probes.liveness.path }}
+              port: health
+            periodSeconds: {{ default 30 .Values.worker.probes.liveness.periodSeconds }}
             timeoutSeconds: 10
           readinessProbe:
             httpGet:
-              path: /health
-              port: http
-            periodSeconds: 10
+              path: {{ default "/readyz" .Values.worker.probes.readiness.path }}
+              port: health
+            periodSeconds: {{ default 10 .Values.worker.probes.readiness.periodSeconds }}
             timeoutSeconds: 5
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.worker.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000

@@ -11,7 +11,7 @@ metadata:
 spec:
   selector:
     matchLabels:
-      {{- include "sub2api.selectorLabels" . | nindent 6 }}
+      {{- include "sub2api.api.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: metrics
       interval: {{ .Values.observability.serviceMonitor.interval }}

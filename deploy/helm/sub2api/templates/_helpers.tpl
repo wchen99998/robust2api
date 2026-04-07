@@ -154,3 +154,19 @@ on each upgrade instead of trying to patch an immutable Job spec.
 {{- define "sub2api.bootstrapJobName" -}}
 {{- printf "%s-bootstrap-r%d" (include "sub2api.fullname" .) .Release.Revision | trunc 63 | trimSuffix "-" }}
 {{- end }}
+
+{{/*
+API component labels.
+*/}}
+{{- define "sub2api.api.selectorLabels" -}}
+{{ include "sub2api.selectorLabels" . }}
+app.kubernetes.io/component: api
+{{- end }}
+
+{{/*
+Worker component labels.
+*/}}
+{{- define "sub2api.worker.selectorLabels" -}}
+{{ include "sub2api.selectorLabels" . }}
+app.kubernetes.io/component: worker
+{{- end }}
