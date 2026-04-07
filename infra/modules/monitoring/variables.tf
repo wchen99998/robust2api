@@ -24,6 +24,38 @@ variable "grafana_admin_password" {
   sensitive   = true
 }
 
+variable "grafana_db_host" {
+  description = "PostgreSQL host for Grafana business analytics datasource"
+  type        = string
+}
+
+variable "grafana_db_port" {
+  description = "PostgreSQL port for Grafana business analytics datasource"
+  type        = number
+}
+
+variable "grafana_db_name" {
+  description = "PostgreSQL database name for Grafana business analytics datasource"
+  type        = string
+}
+
+variable "grafana_db_user" {
+  description = "PostgreSQL read-only user for Grafana business analytics datasource"
+  type        = string
+}
+
+variable "grafana_db_password" {
+  description = "PostgreSQL read-only password for Grafana business analytics datasource"
+  type        = string
+  sensitive   = true
+}
+
+variable "grafana_db_sslmode" {
+  description = "PostgreSQL SSL mode for Grafana business analytics datasource"
+  type        = string
+  default     = "require"
+}
+
 # --- R2 Storage ---
 
 variable "r2_endpoint" {

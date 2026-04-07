@@ -56,9 +56,6 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
-		// 运维监控（Ops）
-		registerOpsRoutes(admin, h)
-
 		// 系统管理
 		registerSystemRoutes(admin, buildInfo)
 
@@ -92,39 +89,6 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	apiKeys := admin.Group("/api-keys")
 	{
 		apiKeys.PUT("/:id", h.Admin.APIKey.UpdateGroup)
-	}
-}
-
-func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	ops := admin.Group("/ops")
-	{
-		ops.GET("/concurrency", h.Admin.Ops.GetConcurrencyStats)
-		ops.GET("/user-concurrency", h.Admin.Ops.GetUserConcurrencyStats)
-		ops.GET("/account-availability", h.Admin.Ops.GetAccountAvailability)
-
-		// Error logs (legacy)
-		ops.GET("/errors", h.Admin.Ops.GetErrorLogs)
-		ops.GET("/errors/:id", h.Admin.Ops.GetErrorLogByID)
-		ops.GET("/errors/:id/retries", h.Admin.Ops.ListRetryAttempts)
-		ops.POST("/errors/:id/retry", h.Admin.Ops.RetryErrorRequest)
-		ops.PUT("/errors/:id/resolve", h.Admin.Ops.UpdateErrorResolution)
-
-		// Request errors (client-visible failures)
-		ops.GET("/request-errors", h.Admin.Ops.ListRequestErrors)
-		ops.GET("/request-errors/:id", h.Admin.Ops.GetRequestError)
-		ops.GET("/request-errors/:id/upstream-errors", h.Admin.Ops.ListRequestErrorUpstreamErrors)
-		ops.POST("/request-errors/:id/retry-client", h.Admin.Ops.RetryRequestErrorClient)
-		ops.POST("/request-errors/:id/upstream-errors/:idx/retry", h.Admin.Ops.RetryRequestErrorUpstreamEvent)
-		ops.PUT("/request-errors/:id/resolve", h.Admin.Ops.ResolveRequestError)
-
-		// Upstream errors (independent upstream failures)
-		ops.GET("/upstream-errors", h.Admin.Ops.ListUpstreamErrors)
-		ops.GET("/upstream-errors/:id", h.Admin.Ops.GetUpstreamError)
-		ops.POST("/upstream-errors/:id/retry", h.Admin.Ops.RetryUpstreamError)
-		ops.PUT("/upstream-errors/:id/resolve", h.Admin.Ops.ResolveUpstreamError)
-
-		// Request drilldown (success + error)
-		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
 	}
 }
 

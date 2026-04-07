@@ -62,3 +62,35 @@ func TestSettingService_GetPublicSettings_ExposesRegistrationEmailSuffixWhitelis
 	require.NoError(t, err)
 	require.Equal(t, []string{"@example.com", "@foo.bar"}, settings.RegistrationEmailSuffixWhitelist)
 }
+
+func TestSettingService_GetPublicSettings_FallsBackToConfiguredGrafanaURL(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyRegistrationEnabled: "true",
+			SettingKeyGrafanaURL:          "",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{
+		GrafanaURL: "https://grafana.example.com",
+	})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "https://grafana.example.com", settings.GrafanaURL)
+}
+
+func TestSettingService_GetPublicSettings_PrefersDatabaseGrafanaURL(t *testing.T) {
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyRegistrationEnabled: "true",
+			SettingKeyGrafanaURL:          "https://grafana-db.example.com",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{
+		GrafanaURL: "https://grafana-config.example.com",
+	})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "https://grafana-db.example.com", settings.GrafanaURL)
+}

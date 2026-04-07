@@ -1968,6 +1968,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 	if s.schedulerSnapshot != nil {
 		accounts, useMixed, err := s.schedulerSnapshot.ListSchedulableAccounts(ctx, groupID, platform, hasForcePlatform)
 		if err == nil {
+			recordUpstreamAccountsActiveMetric(ctx, accounts, platform, useMixed)
 			slog.Debug("account_scheduling_list_snapshot",
 				"group_id", derefGroupID(groupID),
 				"platform", platform,
@@ -2016,6 +2017,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 			"platform", platform,
 			"raw_count", len(accounts),
 			"filtered_count", len(filtered))
+		recordUpstreamAccountsActiveMetric(ctx, filtered, platform, useMixed)
 		for _, acc := range filtered {
 			slog.Debug("account_scheduling_account_detail",
 				"account_id", acc.ID,
@@ -2049,6 +2051,7 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 		"group_id", derefGroupID(groupID),
 		"platform", platform,
 		"count", len(accounts))
+	recordUpstreamAccountsActiveMetric(ctx, accounts, platform, useMixed)
 	for _, acc := range accounts {
 		slog.Debug("account_scheduling_account_detail",
 			"account_id", acc.ID,
@@ -2059,6 +2062,33 @@ func (s *GatewayService) listSchedulableAccounts(ctx context.Context, groupID *i
 			"tls_fingerprint", acc.IsTLSFingerprintEnabled())
 	}
 	return accounts, useMixed, nil
+}
+
+func recordUpstreamAccountsActiveMetric(ctx context.Context, accounts []Account, requestedPlatform string, useMixed bool) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	counts := map[string]int64{}
+	relevantPlatforms := map[string]struct{}{}
+	if requestedPlatform != "" {
+		relevantPlatforms[requestedPlatform] = struct{}{}
+	}
+	if useMixed {
+		relevantPlatforms[PlatformAntigravity] = struct{}{}
+	}
+
+	for _, account := range accounts {
+		if account.Platform == "" {
+			continue
+		}
+		counts[account.Platform]++
+		relevantPlatforms[account.Platform] = struct{}{}
+	}
+
+	for platform := range relevantPlatforms {
+		appelotel.M().SetUpstreamAccountsActive(ctx, counts[platform], platform)
+	}
 }
 
 // IsSingleAntigravityAccountGroup 检查指定分组是否只有一个 antigravity 平台的可调度账号。

@@ -55,6 +55,17 @@ output "database_name" {
   value       = var.enable_managed_database ? module.database[0].database : ""
 }
 
+output "grafana_reader_user" {
+  description = "Grafana read-only DB user from managed PostgreSQL (empty if managed DB disabled)"
+  value       = var.enable_managed_database ? module.database[0].grafana_reader_user : ""
+}
+
+output "grafana_reader_password" {
+  description = "Grafana read-only DB password from managed PostgreSQL (empty if managed DB disabled)"
+  value       = var.enable_managed_database ? module.database[0].grafana_reader_password : ""
+  sensitive   = true
+}
+
 # --- Observability storage (conditional) ---
 
 output "r2_tempo_bucket" {
@@ -82,5 +93,31 @@ output "grafana_url" {
 output "grafana_admin_password" {
   description = "Auto-generated Grafana admin password (empty if monitoring disabled)"
   value       = var.enable_monitoring ? local.effective_grafana_admin_password : ""
+  sensitive   = true
+}
+
+output "grafana_datasource_db_host" {
+  description = "Grafana PostgreSQL datasource host (empty if monitoring disabled)"
+  value       = var.enable_monitoring ? local.effective_grafana_db_host : ""
+}
+
+output "grafana_datasource_db_port" {
+  description = "Grafana PostgreSQL datasource port (empty if monitoring disabled)"
+  value       = var.enable_monitoring ? local.effective_grafana_db_port : ""
+}
+
+output "grafana_datasource_db_name" {
+  description = "Grafana PostgreSQL datasource database name (empty if monitoring disabled)"
+  value       = var.enable_monitoring ? local.effective_grafana_db_name : ""
+}
+
+output "grafana_datasource_db_user" {
+  description = "Grafana PostgreSQL datasource user (empty if monitoring disabled)"
+  value       = var.enable_monitoring ? local.effective_grafana_db_user : ""
+}
+
+output "grafana_datasource_db_password" {
+  description = "Grafana PostgreSQL datasource password (empty if monitoring disabled)"
+  value       = var.enable_monitoring ? local.effective_grafana_db_password : ""
   sensitive   = true
 }

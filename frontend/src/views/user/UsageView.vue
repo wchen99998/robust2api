@@ -191,7 +191,7 @@
               <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">({{ row.image_size || '2K' }})</span>
             </div>
             <!-- Token 请求 -->
-            <div v-else class="flex items-center gap-2">
+            <div v-else class="flex items-start gap-2">
               <div class="text-sm tabular-nums">
                 <!-- Input / Output Tokens -->
                 <div class="flex items-center gap-3">
@@ -221,7 +221,7 @@
               </div>
               <!-- Token Detail Tooltip -->
               <div
-                class="group relative"
+                class="group relative mt-0.5"
                 @mouseenter="showTokenTooltip($event, row)"
                 @mouseleave="hideTokenTooltip"
               >
@@ -314,67 +314,61 @@
         top: tokenTooltipPosition.y + 'px'
       }"
     >
-      <div
-        class="whitespace-nowrap rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800"
-      >
+      <div class="mica-popover whitespace-nowrap rounded-mica-lg border border-black/[0.06] bg-white/80 px-3.5 py-3 text-xs shadow-mica-popover backdrop-blur-xl dark:border-white/[0.1] dark:bg-[#2c2c2e]/80">
         <div class="space-y-1.5">
           <!-- Token Breakdown -->
           <div>
-            <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.tokenDetails') }}</div>
-            <div v-if="tokenTooltipData && tokenTooltipData.input_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.input_tokens.toLocaleString() }}</span>
+            <div class="text-mica-caption font-semibold text-mica-text-secondary dark:text-mica-text-secondary-dark mb-1.5">{{ t('usage.tokenDetails') }}</div>
+            <div v-if="tokenTooltipData && tokenTooltipData.input_tokens > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.inputTokens') }}</span>
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">{{ tokenTooltipData.input_tokens.toLocaleString() }}</span>
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.output_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.output_tokens.toLocaleString() }}</span>
+            <div v-if="tokenTooltipData && tokenTooltipData.output_tokens > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.outputTokens') }}</span>
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">{{ tokenTooltipData.output_tokens.toLocaleString() }}</span>
             </div>
             <div v-if="tokenTooltipData && tokenTooltipData.cache_creation_tokens > 0">
               <!-- 有 5m/1h 明细时，展开显示 -->
               <template v-if="tokenTooltipData.cache_creation_5m_tokens > 0 || tokenTooltipData.cache_creation_1h_tokens > 0">
-                <div v-if="tokenTooltipData.cache_creation_5m_tokens > 0" class="flex items-center justify-between gap-4">
-                  <span class="text-gray-400 flex items-center gap-1.5">
+                <div v-if="tokenTooltipData.cache_creation_5m_tokens > 0" class="flex items-center justify-between gap-6">
+                  <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark flex items-center gap-1.5">
                     {{ t('admin.usage.cacheCreation5mTokens') }}
-                    <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-amber-500/20 text-amber-400 ring-1 ring-inset ring-amber-500/30">5m</span>
+                    <span class="inline-flex items-center rounded-mica-sm px-1 py-px text-[10px] font-medium leading-tight bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">5m</span>
                   </span>
-                  <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_5m_tokens.toLocaleString() }}</span>
+                  <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">{{ tokenTooltipData.cache_creation_5m_tokens.toLocaleString() }}</span>
                 </div>
-                <div v-if="tokenTooltipData.cache_creation_1h_tokens > 0" class="flex items-center justify-between gap-4">
-                  <span class="text-gray-400 flex items-center gap-1.5">
+                <div v-if="tokenTooltipData.cache_creation_1h_tokens > 0" class="flex items-center justify-between gap-6">
+                  <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark flex items-center gap-1.5">
                     {{ t('admin.usage.cacheCreation1hTokens') }}
-                    <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-orange-500/20 text-orange-400 ring-1 ring-inset ring-orange-500/30">1h</span>
+                    <span class="inline-flex items-center rounded-mica-sm px-1 py-px text-[10px] font-medium leading-tight bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400">1h</span>
                   </span>
-                  <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_1h_tokens.toLocaleString() }}</span>
+                  <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">{{ tokenTooltipData.cache_creation_1h_tokens.toLocaleString() }}</span>
                 </div>
               </template>
               <!-- 无明细时，只显示聚合值 -->
-              <div v-else class="flex items-center justify-between gap-4">
-                <span class="text-gray-400">{{ t('admin.usage.cacheCreationTokens') }}</span>
-                <span class="font-medium text-white">{{ tokenTooltipData.cache_creation_tokens.toLocaleString() }}</span>
+              <div v-else class="flex items-center justify-between gap-6">
+                <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.cacheCreationTokens') }}</span>
+                <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">{{ tokenTooltipData.cache_creation_tokens.toLocaleString() }}</span>
               </div>
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.cache_ttl_overridden" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400 flex items-center gap-1.5">
+            <div v-if="tokenTooltipData && tokenTooltipData.cache_ttl_overridden" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark flex items-center gap-1.5">
                 {{ t('usage.cacheTtlOverriddenLabel') }}
-                <span class="inline-flex items-center rounded px-1 py-px text-[10px] font-medium leading-tight bg-rose-500/20 text-rose-400 ring-1 ring-inset ring-rose-500/30">R-{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? '5m' : '1H' }}</span>
+                <span class="inline-flex items-center rounded-mica-sm px-1 py-px text-[10px] font-medium leading-tight bg-rose-100 text-rose-700 dark:bg-rose-500/20 dark:text-rose-400">R-{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? '5m' : '1H' }}</span>
               </span>
-              <span class="font-medium text-rose-400">{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? t('usage.cacheTtlOverridden1h') : t('usage.cacheTtlOverridden5m') }}</span>
+              <span class="font-medium text-rose-600 dark:text-rose-400">{{ tokenTooltipData.cache_creation_1h_tokens > 0 ? t('usage.cacheTtlOverridden1h') : t('usage.cacheTtlOverridden5m') }}</span>
             </div>
-            <div v-if="tokenTooltipData && tokenTooltipData.cache_read_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheReadTokens') }}</span>
-              <span class="font-medium text-white">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
+            <div v-if="tokenTooltipData && tokenTooltipData.cache_read_tokens > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.cacheReadTokens') }}</span>
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">{{ tokenTooltipData.cache_read_tokens.toLocaleString() }}</span>
             </div>
           </div>
           <!-- Total -->
-          <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.totalTokens') }}</span>
-            <span class="font-semibold text-blue-400">{{ ((tokenTooltipData?.input_tokens || 0) + (tokenTooltipData?.output_tokens || 0) + (tokenTooltipData?.cache_creation_tokens || 0) + (tokenTooltipData?.cache_read_tokens || 0)).toLocaleString() }}</span>
+          <div class="flex items-center justify-between gap-6 border-t border-black/[0.06] pt-1.5 dark:border-white/[0.08]">
+            <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.totalTokens') }}</span>
+            <span class="font-semibold tabular-nums text-blue-600 dark:text-blue-400">{{ ((tokenTooltipData?.input_tokens || 0) + (tokenTooltipData?.output_tokens || 0) + (tokenTooltipData?.cache_creation_tokens || 0) + (tokenTooltipData?.cache_read_tokens || 0)).toLocaleString() }}</span>
           </div>
         </div>
-        <!-- Tooltip Arrow (left side) -->
-        <div
-          class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"
-        ></div>
       </div>
     </div>
   </Teleport>
@@ -389,64 +383,54 @@
         top: tooltipPosition.y + 'px'
       }"
     >
-      <div
-        class="whitespace-nowrap rounded-lg border border-gray-700 bg-gray-900 px-3 py-2.5 text-xs text-white shadow-xl dark:border-gray-600 dark:bg-gray-800"
-      >
+      <div class="mica-popover whitespace-nowrap rounded-mica-lg border border-black/[0.06] bg-white/80 px-3.5 py-3 text-xs shadow-mica-popover backdrop-blur-xl dark:border-white/[0.1] dark:bg-[#2c2c2e]/80">
         <div class="space-y-1.5">
           <!-- Cost Breakdown -->
-          <div class="mb-2 border-b border-gray-700 pb-1.5">
-            <div class="text-xs font-semibold text-gray-300 mb-1">{{ t('usage.costDetails') }}</div>
-            <div v-if="tooltipData && tooltipData.input_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.inputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.input_cost.toFixed(6) }}</span>
+          <div class="mb-2 border-b border-black/[0.06] pb-1.5 dark:border-white/[0.08]">
+            <div class="text-mica-caption font-semibold text-mica-text-secondary dark:text-mica-text-secondary-dark mb-1.5">{{ t('usage.costDetails') }}</div>
+            <div v-if="tooltipData && tooltipData.input_cost > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.inputCost') }}</span>
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">${{ tooltipData.input_cost.toFixed(6) }}</span>
             </div>
-            <div v-if="tooltipData && tooltipData.output_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.outputCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.output_cost.toFixed(6) }}</span>
+            <div v-if="tooltipData && tooltipData.output_cost > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.outputCost') }}</span>
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">${{ tooltipData.output_cost.toFixed(6) }}</span>
             </div>
-            <div v-if="tooltipData && tooltipData.input_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('usage.inputTokenPrice') }}</span>
-              <span class="font-medium text-sky-300">{{ formatTokenPricePerMillion(tooltipData.input_cost, tooltipData.input_tokens) }} {{ t('usage.perMillionTokens') }}</span>
+            <div v-if="tooltipData && tooltipData.input_tokens > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.inputTokenPrice') }}</span>
+              <span class="font-medium tabular-nums text-sky-600 dark:text-sky-400">{{ formatTokenPricePerMillion(tooltipData.input_cost, tooltipData.input_tokens) }} {{ t('usage.perMillionTokens') }}</span>
             </div>
-            <div v-if="tooltipData && tooltipData.output_tokens > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('usage.outputTokenPrice') }}</span>
-              <span class="font-medium text-violet-300">{{ formatTokenPricePerMillion(tooltipData.output_cost, tooltipData.output_tokens) }} {{ t('usage.perMillionTokens') }}</span>
+            <div v-if="tooltipData && tooltipData.output_tokens > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.outputTokenPrice') }}</span>
+              <span class="font-medium tabular-nums text-violet-600 dark:text-violet-400">{{ formatTokenPricePerMillion(tooltipData.output_cost, tooltipData.output_tokens) }} {{ t('usage.perMillionTokens') }}</span>
             </div>
-            <div v-if="tooltipData && tooltipData.cache_creation_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheCreationCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_creation_cost.toFixed(6) }}</span>
+            <div v-if="tooltipData && tooltipData.cache_creation_cost > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.cacheCreationCost') }}</span>
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">${{ tooltipData.cache_creation_cost.toFixed(6) }}</span>
             </div>
-            <div v-if="tooltipData && tooltipData.cache_read_cost > 0" class="flex items-center justify-between gap-4">
-              <span class="text-gray-400">{{ t('admin.usage.cacheReadCost') }}</span>
-              <span class="font-medium text-white">${{ tooltipData.cache_read_cost.toFixed(6) }}</span>
+            <div v-if="tooltipData && tooltipData.cache_read_cost > 0" class="flex items-center justify-between gap-6">
+              <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('admin.usage.cacheReadCost') }}</span>
+              <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">${{ tooltipData.cache_read_cost.toFixed(6) }}</span>
             </div>
           </div>
           <!-- Rate and Summary -->
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.serviceTier') }}</span>
-            <span class="font-semibold text-cyan-300">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
+            <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.serviceTier') }}</span>
+            <span class="font-semibold text-cyan-600 dark:text-cyan-400">{{ getUsageServiceTierLabel(tooltipData?.service_tier, t) }}</span>
           </div>
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.rate') }}</span>
-            <span class="font-semibold text-blue-400"
-              >{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span
-            >
+            <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.rate') }}</span>
+            <span class="font-semibold tabular-nums text-blue-600 dark:text-blue-400">{{ formatMultiplier(tooltipData?.rate_multiplier || 1) }}x</span>
           </div>
           <div class="flex items-center justify-between gap-6">
-            <span class="text-gray-400">{{ t('usage.original') }}</span>
-            <span class="font-medium text-white">${{ tooltipData?.total_cost.toFixed(6) }}</span>
+            <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.original') }}</span>
+            <span class="font-medium tabular-nums text-mica-text-primary dark:text-mica-text-primary-dark">${{ tooltipData?.total_cost.toFixed(6) }}</span>
           </div>
-          <div class="flex items-center justify-between gap-6 border-t border-gray-700 pt-1.5">
-            <span class="text-gray-400">{{ t('usage.billed') }}</span>
-            <span class="font-semibold text-green-400"
-              >${{ tooltipData?.actual_cost.toFixed(6) }}</span
-            >
+          <div class="flex items-center justify-between gap-6 border-t border-black/[0.06] pt-1.5 dark:border-white/[0.08]">
+            <span class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.billed') }}</span>
+            <span class="font-semibold tabular-nums text-green-600 dark:text-green-400">${{ tooltipData?.actual_cost.toFixed(6) }}</span>
           </div>
         </div>
-        <!-- Tooltip Arrow (left side) -->
-        <div
-          class="absolute right-full top-1/2 h-0 w-0 -translate-y-1/2 border-b-[6px] border-r-[6px] border-t-[6px] border-b-transparent border-r-gray-900 border-t-transparent dark:border-r-gray-800"
-        ></div>
       </div>
     </div>
   </Teleport>

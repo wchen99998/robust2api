@@ -25,6 +25,7 @@ export const useAppStore = defineStore('app', () => {
   const siteVersion = ref<string>('')
   const contactInfo = ref<string>('')
   const apiBaseUrl = ref<string>('')
+  const grafanaUrl = ref<string>('')
   const docUrl = ref<string>('')
   const cachedPublicSettings = ref<PublicSettings | null>(null)
 
@@ -261,6 +262,7 @@ export const useAppStore = defineStore('app', () => {
     siteVersion.value = config.version || ''
     contactInfo.value = config.contact_info || ''
     apiBaseUrl.value = config.api_base_url || ''
+    grafanaUrl.value = config.grafana_url || ''
     docUrl.value = config.doc_url || ''
     publicSettingsLoaded.value = true
   }
@@ -294,6 +296,7 @@ export const useAppStore = defineStore('app', () => {
         site_logo: siteLogo.value,
         site_subtitle: '',
         api_base_url: apiBaseUrl.value,
+        grafana_url: grafanaUrl.value,
         contact_info: contactInfo.value,
         doc_url: docUrl.value,
         home_content: '',
@@ -363,6 +366,7 @@ export const useAppStore = defineStore('app', () => {
     siteVersion,
     contactInfo,
     apiBaseUrl,
+    grafanaUrl,
     docUrl,
     cachedPublicSettings,
 

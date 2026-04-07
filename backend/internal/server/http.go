@@ -34,7 +34,6 @@ func ProvideRouter(
 	apiKeyAuth middleware2.APIKeyAuthMiddleware,
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
-	opsService *service.OpsService,
 	settingService *service.SettingService,
 	buildInfo service.BuildInfo,
 	redisClient *redis.Client,
@@ -59,7 +58,7 @@ func ProvideRouter(
 		}
 	}
 
-	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, buildInfo, cfg, redisClient, healthChecker)
+	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, settingService, buildInfo, cfg, redisClient, healthChecker)
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器

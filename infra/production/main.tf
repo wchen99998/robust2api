@@ -78,10 +78,11 @@ module "database" {
   source = "../modules/database"
   count  = var.enable_managed_database ? 1 : 0
 
-  cluster_name    = var.cluster_name
-  region          = var.region
-  db_size         = var.db_size
-  doks_cluster_id = module.doks.cluster_id
+  cluster_name        = var.cluster_name
+  region              = var.region
+  db_size             = var.db_size
+  grafana_reader_user = var.managed_grafana_reader_user
+  doks_cluster_id     = module.doks.cluster_id
 }
 
 module "storage" {
@@ -108,6 +109,24 @@ check "monitoring_requires_r2_credentials" {
 
 locals {
   effective_grafana_admin_password = var.existing_grafana_admin_password != "" ? var.existing_grafana_admin_password : random_password.grafana_admin_password.result
+  effective_grafana_db_host        = var.enable_managed_database ? module.database[0].host : var.grafana_db_host
+  effective_grafana_db_port        = var.enable_managed_database ? module.database[0].port : var.grafana_db_port
+  effective_grafana_db_name        = var.enable_managed_database ? module.database[0].database : var.grafana_db_name
+  effective_grafana_db_user        = var.enable_managed_database ? module.database[0].grafana_reader_user : var.grafana_db_user
+  effective_grafana_db_password    = var.enable_managed_database ? module.database[0].grafana_reader_password : var.grafana_db_password
+  effective_grafana_db_sslmode     = var.enable_managed_database ? module.database[0].sslmode : var.grafana_db_sslmode
+}
+
+check "monitoring_requires_grafana_db_credentials" {
+  assert {
+    condition = !var.enable_monitoring || (
+      local.effective_grafana_db_host != "" &&
+      local.effective_grafana_db_name != "" &&
+      local.effective_grafana_db_user != "" &&
+      local.effective_grafana_db_password != ""
+    )
+    error_message = "Grafana PostgreSQL datasource credentials must be configured when enable_monitoring=true."
+  }
 }
 
 # --- Auto-generated secrets ---
@@ -128,6 +147,12 @@ module "monitoring" {
   hostname_prefix = var.grafana_hostname_prefix
 
   grafana_admin_password = local.effective_grafana_admin_password
+  grafana_db_host        = local.effective_grafana_db_host
+  grafana_db_port        = local.effective_grafana_db_port
+  grafana_db_name        = local.effective_grafana_db_name
+  grafana_db_user        = local.effective_grafana_db_user
+  grafana_db_password    = local.effective_grafana_db_password
+  grafana_db_sslmode     = local.effective_grafana_db_sslmode
 
   # R2 storage (from storage module)
   r2_endpoint   = var.enable_observability_storage ? module.storage[0].s3_endpoint : ""

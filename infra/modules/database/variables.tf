@@ -33,6 +33,12 @@ variable "db_user" {
   default     = "sub2api"
 }
 
+variable "grafana_reader_user" {
+  description = "Name of the read-only database user used by Grafana dashboards"
+  type        = string
+  default     = "grafana_reader"
+}
+
 variable "doks_cluster_id" {
   description = "DOKS cluster ID for firewall rules (restrict DB access to cluster)"
   type        = string

@@ -27,7 +27,19 @@ enable_observability_storage = false
 
 # Monitoring stack (optional, default false)
 # Requires enable_observability_storage = true for R2 buckets
+# Also requires PostgreSQL datasource credentials for Grafana analytics dashboards.
 enable_monitoring = false
 # grafana_hostname_prefix = "grafana"
 # r2_access_key   = "your_r2_access_key"
 # r2_secret_key   = "your_r2_secret_key"
+
+# External PostgreSQL datasource for Grafana (used when enable_managed_database = false)
+# grafana_db_host     = "your-postgres-host.example.com"
+# grafana_db_port     = 5432
+# grafana_db_name     = "sub2api"
+# grafana_db_user     = "grafana_reader"
+# grafana_db_password = "your_grafana_reader_password"
+# grafana_db_sslmode  = "require"
+
+# Managed PostgreSQL reader username override (used when enable_managed_database = true)
+# managed_grafana_reader_user = "grafana_reader"

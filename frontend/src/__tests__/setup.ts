@@ -5,6 +5,31 @@
 import { config } from '@vue/test-utils'
 import { vi } from 'vitest'
 
+function createStorageMock(): Storage {
+  let store = new Map<string, string>()
+
+  return {
+    get length() {
+      return store.size
+    },
+    clear() {
+      store = new Map<string, string>()
+    },
+    getItem(key: string) {
+      return store.has(key) ? store.get(key)! : null
+    },
+    key(index: number) {
+      return Array.from(store.keys())[index] ?? null
+    },
+    removeItem(key: string) {
+      store.delete(key)
+    },
+    setItem(key: string, value: string) {
+      store.set(String(key), String(value))
+    }
+  }
+}
+
 // Mock requestIdleCallback (Safari < 15 不支持)
 if (typeof globalThis.requestIdleCallback === 'undefined') {
   globalThis.requestIdleCallback = ((callback: IdleRequestCallback) => {
@@ -35,6 +60,22 @@ class MockResizeObserver {
 }
 
 globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver
+
+// Some test runners/plugins replace localStorage with a partial object that lacks
+// the Storage methods our auth/client tests rely on. Normalize it here once.
+if (typeof globalThis.localStorage === 'undefined' || typeof globalThis.localStorage.clear !== 'function') {
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: createStorageMock(),
+    configurable: true
+  })
+}
+
+if (typeof globalThis.sessionStorage === 'undefined' || typeof globalThis.sessionStorage.clear !== 'function') {
+  Object.defineProperty(globalThis, 'sessionStorage', {
+    value: createStorageMock(),
+    configurable: true
+  })
+}
 
 // Vue Test Utils 全局配置
 config.global.stubs = {

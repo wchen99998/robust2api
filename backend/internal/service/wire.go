@@ -387,7 +387,6 @@ var SharedProviderSet = wire.NewSet(
 	NewAccountUsageService,
 	NewAccountTestService,
 	ProvideSettingService,
-	NewOpsService,
 	NewEmailService,
 	NewTurnstileService,
 	NewSubscriptionService,

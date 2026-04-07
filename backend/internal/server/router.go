@@ -31,7 +31,6 @@ func SetupRouter(
 	apiKeyAuth middleware2.APIKeyAuthMiddleware,
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
-	opsService *service.OpsService,
 	settingService *service.SettingService,
 	buildInfo service.BuildInfo,
 	cfg *config.Config,
@@ -100,7 +99,7 @@ func SetupRouter(
 	}
 
 	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, buildInfo, cfg, redisClient, healthChecker)
+	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, settingService, buildInfo, cfg, redisClient, healthChecker)
 
 	return r
 }
@@ -114,7 +113,6 @@ func registerRoutes(
 	apiKeyAuth middleware2.APIKeyAuthMiddleware,
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
-	opsService *service.OpsService,
 	settingService *service.SettingService,
 	buildInfo service.BuildInfo,
 	cfg *config.Config,
@@ -131,5 +129,5 @@ func registerRoutes(
 	routes.RegisterAuthRoutes(v1, h, jwtAuth, redisClient, settingService)
 	routes.RegisterUserRoutes(v1, h, jwtAuth, settingService)
 	routes.RegisterAdminRoutes(v1, h, adminAuth, buildInfo)
-	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, opsService, settingService, cfg)
+	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, settingService, cfg)
 }

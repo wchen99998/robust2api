@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 )
 
 // ConcurrencyCache 定义并发控制的缓存接口
@@ -86,6 +87,10 @@ const (
 // ConcurrencyService manages concurrent request limiting for accounts and users
 type ConcurrencyService struct {
 	cache ConcurrencyCache
+}
+
+type queueDepthReader interface {
+	GetTotalWaitingCount(ctx context.Context) (int64, error)
 }
 
 // NewConcurrencyService creates a new ConcurrencyService
@@ -211,6 +216,7 @@ func (s *ConcurrencyService) AcquireUserSlot(ctx context.Context, userID int64, 
 func (s *ConcurrencyService) IncrementWaitCount(ctx context.Context, userID int64, maxWait int) (bool, error) {
 	if s.cache == nil {
 		// Redis not available, allow request
+		s.recordQueueDepth(ctx)
 		return true, nil
 	}
 
@@ -220,6 +226,7 @@ func (s *ConcurrencyService) IncrementWaitCount(ctx context.Context, userID int6
 		logger.LegacyPrintf("service.concurrency", "Warning: increment wait count failed for user %d: %v", userID, err)
 		return true, nil
 	}
+	s.recordQueueDepth(ctx)
 	return result, nil
 }
 
@@ -227,6 +234,7 @@ func (s *ConcurrencyService) IncrementWaitCount(ctx context.Context, userID int6
 // Should be called when a request completes or exits the wait queue.
 func (s *ConcurrencyService) DecrementWaitCount(ctx context.Context, userID int64) {
 	if s.cache == nil {
+		s.recordQueueDepth(ctx)
 		return
 	}
 
@@ -237,11 +245,13 @@ func (s *ConcurrencyService) DecrementWaitCount(ctx context.Context, userID int6
 	if err := s.cache.DecrementWaitCount(bgCtx, userID); err != nil {
 		logger.LegacyPrintf("service.concurrency", "Warning: decrement wait count failed for user %d: %v", userID, err)
 	}
+	s.recordQueueDepth(bgCtx)
 }
 
 // IncrementAccountWaitCount increments the wait queue counter for an account.
 func (s *ConcurrencyService) IncrementAccountWaitCount(ctx context.Context, accountID int64, maxWait int) (bool, error) {
 	if s.cache == nil {
+		s.recordQueueDepth(ctx)
 		return true, nil
 	}
 
@@ -250,12 +260,14 @@ func (s *ConcurrencyService) IncrementAccountWaitCount(ctx context.Context, acco
 		logger.LegacyPrintf("service.concurrency", "Warning: increment wait count failed for account %d: %v", accountID, err)
 		return true, nil
 	}
+	s.recordQueueDepth(ctx)
 	return result, nil
 }
 
 // DecrementAccountWaitCount decrements the wait queue counter for an account.
 func (s *ConcurrencyService) DecrementAccountWaitCount(ctx context.Context, accountID int64) {
 	if s.cache == nil {
+		s.recordQueueDepth(ctx)
 		return
 	}
 
@@ -265,6 +277,7 @@ func (s *ConcurrencyService) DecrementAccountWaitCount(ctx context.Context, acco
 	if err := s.cache.DecrementAccountWaitCount(bgCtx, accountID); err != nil {
 		logger.LegacyPrintf("service.concurrency", "Warning: decrement wait count failed for account %d: %v", accountID, err)
 	}
+	s.recordQueueDepth(bgCtx)
 }
 
 // GetAccountWaitingCount gets current wait queue count for an account.
@@ -357,4 +370,27 @@ func (s *ConcurrencyService) GetAccountConcurrencyBatch(ctx context.Context, acc
 		return result, nil
 	}
 	return s.cache.GetAccountConcurrencyBatch(ctx, accountIDs)
+}
+
+func (s *ConcurrencyService) recordQueueDepth(ctx context.Context) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if s == nil || s.cache == nil {
+		appelotel.M().SetConcurrencyQueueDepth(ctx, 0)
+		return
+	}
+
+	reader, ok := s.cache.(queueDepthReader)
+	if !ok {
+		return
+	}
+
+	depth, err := reader.GetTotalWaitingCount(ctx)
+	if err != nil {
+		logger.LegacyPrintf("service.concurrency", "Warning: read total waiting count failed: %v", err)
+		return
+	}
+
+	appelotel.M().SetConcurrencyQueueDepth(ctx, depth)
 }

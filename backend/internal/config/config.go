@@ -78,6 +78,7 @@ type Config struct {
 	UsageCleanup            UsageCleanupConfig            `mapstructure:"usage_cleanup"`
 	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
 	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
+	GrafanaURL              string                        `mapstructure:"grafana_url"`
 	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
 	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
@@ -936,6 +937,7 @@ func load() (*Config, error) {
 	cfg.Log.ServiceName = strings.TrimSpace(cfg.Log.ServiceName)
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
+	cfg.GrafanaURL = strings.TrimSpace(cfg.GrafanaURL)
 	cfg.Log.Output.ToStdout = true
 
 	// 兼容旧键 gateway.openai_ws.sticky_previous_response_ttl_seconds。
@@ -1134,6 +1136,7 @@ func setDefaults() {
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
+	viper.SetDefault("grafana_url", "")
 
 	// API Key auth cache
 	viper.SetDefault("api_key_auth_cache.l1_size", 65535)

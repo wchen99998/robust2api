@@ -19,6 +19,9 @@ kube-prometheus-stack:
   grafana:
     enabled: true
     adminPassword: ""  # Set via --set kube-prometheus-stack.grafana.adminPassword=xxx
+    grafana.ini:
+      security:
+        allow_embedding: true
     sidecar:
       dashboards:
         enabled: true
@@ -26,6 +29,7 @@ kube-prometheus-stack:
       datasources:
         enabled: true
         label: grafana_datasource
+        resource: both
     ingress:
       enabled: false  # Managed by grafanaIngress below, not here
   alertmanager:
@@ -38,6 +42,18 @@ grafanaIngress:
   className: nginx
   clusterIssuer: letsencrypt-prod
   cloudflareProxied: "true"
+
+## Grafana PostgreSQL datasource for business analytics dashboards
+grafanaPostgresDatasource:
+  enabled: false
+  name: Sub2API PostgreSQL
+  uid: sub2api-pg
+  host: ""
+  port: 5432
+  database: ""
+  user: ""
+  password: ""
+  sslmode: require
 
 ## Grafana Tempo (distributed tracing)
 tempo:

@@ -1,6 +1,12 @@
 locals {
   grafana_host     = "${var.hostname_prefix}.${var.domain_suffix}"
   r2_endpoint_host = trimsuffix(trimprefix(trimprefix(var.r2_endpoint, "https://"), "http://"), "/")
+  grafana_pg_enabled = (
+    var.grafana_db_host != "" &&
+    var.grafana_db_name != "" &&
+    var.grafana_db_user != "" &&
+    var.grafana_db_password != ""
+  )
 }
 
 resource "null_resource" "helm_deps" {
@@ -43,6 +49,42 @@ resource "helm_release" "monitoring" {
   set {
     name  = "grafanaIngress.host"
     value = local.grafana_host
+  }
+
+  # --- Grafana PostgreSQL datasource ---
+  set {
+    name  = "grafanaPostgresDatasource.enabled"
+    value = local.grafana_pg_enabled ? "true" : "false"
+  }
+
+  set {
+    name  = "grafanaPostgresDatasource.host"
+    value = var.grafana_db_host
+  }
+
+  set {
+    name  = "grafanaPostgresDatasource.port"
+    value = tostring(var.grafana_db_port)
+  }
+
+  set {
+    name  = "grafanaPostgresDatasource.database"
+    value = var.grafana_db_name
+  }
+
+  set {
+    name  = "grafanaPostgresDatasource.user"
+    value = var.grafana_db_user
+  }
+
+  set {
+    name  = "grafanaPostgresDatasource.sslmode"
+    value = var.grafana_db_sslmode
+  }
+
+  set_sensitive {
+    name  = "grafanaPostgresDatasource.password"
+    value = var.grafana_db_password
   }
 
   # --- Tempo (R2 storage) ---

@@ -367,6 +367,54 @@ func (c *concurrencyCache) GetAccountWaitingCount(ctx context.Context, accountID
 	return val, nil
 }
 
+func (c *concurrencyCache) GetTotalWaitingCount(ctx context.Context) (int64, error) {
+	if c == nil || c.rdb == nil {
+		return 0, nil
+	}
+
+	var total int64
+	patterns := []string{waitQueueKeyPrefix + "*", accountWaitKeyPrefix + "*"}
+
+	for _, pattern := range patterns {
+		var cursor uint64
+		for {
+			keys, nextCursor, err := c.rdb.Scan(ctx, cursor, pattern, 100).Result()
+			if err != nil {
+				return 0, err
+			}
+
+			if len(keys) > 0 {
+				values, err := c.rdb.MGet(ctx, keys...).Result()
+				if err != nil {
+					return 0, err
+				}
+
+				for _, value := range values {
+					switch v := value.(type) {
+					case string:
+						n, err := strconv.ParseInt(v, 10, 64)
+						if err == nil && n > 0 {
+							total += n
+						}
+					case []byte:
+						n, err := strconv.ParseInt(string(v), 10, 64)
+						if err == nil && n > 0 {
+							total += n
+						}
+					}
+				}
+			}
+
+			cursor = nextCursor
+			if cursor == 0 {
+				break
+			}
+		}
+	}
+
+	return total, nil
+}
+
 func (c *concurrencyCache) GetAccountsLoadBatch(ctx context.Context, accounts []service.AccountWithConcurrency) (map[int64]*service.AccountLoadInfo, error) {
 	if len(accounts) == 0 {
 		return map[int64]*service.AccountLoadInfo{}, nil
