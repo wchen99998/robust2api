@@ -674,11 +674,15 @@ defineExpose({
   position: sticky;
   top: 0;
   z-index: 200;
-  background-color: rgba(0,0,0,0.02);
+  background-color: rgba(255, 255, 255, 0.88);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  box-shadow: none;
+  backdrop-filter: blur(18px);
 }
 
 .dark .table-wrapper .table-header {
-  background-color: rgba(255,255,255,0.02);
+  background-color: rgba(28, 27, 26, 0.88);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 /* 表体保持在表头下方 */
@@ -692,11 +696,12 @@ defineExpose({
   position: sticky;
   top: 0;
   z-index: 210; /* 必须高于所有表体内容 */
-  background-color: rgba(0,0,0,0.02);
+  background-color: rgba(255, 255, 255, 0.88);
+  box-shadow: none;
 }
 
 .dark .sticky-header-cell {
-  background-color: rgba(255,255,255,0.02);
+  background-color: rgba(28, 27, 26, 0.88);
 }
 
 /* Sticky 列基础样式 */
