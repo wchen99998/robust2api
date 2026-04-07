@@ -1,0 +1,37 @@
+# =============================================================================
+# Sub2API API Server — GoReleaser Dockerfile
+# =============================================================================
+# Packages the pre-built API server binary. No compilation needed.
+# =============================================================================
+
+ARG ALPINE_IMAGE=alpine:3.21
+
+FROM ${ALPINE_IMAGE}
+
+LABEL maintainer="Wccccc <github.com/wchen99998>"
+LABEL description="Sub2API API Server - AI API Gateway Platform"
+LABEL org.opencontainers.image.source="https://github.com/wchen99998/sub2api"
+
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+RUN addgroup -g 1000 sub2api && \
+    adduser -u 1000 -G sub2api -s /bin/sh -D sub2api
+
+WORKDIR /app
+
+COPY sub2api-api /app/sub2api-api
+COPY backend/resources /app/resources
+
+RUN chown -R sub2api:sub2api /app
+
+USER sub2api
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget -q -T 5 -O /dev/null http://localhost:${SERVER_PORT:-8080}/readyz || exit 1
+
+ENTRYPOINT ["/app/sub2api-api"]
