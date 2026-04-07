@@ -344,6 +344,30 @@ func ProvideAPIIdempotencyCleanupService(repo IdempotencyRepository, cfg *config
 	return NewIdempotencyCleanupService(repo, cfg)
 }
 
+// ProvideAPIDashboardAggregationService constructs DashboardAggregationService without calling Start().
+// The API instance serves admin dashboard queries but does not run the background aggregation loop.
+func ProvideAPIDashboardAggregationService(repo DashboardAggregationRepository, timingWheel *TimingWheelService, cfg *config.Config) *DashboardAggregationService {
+	return NewDashboardAggregationService(repo, timingWheel, cfg)
+}
+
+// ProvideAPIUsageCleanupService constructs UsageCleanupService without calling Start().
+// The API instance serves the admin usage cleanup endpoint but does not run the background cleanup loop.
+func ProvideAPIUsageCleanupService(repo UsageCleanupRepository, timingWheel *TimingWheelService, dashboardAgg *DashboardAggregationService, cfg *config.Config) *UsageCleanupService {
+	return NewUsageCleanupService(repo, timingWheel, dashboardAgg, cfg)
+}
+
+// ProvideAPIBackupService constructs BackupService without calling Start().
+// The API instance serves backup management endpoints but does not run the scheduled backup loop.
+func ProvideAPIBackupService(
+	settingRepo SettingRepository,
+	cfg *config.Config,
+	encryptor SecretEncryptor,
+	storeFactory BackupObjectStoreFactory,
+	dumper DBDumper,
+) *BackupService {
+	return NewBackupService(settingRepo, cfg, encryptor, storeFactory, dumper)
+}
+
 // SharedProviderSet contains pure constructors with no background goroutines (no Start() calls).
 var SharedProviderSet = wire.NewSet(
 	// Core services
@@ -415,6 +439,10 @@ var APIProviderSet = wire.NewSet(
 	ProvideAPITimingWheelService,
 	ProvideAPIDeferredService,
 	ProvideAPIIdempotencyCleanupService,
+	// Admin data-query providers (no background loops)
+	ProvideAPIDashboardAggregationService,
+	ProvideAPIUsageCleanupService,
+	ProvideAPIBackupService,
 	// Request-path async workers (must stay in API for request processing)
 	ProvideEmailQueueService,
 	NewBillingCacheService,

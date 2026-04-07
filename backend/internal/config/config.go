@@ -83,6 +83,9 @@ type Config struct {
 	Update                  UpdateConfig                  `mapstructure:"update"`
 	Idempotency             IdempotencyConfig             `mapstructure:"idempotency"`
 	Otel                    OtelConfig                    `mapstructure:"otel"`
+	Worker                  struct {
+		HealthPort string `mapstructure:"health_port"`
+	} `mapstructure:"worker"`
 }
 
 type LogConfig struct {
