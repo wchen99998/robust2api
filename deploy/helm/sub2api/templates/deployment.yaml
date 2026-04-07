@@ -27,8 +27,8 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
         - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          image: "{{ .Values.image.server.repository }}:{{ .Values.image.server.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.server.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
