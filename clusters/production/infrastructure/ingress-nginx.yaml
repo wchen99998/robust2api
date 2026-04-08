@@ -1,0 +1,33 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: ingress-nginx
+  namespace: ingress-nginx
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: ingress-nginx
+      version: "4.12.1"
+      sourceRef:
+        kind: HelmRepository
+        name: ingress-nginx
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 10m
+  values:
+    controller:
+      service:
+        externalTrafficPolicy: Local
+        annotations:
+          service.beta.kubernetes.io/do-loadbalancer-name: sub2api-lb
+          service.beta.kubernetes.io/do-loadbalancer-tls-passthrough: "true"
+      config:
+        enable-underscores-in-headers: "true"

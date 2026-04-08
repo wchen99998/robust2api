@@ -1,0 +1,84 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: monitoring
+  namespace: monitoring
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: deploy/helm/monitoring
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 15m
+  valuesFrom:
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: kube-prometheus-stack.grafana.adminPassword
+      targetPath: kube-prometheus-stack.grafana.adminPassword
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: tempo.tempo.storage.trace.s3.access_key
+      targetPath: tempo.tempo.storage.trace.s3.access_key
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: tempo.tempo.storage.trace.s3.secret_key
+      targetPath: tempo.tempo.storage.trace.s3.secret_key
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: loki.loki.storage.s3.accessKeyId
+      targetPath: loki.loki.storage.s3.accessKeyId
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: loki.loki.storage.s3.secretAccessKey
+      targetPath: loki.loki.storage.s3.secretAccessKey
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: grafanaPostgresDatasource.user
+      targetPath: grafanaPostgresDatasource.user
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: grafanaPostgresDatasource.password
+      targetPath: grafanaPostgresDatasource.password
+  values:
+    # CHANGEME: Set your Grafana hostname
+    grafanaIngress:
+      host: grafana.do-prod.yourdomain.com
+
+    # CHANGEME: Set your R2 endpoint and bucket names
+    tempo:
+      tempo:
+        storage:
+          trace:
+            s3:
+              bucket: sub2api-tempo
+              endpoint: your-account-id.r2.cloudflarestorage.com
+
+    loki:
+      loki:
+        storage:
+          s3:
+            endpoint: your-account-id.r2.cloudflarestorage.com
+          bucketNames:
+            chunks: sub2api-loki
+            ruler: sub2api-loki
+            admin: sub2api-loki
+
+    grafanaPostgresDatasource:
+      enabled: true
+      # CHANGEME: Set your DB host (non-sensitive, sensitive fields come from monitoring-secrets)
+      host: your-db-host.db.ondigitalocean.com
+      port: 25060
+      database: sub2api
+      sslmode: require

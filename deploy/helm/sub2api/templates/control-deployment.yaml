@@ -40,7 +40,7 @@ spec:
               protocol: TCP
           env:
             - name: EXTRA_FRAME_SRC_ORIGINS
-              value: {{ join " " .Values.control.frontend.extraFrameSrcOrigins | quote }}
+              value: {{ include "sub2api.frameSrcOrigins" . | quote }}
           envFrom:
             - configMapRef:
                 name: {{ include "sub2api.fullname" . }}
@@ -82,7 +82,7 @@ spec:
             - name: GATEWAY_UPSTREAM
               value: "http://{{ include "sub2api.fullname" . }}-gateway:{{ .Values.service.port }}"
             - name: EXTRA_FRAME_SRC_ORIGINS
-              value: {{ join " " .Values.control.frontend.extraFrameSrcOrigins | quote }}
+              value: {{ include "sub2api.frameSrcOrigins" . | quote }}
           ports:
             - name: frontend
               containerPort: {{ .Values.control.frontend.port }}

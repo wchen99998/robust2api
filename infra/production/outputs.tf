@@ -15,18 +15,6 @@ output "kubeconfig_command" {
   value       = "doctl kubernetes cluster kubeconfig save ${module.doks.name}"
 }
 
-# --- Networking ---
-
-output "load_balancer_ip" {
-  description = "Ingress load balancer IP"
-  value       = module.kubernetes.load_balancer_ip
-}
-
-output "domain_suffix" {
-  description = "Domain suffix for services (<service>-<namespace>.<suffix>)"
-  value       = var.domain_suffix
-}
-
 # --- Database (conditional) ---
 
 output "database_host" {
@@ -81,43 +69,4 @@ output "r2_loki_bucket" {
 output "r2_s3_endpoint" {
   description = "R2 S3-compatible endpoint (empty if disabled)"
   value       = var.enable_observability_storage ? module.storage[0].s3_endpoint : ""
-}
-
-# --- Monitoring (conditional) ---
-
-output "grafana_url" {
-  description = "Grafana dashboard URL (empty if monitoring disabled)"
-  value       = var.enable_monitoring ? "https://${var.grafana_hostname_prefix}.${var.domain_suffix}" : ""
-}
-
-output "grafana_admin_password" {
-  description = "Auto-generated Grafana admin password (empty if monitoring disabled)"
-  value       = var.enable_monitoring ? local.effective_grafana_admin_password : ""
-  sensitive   = true
-}
-
-output "grafana_datasource_db_host" {
-  description = "Grafana PostgreSQL datasource host (empty if monitoring disabled)"
-  value       = var.enable_monitoring ? local.effective_grafana_db_host : ""
-}
-
-output "grafana_datasource_db_port" {
-  description = "Grafana PostgreSQL datasource port (empty if monitoring disabled)"
-  value       = var.enable_monitoring ? local.effective_grafana_db_port : ""
-}
-
-output "grafana_datasource_db_name" {
-  description = "Grafana PostgreSQL datasource database name (empty if monitoring disabled)"
-  value       = var.enable_monitoring ? local.effective_grafana_db_name : ""
-}
-
-output "grafana_datasource_db_user" {
-  description = "Grafana PostgreSQL datasource user (empty if monitoring disabled)"
-  value       = var.enable_monitoring ? local.effective_grafana_db_user : ""
-}
-
-output "grafana_datasource_db_password" {
-  description = "Grafana PostgreSQL datasource password (empty if monitoring disabled)"
-  value       = var.enable_monitoring ? local.effective_grafana_db_password : ""
-  sensitive   = true
 }

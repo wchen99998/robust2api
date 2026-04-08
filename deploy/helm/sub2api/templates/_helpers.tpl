@@ -183,6 +183,28 @@ app.kubernetes.io/component: control
 {{- end }}
 
 {{/*
+Origins allowed in iframe embeds rendered by the control frontend.
+The configured Grafana URL origin is included automatically.
+*/}}
+{{- define "sub2api.frameSrcOrigins" -}}
+{{- $origins := list -}}
+{{- range .Values.control.frontend.extraFrameSrcOrigins }}
+  {{- $trimmed := trim . -}}
+  {{- if $trimmed }}
+    {{- $origins = append $origins $trimmed -}}
+  {{- end }}
+{{- end }}
+{{- $grafanaURL := trim .Values.config.grafanaUrl -}}
+{{- if $grafanaURL }}
+  {{- $parsed := urlParse $grafanaURL -}}
+  {{- if and $parsed.scheme $parsed.host }}
+    {{- $origins = append $origins (printf "%s://%s" $parsed.scheme $parsed.host) -}}
+  {{- end }}
+{{- end }}
+{{- join " " ($origins | uniq) -}}
+{{- end }}
+
+{{/*
 Worker component labels.
 */}}
 {{- define "sub2api.worker.selectorLabels" -}}

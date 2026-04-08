@@ -2,10 +2,34 @@
 
 Deploy Sub2API on DigitalOcean Kubernetes (DOKS) with a clean ownership split:
 
-- Terraform manages cluster-level infrastructure: DOKS, ingress-nginx, cert-manager, ExternalDNS, optional managed PostgreSQL, optional R2 buckets, and optional monitoring.
-- Helm manages the `sub2api` application release in the `sub2api` namespace.
+- **Terraform** manages cloud resources: DOKS cluster, optional managed PostgreSQL, optional R2 storage buckets, and Cloudflare API token bootstrap secrets.
+- **Flux CD** manages everything inside the cluster: ingress-nginx, cert-manager, ExternalDNS, the Sub2API application, and an optional monitoring stack — all via GitOps.
 
-Do not manage the `sub2api` application Helm release through Terraform. Keep app rollouts, rollbacks, and image updates in Helm so application deployment remains independent from infrastructure reconciliation.
+All in-cluster changes are made by editing YAML files in `clusters/production/`, committing, and pushing. Flux reconciles automatically.
+
+```
+Cloudflare (DNS managed by ExternalDNS, CDN/WAF if proxied)
+    |
+DO Load Balancer (TLS passthrough)
+    |
+ingress-nginx (TLS via cert-manager DNS-01 / Let's Encrypt)
+    |
+Sub2API pods (namespace: sub2api)
+    +-- Redis (in-cluster Bitnami, standalone)
+    +-- PostgreSQL (in-cluster Bitnami or external DO Managed)
+
+Monitoring (namespace: monitoring, optional and suspended by default)
+    +-- Prometheus (metrics)
+    +-- Grafana (dashboards)
+    +-- Tempo (traces -> R2)
+    +-- Loki (logs -> R2)
+    +-- Alloy (gRPC OTLP receiver)
+
+Flux CD (namespace: flux-system)
+    +-- Watches: clusters/production/ in this Git repo
+    +-- Reconciles: infrastructure -> cert-manager-issuers -> apps
+    +-- Optional: monitoring (enable by unsuspending its Kustomization)
+```
 
 ## Prerequisites
 
@@ -13,34 +37,29 @@ Do not manage the `sub2api` application Helm release through Terraform. Keep app
 - [doctl](https://docs.digitalocean.com/reference/doctl/how-to/install/) (DigitalOcean CLI)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - [Helm](https://helm.sh/docs/intro/install/) >= 3
+- [Flux CLI](https://fluxcd.io/flux/installation/#install-the-flux-cli) (`brew install fluxcd/tap/flux`)
 - A DigitalOcean API token ([create one](https://cloud.digitalocean.com/account/api/tokens))
 - A Cloudflare API token with DNS edit permissions ([create one](https://dash.cloudflare.com/profile/api-tokens))
-- Your Cloudflare zone ID (found on your domain's overview page)
+- A GitHub personal access token with `repo` scope (for Flux bootstrap)
 
 ## Deployment Ownership
 
 Use Terraform for:
 - DOKS cluster lifecycle
-- ingress-nginx, cert-manager, ExternalDNS
-- Cloudflare-backed DNS/certificate bootstrap
 - Optional external DO managed PostgreSQL
 - Optional R2 buckets for Tempo and Loki
-- Optional monitoring stack in `monitoring`
+- Cloudflare API token secrets (bootstrap for cert-manager and ExternalDNS)
 
-Use Helm for:
-- Installing `sub2api`
-- Bundled PostgreSQL in the `sub2api` namespace
-- Bundled Redis in the `sub2api` namespace
-- Upgrading `sub2api` image versions
-- Switching the app between bundled and external PostgreSQL/Redis
-- App-level rollback and runtime tuning
+Use Flux (GitOps) for:
+- ingress-nginx, cert-manager, ExternalDNS
+- Optional monitoring stack (Prometheus, Grafana, Tempo, Loki, Alloy)
+- Sub2API application (gateway, control, worker)
+- All in-cluster configuration changes
 
 ## 1. Provision Infrastructure
 
 ```bash
 cd infra/production
-
-# Create your config from the example
 cp terraform.tfvars.example terraform.tfvars
 ```
 
@@ -53,586 +72,332 @@ region       = "sgp1"
 cluster_name = "sub2api"
 k8s_version  = "1.34"
 
-# Kubernetes bootstrap
-letsencrypt_email = "admin@yourdomain.com"
-
-# Cloudflare DNS
+# Cloudflare (for API token secrets only)
 cloudflare_api_token = "..."
-cloudflare_zone_id   = "..."
-# DNS convention: <service>-<namespace>.<suffix>
-# e.g. with suffix "do-prod.yourdomain.com", the default Ingress host
-# becomes "gateway-sub2api.do-prod.yourdomain.com" (gateway) and "app-sub2api.do-prod.yourdomain.com" (control)
-domain_suffix        = "do-prod.yourdomain.com"
-cloudflare_proxied   = true
 
 # Optional: managed PostgreSQL (default false, uses in-cluster Bitnami PG)
 # enable_managed_database = true
+
+# Optional: R2 storage for Tempo/Loki
+# enable_observability_storage = true
+# cloudflare_account_id        = "..."
 ```
 
-> **Important:** Check available Kubernetes versions before deploying:
-> ```bash
-> curl -s -X GET "https://api.digitalocean.com/v2/kubernetes/options" \
->   -H "Authorization: Bearer $DO_TOKEN" | python3 -c \
->   "import sys,json; d=json.load(sys.stdin); [print(v['slug']) for v in d['options']['versions']]"
-> ```
-
-### Staged Apply (Required)
-
-Terraform must be applied in stages because `kubernetes_manifest` (ClusterIssuer) requires the CRDs from cert-manager, which requires the cluster to exist first.
+Apply:
 
 ```bash
 terraform init
-
-# Stage 1: Create the DOKS cluster
-terraform apply -target=module.doks
-
-# Stage 2: Install ingress-nginx, cert-manager, ExternalDNS, and app namespace
-terraform apply \
-  -target=module.kubernetes.kubernetes_namespace.app \
-  -target=module.kubernetes.helm_release.ingress_nginx \
-  -target=module.kubernetes.helm_release.cert_manager \
-  -target=module.kubernetes.helm_release.external_dns
-
-# Stage 3: Create ClusterIssuer and remaining resources
 terraform apply
 ```
 
-This creates:
-- DOKS cluster with autoscaling (1-3 nodes)
-- ingress-nginx controller + DO load balancer
-- cert-manager with Let's Encrypt ClusterIssuer (DNS-01 via Cloudflare)
-- ExternalDNS (auto-creates Cloudflare DNS records from Ingress resources)
-- `sub2api` namespace
-
-## 2. Configure kubectl
+Configure kubectl:
 
 ```bash
-doctl auth init
-doctl kubernetes cluster kubeconfig save sub2api
-kubectl get nodes     # verify connectivity
+eval "$(terraform output -raw kubeconfig_command)"
 ```
 
-## 3. Deploy Sub2API with Helm
+## 2. Bootstrap Flux
 
-`sub2api` should be deployed directly with Helm, not through Terraform.
-
-### Build Helm dependencies
+One-time setup. This installs Flux controllers and creates a GitRepository pointing at this repo.
 
 ```bash
-helm dependency build deploy/helm/sub2api
+export GITHUB_TOKEN=<your-github-pat>
+
+flux bootstrap github \
+  --owner=<github-org-or-user> \
+  --repository=robust2api \
+  --branch=main \
+  --path=clusters/production \
+  --personal
 ```
 
-### Create image pull secret (private GHCR)
+Flux will:
+1. Install its controllers in the `flux-system` namespace
+2. Create a GitRepository source pointing at this repo
+3. Start from the checked-in root `clusters/production/kustomization.yaml`
+4. Apply infrastructure -> cert-manager-issuers -> apps in dependency order
+5. Leave the monitoring Kustomization suspended until you explicitly enable it
 
-The container image is in a private GHCR registry. Create a pull secret using a GitHub PAT with `read:packages` scope:
+## 3. Create Secrets
+
+Flux HelmReleases reference secrets via `valuesFrom`. These must be created manually before the first deploy, and the secret keys must match the explicit `valuesKey` mappings in the HelmRelease manifests.
+
+### Image Pull Secret (for private GHCR)
 
 ```bash
-kubectl -n sub2api create secret docker-registry ghcr-pull \
+kubectl create secret docker-registry ghcr-pull \
+  -n sub2api \
   --docker-server=ghcr.io \
-  --docker-username=wchen99998 \
-  --docker-password=<GITHUB_PAT_WITH_READ_PACKAGES>
+  --docker-username=<github-username> \
+  --docker-password=<github-pat-with-read-packages>
 ```
 
-### Generate secrets
+### Sub2API Secrets
 
 ```bash
-JWT_SECRET=$(openssl rand -hex 32)
-TOTP_KEY=$(openssl rand -hex 32)
-ADMIN_PASS=$(openssl rand -base64 16)
-PG_PASS=$(openssl rand -base64 16)
-REDIS_PASS=$(openssl rand -base64 16)
+kubectl create namespace sub2api --dry-run=client -o yaml | kubectl apply -f -
 
-echo "JWT_SECRET:    $JWT_SECRET"
-echo "ADMIN_PASS:    $ADMIN_PASS"
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sub2api-secrets
+  namespace: sub2api
+type: Opaque
+stringData:
+  secrets.jwtSecret: "<random-32-char>"
+  secrets.totpEncryptionKey: "<64-hex-char, generate with: openssl rand -hex 32>"
+  secrets.adminPassword: "<admin-password>"
+  postgresql.auth.password: "<db-password-or-empty-if-external>"
+  redis.auth.password: "<redis-password-or-empty-if-external>"
+  externalDatabase.password: ""
+  externalRedis.password: ""
+EOF
 ```
 
-For the default deployment path, keep PostgreSQL and Redis in-cluster and install the app with Helm:
+If using external PostgreSQL and/or Redis instead of the bundled charts, set `postgresql.enabled=false` and/or `redis.enabled=false` in `clusters/production/apps/sub2api.yaml` and move the real passwords into `externalDatabase.password` / `externalRedis.password`. Leave the unused password keys present with empty string values so Flux can still resolve every mapped secret key.
+
+### Monitoring Secrets (if using monitoring stack)
+
+The monitoring Kustomization is suspended by default. Only create this secret and unsuspend [`clusters/production/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring.yaml) if you want the LGTM stack.
 
 ```bash
-helm upgrade --install sub2api deploy/helm/sub2api \
-  -n sub2api \
-  --create-namespace \
-  --set image.gateway.tag=0.3.0 \
-  --set image.control.tag=0.3.0 \
-  --set image.frontend.tag=0.3.0 \
-  --set image.worker.tag=0.3.0 \
-  --set image.bootstrap.tag=0.3.0 \
-  --set gateway.replicaCount=1 \
-  --set gateway.autoscaling.enabled=false \
-  --set control.replicaCount=1 \
-  --set control.autoscaling.enabled=false \
-  --set ingress.gateway.host=gateway-sub2api.do-prod.yourdomain.com \
-  --set ingress.control.host=app-sub2api.do-prod.yourdomain.com \
-  --set ingress.gateway.tls.enabled=true \
-  --set ingress.control.tls.enabled=true \
-  --set-string 'ingress.annotations.nginx\.ingress\.kubernetes\.io/ssl-redirect=true' \
-  --set config.grafanaUrl=https://grafana-monitoring.do-prod.yourdomain.com \
-  --set 'control.frontend.extraFrameSrcOrigins[0]=https://grafana-monitoring.do-prod.yourdomain.com' \
-  --set secrets.jwtSecret="$JWT_SECRET" \
-  --set secrets.totpEncryptionKey="$TOTP_KEY" \
-  --set secrets.adminEmail="admin@sub2api.local" \
-  --set secrets.adminPassword="$ADMIN_PASS" \
-  --set postgresql.auth.password="$PG_PASS" \
-  --set redis.auth.password="$REDIS_PASS" \
-  --set 'imagePullSecrets[0].name=ghcr-pull' \
-  --set observability.enabled=false \
-  --set observability.serviceMonitor.enabled=false
+kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
+
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: monitoring-secrets
+  namespace: monitoring
+type: Opaque
+stringData:
+  kube-prometheus-stack.grafana.adminPassword: "<grafana-password>"
+  tempo.tempo.storage.trace.s3.access_key: "<r2-access-key>"
+  tempo.tempo.storage.trace.s3.secret_key: "<r2-secret-key>"
+  loki.loki.storage.s3.accessKeyId: "<r2-access-key>"
+  loki.loki.storage.s3.secretAccessKey: "<r2-secret-key>"
+  grafanaPostgresDatasource.user: "<grafana-db-user>"
+  grafanaPostgresDatasource.password: "<grafana-db-password>"
+EOF
 ```
 
-> **Important:** TLS must be enabled per-ingress with `ingress.gateway.tls.enabled=true` and `ingress.control.tls.enabled=true`. The global `ingress.tls.enabled` only sets a default secret name — it does not enable TLS on the ingresses.
+## 4. Configure Flux Manifests
 
-> **Important:** Use `--set-string` for annotation values that look like booleans (e.g., `ssl-redirect=true`), otherwise Helm encodes them as YAML booleans and Kubernetes rejects the Ingress with a decode error.
+Update `CHANGEME` values in the Flux YAML files before deploying:
 
-This path uses:
-- The chart-managed PostgreSQL subchart for the application database
-- The chart-managed Redis subchart for caching / coordination
-- The default ingress naming pattern is `gateway-sub2api.<domain_suffix>` for the gateway host and `app-sub2api.<domain_suffix>` for the control host
-- A Grafana URL passed into the app chart so `/admin/dashboard` can embed the monitoring dashboard
-- Any iframe origin used by Grafana, purchase/subscription pages, custom menu items, or URL-based home content must be explicitly listed in `control.frontend.extraFrameSrcOrigins`
-- Helm as the source of truth for future app upgrades
+| File | Values to set |
+|------|--------------|
+| `clusters/production/infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt notification email) |
+| `clusters/production/infrastructure/external-dns.yaml` | `txtOwnerId`, `domainFilters` |
+| `clusters/production/monitoring.yaml` | Set `spec.suspend: false` when you are ready to enable monitoring |
+| `clusters/production/monitoring/monitoring.yaml` | `grafanaIngress.host`, R2 endpoints, bucket names, DB host (monitoring only) |
+| `clusters/production/apps/sub2api.yaml` | Image tags, ingress hosts, `gatewayUrl`; set `grafanaUrl` and enable `observability` only when monitoring is enabled |
 
-Because the bundled PostgreSQL and Redis instances are created by the `sub2api` chart in the `sub2api` namespace, treat them as application components, not Terraform-managed infrastructure.
+### Enable Monitoring (optional)
 
-> **Important:** `TOTP_KEY` must be a 64-character hex key. `openssl rand -hex 32` is correct. Do not use a 32-character random string.
+1. Fill in the `CHANGEME` values in [`clusters/production/monitoring/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring/monitoring.yaml).
+2. Create `monitoring-secrets` in the `monitoring` namespace.
+3. Set `spec.suspend: false` in [`clusters/production/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring.yaml).
+4. Update [`clusters/production/apps/sub2api.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/apps/sub2api.yaml) with your Grafana URL and set `observability.enabled=true` and `observability.serviceMonitor.enabled=true` if you want the app to emit OTLP traces and Prometheus ServiceMonitor resources.
+5. Commit and push. Flux will reconcile monitoring independently of the app layer.
 
-> **Important:** `deploy/helm/sub2api/values-production.yaml` is for external database / external Redis style deployments. Do not include it for the default bundled PostgreSQL + Redis installation above.
+## 5. Initial Deploy
 
-> **Important:** `config.grafanaUrl` should point at the externally reachable Grafana base URL for this cluster. If you enable monitoring later, update the existing `sub2api` release with the same setting so the admin dashboard can load Grafana.
-
-> **Cloudflare SSL:** Set your Cloudflare SSL/TLS mode to **"Full (Strict)"** in the dashboard (SSL/TLS -> Overview). This ensures end-to-end encryption: client -> Cloudflare -> HTTPS -> nginx (Let's Encrypt cert) -> app. Using "Flexible" mode will cause a 308 redirect loop because nginx forces HTTPS.
-
-> **Note on Bitnami image tags:** The Bitnami PostgreSQL and Redis subcharts pin specific image tags that may be removed from Docker Hub over time. If pods show `ImagePullBackOff`, override with available tags:
-> ```bash
-> helm upgrade sub2api deploy/helm/sub2api -n sub2api --reuse-values \
->   --set postgresql.image.tag=latest \
->   --set redis.image.tag=latest
-> ```
-
-> **StatefulSet persistence:** The PostgreSQL and Redis subcharts use StatefulSets with immutable `volumeClaimTemplates`. If you change `postgresql.primary.persistence.size` or `redis.master.persistence.size` after the initial install, the upgrade will fail with a `Forbidden: updates to statefulset spec` error. You must either delete and recreate the StatefulSet or keep the same persistence size.
-
-### Verify
+Commit the configured manifests and push:
 
 ```bash
-kubectl -n sub2api get pods        # gateway, control (2/2), worker, pg, redis should be Running
-kubectl -n sub2api get ingress     # should show gateway + control hosts with LB IP and ports 80,443
-kubectl -n sub2api get certificate # both gateway-tls and control-tls should show READY=True
+git add clusters/production/
+git commit -m "deploy: configure Flux manifests for production"
+git push
 ```
 
-Verify internal health:
+Flux syncs automatically within 1 minute.
+
+## 6. Verify
 
 ```bash
-# All three services should return {"status":"ok"}
-kubectl -n sub2api exec deploy/sub2api-gateway -- wget -q -O - http://localhost:8080/livez
-kubectl -n sub2api exec deploy/sub2api-control -c control -- wget -q -O - http://localhost:8080/livez
-kubectl -n sub2api exec deploy/sub2api-worker -- wget -q -O - http://localhost:8081/livez
+# Check Kustomization status (dependency chain)
+flux get kustomizations
 
-# Control readiness should show postgresql and redis as "ok"
-kubectl -n sub2api exec deploy/sub2api-control -c control -- wget -q -O - http://localhost:8080/readyz
+# Check all HelmReleases
+flux get helmreleases -A
 
-# Metrics endpoint (if observability enabled)
-kubectl -n sub2api exec deploy/sub2api-gateway -- wget -q -O - http://localhost:9090/metrics | head -5
+# Check pods
+kubectl get pods -n sub2api
+kubectl get pods -n ingress-nginx
+kubectl get pods -n cert-manager
+kubectl get pods -n external-dns
+
+# Monitoring pods (only if enabled)
+kubectl get pods -n monitoring
+
+# Check certificates
+kubectl get certificates -A
+
+# Check ingress
+kubectl get ingress -A
 ```
 
-Your app should be accessible at `https://gateway-sub2api.do-prod.yourdomain.com` for the inference gateway and `https://app-sub2api.do-prod.yourdomain.com` for the control/admin UI.
+All HelmReleases should show `Ready: True`. If not, see Troubleshooting below.
 
-### Upgrade Sub2API
+## Deploying a New Version
 
-Use Helm for all app upgrades:
+1. Tag and push to trigger image builds:
 
 ```bash
-helm upgrade sub2api deploy/helm/sub2api \
-  -n sub2api \
-  --reuse-values \
-  --set image.gateway.tag=<new-version> \
-  --set image.control.tag=<new-version> \
-  --set image.frontend.tag=<new-version> \
-  --set image.worker.tag=<new-version> \
-  --set image.bootstrap.tag=<new-version>
+git tag v0.3.0
+git push origin v0.3.0
 ```
 
-### Roll back Sub2API
+2. Update image tags in `clusters/production/apps/sub2api.yaml`:
+
+```yaml
+image:
+  gateway:
+    tag: "0.3.0"
+  control:
+    tag: "0.3.0"
+  frontend:
+    tag: "0.3.0"
+  worker:
+    tag: "0.3.0"
+  bootstrap:
+    tag: "0.3.0"
+```
+
+3. Commit and push:
 
 ```bash
-helm history sub2api -n sub2api
-helm rollback sub2api <revision> -n sub2api
+git add clusters/production/apps/sub2api.yaml
+git commit -m "deploy: v0.3.0"
+git push
 ```
 
-## DNS Pattern and ExternalDNS
+4. Flux syncs automatically within 1 minute.
 
-DNS records are managed automatically by ExternalDNS running in the cluster. When an Ingress resource is created, ExternalDNS reads its hostname and creates the corresponding Cloudflare DNS record pointing to the load balancer IP.
+## Rolling Back
 
-### Naming convention
-
-Hostnames follow the pattern `<service>-<namespace>.<domain_suffix>`. For example, with `domain_suffix = "do-prod.yourdomain.com"`:
-
-| Service | Namespace | Hostname |
-|---------|-----------|----------|
-| gateway | sub2api | `gateway-sub2api.do-prod.yourdomain.com` |
-| control | sub2api | `app-sub2api.do-prod.yourdomain.com` |
-
-### Cloudflare proxy
-
-By default, ExternalDNS creates records with Cloudflare proxy enabled or disabled based on the `cloudflare_proxied` Terraform variable. You can override this per-Ingress using the Helm chart's `cloudflareProxied` value:
+Revert the image tag commit:
 
 ```bash
-# Disable Cloudflare proxy for a specific deployment
-helm install ... --set ingress.cloudflareProxied="false"
+git revert HEAD
+git push
 ```
 
-### Custom domains (extraHosts)
+Flux will roll back to the previous version automatically.
 
-To serve the application on additional hostnames (e.g. a vanity domain), use the `extraHosts` value:
+## Upgrading Infrastructure Components
+
+Edit the chart version in the relevant HelmRelease file, commit, and push:
 
 ```bash
-helm install ... \
-  --set ingress.gateway.host=gateway-sub2api.do-prod.yourdomain.com \
-  --set ingress.control.host=app-sub2api.do-prod.yourdomain.com \
-  --set 'ingress.extraHosts[0].host=app.mycustomdomain.com'
+# Example: upgrade ingress-nginx
+# Edit clusters/production/infrastructure/ingress-nginx.yaml
+# Change: version: "4.12.1" -> version: "4.13.0"
+git add clusters/production/infrastructure/ingress-nginx.yaml
+git commit -m "infra: upgrade ingress-nginx to 4.13.0"
+git push
 ```
 
-ExternalDNS will create records for all hosts listed in the Ingress. For custom domains outside the `domain_suffix`, ensure their DNS is configured separately to point to the load balancer.
+## Migrating from Terraform-Managed In-Cluster Resources
 
-## 4. Using Managed PostgreSQL (Optional)
-
-If you want Terraform to provision DigitalOcean Managed PostgreSQL, let Terraform create the external database and keep Helm responsible for switching the app release to it.
-
-```bash
-cd infra/production
-
-# Enable in terraform.tfvars
-# enable_managed_database = true
-
-terraform apply
-```
-
-Then update the Helm release to use the external database. Start from `values-production.yaml`, which is designed for external services:
-
-```bash
-DB_HOST=$(terraform output -raw database_host)
-DB_PORT=$(terraform output -raw database_port)
-DB_USER=$(terraform output -raw database_user)
-DB_PASS=$(terraform output -raw database_password)
-
-helm upgrade sub2api deploy/helm/sub2api \
-  -n sub2api \
-  -f deploy/helm/sub2api/values-production.yaml \
-  --reset-values \
-  --set postgresql.enabled=false \
-  --set externalDatabase.host="$DB_HOST" \
-  --set externalDatabase.port="$DB_PORT" \
-  --set externalDatabase.user="$DB_USER" \
-  --set externalDatabase.password="$DB_PASS" \
-  --set externalDatabase.database=sub2api \
-  --set externalDatabase.sslmode=require \
-  --set secrets.jwtSecret="$JWT_SECRET" \
-  --set secrets.totpEncryptionKey="$TOTP_KEY" \
-  --set secrets.adminPassword="$ADMIN_PASS"
-```
-
-If you also move Redis out of cluster, set:
-
-```bash
-  --set redis.enabled=false \
-  --set externalRedis.host="<redis-host>" \
-  --set externalRedis.port=6379 \
-  --set externalRedis.password="<redis-password>" \
-  --set externalRedis.enableTLS=true
-```
-
-## 5. Deploy Monitoring Stack (Optional)
-
-The monitoring stack is cluster-level infrastructure. Manage it with Terraform, not a separate manual `helm install`.
-
-### Prerequisites
-
-1. Your Cloudflare API token must have **R2 Storage Edit** permission (in addition to DNS Edit)
-2. Add to `infra/production/terraform.tfvars`:
-   ```hcl
-   enable_observability_storage = true
-   cloudflare_account_id        = "your_cloudflare_account_id"
-   ```
-
-Set the following in `terraform.tfvars` before applying:
-
-```hcl
-enable_observability_storage = true
-cloudflare_account_id        = "your_cloudflare_account_id"
-enable_monitoring            = true
-r2_access_key                = "your_r2_access_key"
-r2_secret_key                = "your_r2_secret_key"
-```
-
-Then apply:
+If you previously used Terraform to manage ingress-nginx, cert-manager, ExternalDNS, and/or the monitoring stack, remove them from Terraform state after Flux has adopted them:
 
 ```bash
 cd infra/production
-terraform apply
+
+# Remove kubernetes module resources
+terraform state rm 'module.kubernetes.helm_release.ingress_nginx'
+terraform state rm 'module.kubernetes.helm_release.cert_manager'
+terraform state rm 'module.kubernetes.helm_release.external_dns'
+terraform state rm 'module.kubernetes.kubernetes_manifest.letsencrypt_issuer'
+terraform state rm 'module.kubernetes.kubernetes_namespace.app'
+terraform state rm 'module.kubernetes.kubernetes_namespace.external_dns'
+terraform state rm 'module.kubernetes.kubernetes_secret.cloudflare_cert_manager'
+terraform state rm 'module.kubernetes.kubernetes_secret.cloudflare_external_dns'
+terraform state rm 'module.kubernetes.data.kubernetes_service.ingress_nginx'
+
+# Remove monitoring module resources (if enabled)
+terraform state rm 'module.monitoring[0].helm_release.monitoring'
+terraform state rm 'module.monitoring[0].null_resource.helm_deps'
+
+# Verify clean state
+terraform plan
 ```
 
-This creates:
-- Two R2 buckets (`<cluster_name>-tempo` and `<cluster_name>-loki`)
-- The `monitoring` Helm release
-- Grafana ingress at `grafana.<domain_suffix>`
-
-Use that Grafana ingress URL as the app chart's `config.grafanaUrl` value.
-
-### Create an R2 API token
-
-Create an R2-scoped API token from the [Cloudflare dashboard](https://dash.cloudflare.com) -> R2 -> Manage R2 API Tokens. This gives you S3-compatible credentials (access key ID + secret) that Tempo and Loki use.
-
-> **Note:** The default Loki cache memory (9.8 GB) is too large for small clusters. The monitoring chart is configured to reduce it to 512 MB / 256 MB. Adjust this if your cluster capacity changes.
->
-> **Note:** `loki.loki.auth_enabled=false` disables Loki's multi-tenant auth. Without this, Alloy log pushes fail with 401 "no org id".
->
-> **Note:** The monitoring Terraform module configures the Alloy gRPC OTLP receiver (port 4317) so Sub2API can send traces and metrics cross-namespace.
-
-### Enable OTel in Sub2API
-
-Once the monitoring stack is running, enable OTel in the app with Helm:
+## Monitoring & Status
 
 ```bash
-helm upgrade sub2api deploy/helm/sub2api \
-  -n sub2api --reuse-values \
-  --set config.grafanaUrl="https://grafana.<domain_suffix>" \
-  --set observability.enabled=true \
-  --set observability.otel.serviceName=sub2api \
-  --set observability.otel.endpoint="monitoring-alloy.monitoring.svc:4317" \
-  --set observability.otel.traceSampleRate="0.1" \
-  --set observability.otel.metricsPort=9090 \
-  --set observability.serviceMonitor.enabled=true \
-  --set observability.serviceMonitor.interval=15s
+# Overall Flux status
+flux get kustomizations
+flux get helmreleases -A
+flux get sources git
+
+# Reconcile immediately (don't wait for interval)
+flux reconcile kustomization apps
+flux reconcile helmrelease sub2api -n sub2api
+
+# View Flux controller logs
+flux logs --level=error
 ```
-
-> **Note:** When using `--reuse-values`, all `observability.otel.*` sub-keys must be explicitly set since they don't exist in the prior release values.
-
-### Accessing the Monitoring UIs
-
-Grafana is accessible externally if the ingress above is enabled (e.g. `https://grafana.<domain_suffix>`). Other services are ClusterIP-only — use `kubectl port-forward`:
-
-| Service | Access | Credentials |
-|---------|--------|-------------|
-| **Grafana** | `https://grafana.<domain_suffix>` or `kubectl -n monitoring port-forward svc/monitoring-grafana 3000:80` → http://localhost:3000 | `admin` / `terraform -chdir=infra/production output -raw grafana_admin_password` |
-| **Prometheus** | `kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-prometheus 9090:9090` → http://localhost:9090 | None |
-| **Tempo** | `kubectl -n monitoring port-forward svc/monitoring-tempo 3200:3200` → http://localhost:3200 | None |
-| **Alertmanager** | `kubectl -n monitoring port-forward svc/monitoring-kube-prometheus-alertmanager 9093:9093` → http://localhost:9093 | None |
-
-#### Grafana: Dashboards and Explore
-
-Grafana is the main UI. Pre-configured datasources are available in the Explore tab:
-
-- **Prometheus** — query metrics (e.g. `rate(http_server_request_duration_seconds_count[5m])`)
-- **Tempo** — search traces by service name, duration, or trace ID
-- **Loki** — query logs (e.g. `{namespace="sub2api"}` or `{app="sub2api"} |= "error"`)
-
-Pre-built dashboards (loaded via sidecar):
-- **Sub2API Overview** — RED metrics, request rates, error rates, latencies
-- **Sub2API Resources** — Go runtime metrics (goroutines, memory, GC)
-
-#### Tempo: Direct Trace Lookup
-
-```bash
-# Search traces by service
-curl -s http://localhost:3200/api/search?tags=service.name%3Dsub2api&limit=10
-
-# Look up a specific trace by ID (from X-Trace-Id response header)
-curl -s http://localhost:3200/api/traces/<trace-id>
-```
-
-#### Loki: Direct Log Queries
-
-```bash
-# Recent sub2api logs
-curl -sG http://localhost:3200/loki/api/v1/query_range \
-  --data-urlencode 'query={namespace="sub2api"}' \
-  --data-urlencode 'limit=50'
-
-# Logs correlated to a specific trace
-curl -sG http://localhost:3200/loki/api/v1/query_range \
-  --data-urlencode 'query={namespace="sub2api"} | json | trace_id="<trace-id>"'
-```
-
-> **Tip:** In Grafana Explore, clicking a trace ID in Tempo automatically links to the correlated logs in Loki (and vice versa) via the pre-configured datasource correlations.
-
-### Verify
-
-```bash
-kubectl -n monitoring get pods        # all pods should be Running
-kubectl -n sub2api logs deployment/sub2api | grep "Metrics server"  # metrics server started
-```
-
-## Common Operations
-
-### Scale the cluster
-
-Edit `terraform.tfvars`:
-
-```hcl
-min_nodes = 2
-max_nodes = 5
-```
-
-```bash
-cd infra/production && terraform apply
-```
-
-### View logs
-
-```bash
-kubectl -n sub2api logs -f deployment/sub2api
-```
-
-### Check Terraform outputs
-
-```bash
-cd infra/production
-terraform output                    # all outputs
-terraform output load_balancer_ip   # specific output
-terraform output kubeconfig_command # kubectl setup command
-```
-
-### Tear down
-
-```bash
-# Remove monitoring stack (if deployed)
-cd infra/production
-terraform destroy -target=module.monitoring
-terraform destroy -target=module.storage
-
-# Remove app
-helm uninstall sub2api -n sub2api
-
-# Destroy infrastructure
-terraform destroy
-```
-
-## Architecture Overview
-
-```
-Cloudflare (DNS managed by ExternalDNS, CDN/WAF if proxied)
-    |
-DO Load Balancer (TLS passthrough)
-    |
-ingress-nginx (TLS via cert-manager DNS-01 / Let's Encrypt)
-    |
-Sub2API pods (namespace: sub2api)
-    |
-    +-- Redis (in-cluster, Bitnami subchart, standalone)
-    +-- PostgreSQL (in-cluster Bitnami subchart, or DO Managed)
-
-Monitoring stack (namespace: monitoring, optional)
-    |
-    +-- Prometheus (metrics) ← scrapes Sub2API /metrics
-    +-- Grafana (dashboards) ← queries Prometheus, Tempo, Loki
-    +-- Tempo (traces) → Cloudflare R2
-    +-- Loki (logs) → Cloudflare R2
-    +-- Alloy (collector) ← receives OTLP from Sub2API
-```
-
-## Terraform Modules
-
-| Module | What it provisions |
-|--------|--------------------|
-| `infra/modules/doks` | DOKS cluster with autoscaling node pool |
-| `infra/modules/kubernetes` | ingress-nginx, cert-manager (DNS-01), ExternalDNS, ClusterIssuer, app namespace |
-| `infra/modules/database` | Optional DO Managed PostgreSQL with VPC firewall |
-| `infra/modules/storage` | Optional Cloudflare R2 buckets for Tempo and Loki |
-| `infra/modules/monitoring` | Optional monitoring Helm release managed by Terraform |
 
 ## Troubleshooting
 
-### Pods stuck in ImagePullBackOff
-
-Check which image is failing:
+### HelmRelease stuck in "not ready"
 
 ```bash
-kubectl -n sub2api describe pod <pod-name> | tail -10
+# Check the HelmRelease status and last error
+kubectl describe helmrelease <name> -n <namespace>
+
+# Check Helm release history
+helm history <name> -n <namespace>
+
+# Force reconciliation
+flux reconcile helmrelease <name> -n <namespace>
 ```
 
-Common causes:
-- **Private GHCR image:** Create an image pull secret and set `imagePullSecrets`
-- **Bitnami tag removed:** Override with `--set postgresql.image.tag=latest` or `--set redis.image.tag=latest`
-
-### App pod CrashLoopBackOff
-
-Usually means PostgreSQL or Redis aren't ready yet. Delete the app pod to trigger a restart once dependencies are running:
+### Source not syncing
 
 ```bash
-kubectl -n sub2api delete pod -l app.kubernetes.io/name=sub2api
+# Check GitRepository status
+flux get sources git -A
+
+# Force source refresh
+flux reconcile source git flux-system
 ```
 
-### Stale ReplicaSets after upgrade
-
-If old ReplicaSets keep spawning pods with wrong images:
+### Suspended reconciliation
 
 ```bash
-kubectl -n sub2api get rs
-kubectl -n sub2api scale rs <old-rs-name> --replicas=0
+# Check if reconciliation is suspended
+flux get kustomizations
+flux get helmreleases -A
+
+# Resume if suspended
+flux resume kustomization <name>
+flux resume helmrelease <name> -n <namespace>
 ```
 
-### Pods stuck in Pending
+### ImagePullBackOff
 
-Check node capacity -- the autoscaler may need time to add nodes:
-
-```bash
-kubectl get nodes
-kubectl describe pod <pod-name> -n sub2api
-```
+- Verify `ghcr-pull` secret exists: `kubectl get secret ghcr-pull -n sub2api`
+- Check token permissions: must have `read:packages` scope
+- Verify image tag exists: `docker manifest inspect ghcr.io/wchen99998/robust2api/gateway:<tag>`
 
 ### Certificate not issuing
 
-Check cert-manager logs and the certificate resource:
-
 ```bash
-kubectl -n cert-manager logs deployment/cert-manager
-kubectl -n sub2api describe certificate
-kubectl -n sub2api describe certificaterequest
+kubectl describe certificate <name> -n <namespace>
+kubectl describe certificaterequest -n <namespace>
+kubectl describe challenge -A
+kubectl logs -n cert-manager deploy/cert-manager
 ```
 
-For DNS-01 challenges, also verify the Cloudflare API token has DNS edit permissions and the zone ID is correct.
+Common cause: Cloudflare API token missing DNS edit permission, or `cloudflare-api-token` secret not created by Terraform.
 
-### Load balancer IP not assigned
+### Pod CrashLoopBackOff
 
-Check the ingress-nginx service:
-
-```bash
-kubectl -n ingress-nginx get svc ingress-nginx-controller
-```
-
-DO load balancers can take 2-3 minutes to provision.
-
-### DNS record not appearing
-
-If ExternalDNS is not creating the expected Cloudflare DNS record, check its logs:
-
-```bash
-kubectl -n external-dns logs deployment/external-dns
-```
-
-Common causes:
-- **Domain filter mismatch:** The Ingress hostname must be under the configured `domain_suffix`. ExternalDNS only manages records matching its `domainFilters`.
-- **Cloudflare token permissions:** The API token needs `Zone:DNS:Edit` and `Zone:Zone:Read` permissions.
-- **Ingress not ready:** ExternalDNS reads hostnames from Ingress resources. Verify the Ingress exists and has a host set: `kubectl -n sub2api get ingress -o wide`
-
-### ExternalDNS general troubleshooting
-
-```bash
-# Check ExternalDNS pod status
-kubectl -n external-dns get pods
-
-# View recent logs
-kubectl -n external-dns logs deployment/external-dns --tail=50
-
-# Verify the Ingress annotations and hosts
-kubectl -n sub2api get ingress -o yaml
-```
-
-### 308 redirect loop with Cloudflare
-
-If the site returns `308 Permanent Redirect` in a loop, Cloudflare's SSL mode is likely "Flexible" (connects to origin over HTTP) while nginx forces HTTPS. Fix by setting Cloudflare SSL to **"Full (Strict)"** in the dashboard -> SSL/TLS -> Overview. This is the recommended mode since cert-manager provides a valid Let's Encrypt certificate on the origin.
-
-### Terraform staged apply errors
-
-If `terraform apply` fails with "no matches for kind ClusterIssuer" or "cannot create REST client", you need to apply in stages (see Section 1). This happens because:
-- Stage 1 creates the cluster (needed for kubernetes/helm providers)
-- Stage 2 installs cert-manager and ExternalDNS (needed for ClusterIssuer CRD)
-- Stage 3 creates the ClusterIssuer and remaining resources
+- Bootstrap job may CrashLoop briefly while PostgreSQL starts — this is expected
+- Check logs: `kubectl logs <pod> -n sub2api`
+- If database connection fails, verify DB credentials in `sub2api-secrets`
