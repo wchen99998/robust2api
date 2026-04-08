@@ -1,6 +1,7 @@
 {{- $ing := .Values.ingress -}}
 {{- if and $ing.enabled ($ing.control.enabled) }}
 {{- $controlHost := required "ingress.control.host or public.baseDomain must be set when ingress.enabled and ingress.control.enabled are true" (include "sub2api.controlHost" . | trim) -}}
+{{- $controlMaxBodySize := default $ing.maxBodySize $ing.control.maxBodySize -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,7 +13,7 @@ metadata:
     external-dns.alpha.kubernetes.io/hostname: >-
       {{ $controlHost }}{{ range $ing.control.extraHosts }},{{ .host }}{{ end }}
     external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ $ing.cloudflareProxied | quote }}
-    nginx.ingress.kubernetes.io/proxy-body-size: {{ $ing.maxBodySize | quote }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ $controlMaxBodySize | quote }}
     {{- with $ing.annotations }}
     {{- toYaml . | nindent 4 }}
     {{- end }}

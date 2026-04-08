@@ -98,15 +98,19 @@ ingress:
   enabled: true
   className: "nginx"
   cloudflareProxied: "true"
+  # Shared default for ingresses without a per-service override.
   maxBodySize: "50m"
   annotations: {}
   gateway:
     enabled: true
+    # Raise this when the gateway needs to accept large multimodal payloads.
+    maxBodySize: ""
     tls:
       enabled: true
       secretName: ""
   control:
     enabled: true
+    maxBodySize: ""
     tls:
       enabled: true
       secretName: ""

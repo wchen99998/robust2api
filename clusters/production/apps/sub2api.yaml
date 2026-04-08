@@ -102,6 +102,7 @@ spec:
         nginx.ingress.kubernetes.io/ssl-redirect: "true"
       gateway:
         enabled: true
+        maxBodySize: "100m"
         tls:
           enabled: true
       control:

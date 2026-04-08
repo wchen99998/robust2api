@@ -261,6 +261,8 @@ ingress:
   enabled: true
   className: "nginx"
   cloudflareProxied: "true"
+  # Default body-size limit applied to ingresses that do not specify a
+  # per-service override below.
   maxBodySize: "50m"
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
@@ -274,6 +276,8 @@ ingress:
     # Optional override. When empty, derive as gateway-<namespace>.<public.baseDomain>.
     host: ""
     extraHosts: []
+    # Optional per-ingress override for nginx.ingress.kubernetes.io/proxy-body-size.
+    maxBodySize: ""
     tls:
       enabled: false
       secretName: ""
@@ -282,6 +286,8 @@ ingress:
     # Optional override. When empty, derive as app-<namespace>.<public.baseDomain>.
     host: ""
     extraHosts: []
+    # Optional per-ingress override for nginx.ingress.kubernetes.io/proxy-body-size.
+    maxBodySize: ""
     tls:
       enabled: false
       secretName: ""
