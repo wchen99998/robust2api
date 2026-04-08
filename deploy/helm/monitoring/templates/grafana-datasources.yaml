@@ -36,35 +36,4 @@ data:
               name: TraceID
               url: '$${__value.raw}'
               urlDisplayLabel: View Trace
----
-{{- $pg := .Values.grafanaPostgresDatasource }}
-{{- if and $pg.enabled $pg.host $pg.database $pg.user $pg.password }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: grafana-datasource-postgres
-  namespace: {{ .Values.namespace }}
-  labels:
-    grafana_datasource: "1"
-type: Opaque
-stringData:
-  pg-datasource.yaml: |
-    apiVersion: 1
-    datasources:
-      - name: {{ $pg.name | quote }}
-        type: postgres
-        uid: {{ $pg.uid | quote }}
-        access: proxy
-        url: {{ printf "%s:%v" $pg.host $pg.port | quote }}
-        user: {{ $pg.user | quote }}
-        database: {{ $pg.database | quote }}
-        isDefault: false
-        editable: false
-        jsonData:
-          sslmode: {{ default "require" $pg.sslmode | quote }}
-          postgresVersion: 1600
-          timescaledb: false
-        secureJsonData:
-          password: {{ $pg.password | quote }}
-{{- end }}
 {{- end }}

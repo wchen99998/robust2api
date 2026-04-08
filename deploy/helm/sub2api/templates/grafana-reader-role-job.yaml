@@ -1,0 +1,133 @@
+{{- if and .Values.grafanaProvisioning.enabled .Values.postgresql.enabled }}
+{{- $postgresAdminPassword := required "postgresql.auth.postgresPassword is required when grafanaProvisioning.enabled=true and postgresql.enabled=true" .Values.postgresql.auth.postgresPassword }}
+{{- $readerUser := required "grafanaProvisioning.reader.username is required when grafanaProvisioning.enabled=true" .Values.grafanaProvisioning.reader.username }}
+{{- $readerPassword := required "grafanaProvisioning.reader.password is required when grafanaProvisioning.enabled=true" .Values.grafanaProvisioning.reader.password }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "sub2api.grafanaReaderRoleJobName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "sub2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: grafana-reader-role
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        {{- include "sub2api.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: grafana-reader-role
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "sub2api.serviceAccountName" . }}
+      restartPolicy: OnFailure
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: provision-reader-role
+          image: {{ include "sub2api.postgresqlImage" . | quote }}
+          imagePullPolicy: {{ default "IfNotPresent" .Values.postgresql.image.pullPolicy }}
+          command:
+            - /bin/bash
+            - -ec
+            - |
+              export PGPASSWORD="$POSTGRES_ADMIN_PASSWORD"
+              for attempt in $(seq 1 60); do
+                if psql \
+                  --host="$PGHOST" \
+                  --port="$PGPORT" \
+                  --username="$PGUSER" \
+                  --dbname="$PGDATABASE" \
+                  --set=ON_ERROR_STOP=1 \
+                  --command='SELECT 1' >/dev/null 2>&1; then
+                  break
+                fi
+                if [ "$attempt" -eq 60 ]; then
+                  echo "PostgreSQL did not become ready in time" >&2
+                  exit 1
+                fi
+                sleep 5
+              done
+
+              psql \
+                --host="$PGHOST" \
+                --port="$PGPORT" \
+                --username="$PGUSER" \
+                --dbname="$PGDATABASE" \
+                --set=ON_ERROR_STOP=1 \
+                --set=reader_user="$READER_USER" \
+                --set=reader_password="$READER_PASSWORD" \
+                --set=app_database="$APP_DATABASE" \
+                --set=app_user="$APP_USER" <<'SQL'
+              SELECT format(
+                CASE
+                  WHEN EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname = :'reader_user')
+                    THEN 'ALTER ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'
+                  ELSE 'CREATE ROLE %I WITH LOGIN PASSWORD %L NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'
+                END,
+                :'reader_user',
+                :'reader_password'
+              ) \gexec
+
+              SELECT format('REVOKE ALL ON DATABASE %I FROM %I', :'app_database', :'reader_user') \gexec
+              SELECT format('GRANT CONNECT ON DATABASE %I TO %I', :'app_database', :'reader_user') \gexec
+              SELECT format('REVOKE ALL ON SCHEMA public FROM %I', :'reader_user') \gexec
+              SELECT format('GRANT USAGE ON SCHEMA public TO %I', :'reader_user') \gexec
+              SELECT format('REVOKE ALL ON ALL TABLES IN SCHEMA public FROM %I', :'reader_user') \gexec
+              SELECT format('REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM %I', :'reader_user') \gexec
+              SELECT format('GRANT SELECT ON ALL TABLES IN SCHEMA public TO %I', :'reader_user') \gexec
+              SELECT format('GRANT SELECT ON ALL SEQUENCES IN SCHEMA public TO %I', :'reader_user') \gexec
+              SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL ON TABLES FROM %I', :'app_user', :'reader_user') \gexec
+              SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public REVOKE ALL ON SEQUENCES FROM %I', :'app_user', :'reader_user') \gexec
+              SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON TABLES TO %I', :'app_user', :'reader_user') \gexec
+              SELECT format('ALTER DEFAULT PRIVILEGES FOR ROLE %I IN SCHEMA public GRANT SELECT ON SEQUENCES TO %I', :'app_user', :'reader_user') \gexec
+              SQL
+          env:
+            - name: PGHOST
+              value: {{ include "sub2api.databaseHost" . | quote }}
+            - name: PGPORT
+              value: {{ include "sub2api.databasePort" . | quote }}
+            - name: PGDATABASE
+              value: {{ include "sub2api.databaseName" . | quote }}
+            - name: PGUSER
+              value: {{ include "sub2api.postgresqlAdminUser" . | quote }}
+            - name: POSTGRES_ADMIN_PASSWORD
+              value: {{ $postgresAdminPassword | quote }}
+            - name: APP_DATABASE
+              value: {{ include "sub2api.databaseName" . | quote }}
+            - name: APP_USER
+              value: {{ include "sub2api.databaseUser" . | quote }}
+            - name: READER_USER
+              value: {{ $readerUser | quote }}
+            - name: READER_PASSWORD
+              value: {{ $readerPassword | quote }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1001
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

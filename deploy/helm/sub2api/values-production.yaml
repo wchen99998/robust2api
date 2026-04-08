@@ -127,6 +127,19 @@ externalDatabase:
   database: sub2api
   sslmode: require
 
+grafanaProvisioning:
+  # Enable this when Grafana dashboard provisioning is managed separately and
+  # you have supplied the read-only database credentials via secret management.
+  enabled: false
+  monitoringNamespace: monitoring
+  datasource:
+    name: Sub2API PostgreSQL
+    uid: sub2api-pg
+    postgresVersion: 1700
+  reader:
+    username: grafana_reader
+    password: ""
+
 externalRedis:
   host: your-redis-host.example.com
   port: 6379
