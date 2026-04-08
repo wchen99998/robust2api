@@ -42,7 +42,7 @@ data:
             {
               "refId": "A",
               "format": "table",
-              "rawSql": "SELECT COUNT(*)::double precision AS value FROM api_keys WHERE deleted_at IS NULL AND status = 1"
+              "rawSql": "SELECT COUNT(*)::double precision AS value FROM api_keys WHERE deleted_at IS NULL AND status = 'active'"
             }
           ]
         },
@@ -516,8 +516,8 @@ data:
           "datasource": { "type": "prometheus" },
           "targets": [
             {
-              "expr": "sum(go_memory_used_bytes{job=~\".*sub2api.*\"}) by (memory_type) / 1024 / 1024",
-              "legendFormat": "{{ "{{" }}memory_type{{ "}}" }} Used (MB)"
+              "expr": "sum(go_memory_used_bytes{job=~\".*sub2api.*\"}) by (go_memory_type) / 1024 / 1024",
+              "legendFormat": "{{ "{{" }}go_memory_type{{ "}}" }} Used (MB)"
             },
             {
               "expr": "sum(go_memory_gc_goal_bytes{job=~\".*sub2api.*\"}) / 1024 / 1024",
