@@ -88,6 +88,7 @@ type Config struct {
 	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
 	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
 	GrafanaURL              string                        `mapstructure:"grafana_url"`
+	GatewayURL              string                        `mapstructure:"gateway_url"` // Public gateway base URL shown to API clients
 	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
 	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
@@ -967,6 +968,7 @@ func load(role Role) (*Config, error) {
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
 	cfg.GrafanaURL = strings.TrimSpace(cfg.GrafanaURL)
+	cfg.GatewayURL = strings.TrimSpace(cfg.GatewayURL)
 	cfg.Log.Output.ToStdout = true
 
 	// 兼容旧键 gateway.openai_ws.sticky_previous_response_ttl_seconds。
@@ -1166,6 +1168,7 @@ func setDefaults() {
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
 	viper.SetDefault("grafana_url", "")
+	viper.SetDefault("gateway_url", "")
 
 	// API Key auth cache
 	viper.SetDefault("api_key_auth_cache.l1_size", 65535)
@@ -1465,6 +1468,11 @@ func (c *Config) ValidateForRole(role Role) error {
 			return fmt.Errorf("server.frontend_url invalid: must not include userinfo")
 		}
 		warnIfInsecureURL("server.frontend_url", c.Server.FrontendURL)
+	}
+	if strings.TrimSpace(c.GatewayURL) != "" {
+		if err := ValidateAbsoluteHTTPURL(c.GatewayURL); err != nil {
+			return fmt.Errorf("gateway_url invalid: %w", err)
+		}
 	}
 	if requiresControlPlaneValidation(role) {
 		if c.JWT.ExpireHour <= 0 {

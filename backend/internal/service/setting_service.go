@@ -249,7 +249,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
 		SiteLogo:                         settings[SettingKeySiteLogo],
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
-		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
+		APIBaseURL:                       s.resolveAPIBaseURL(settings),
 		ContactInfo:                      settings[SettingKeyContactInfo],
 		DocURL:                           settings[SettingKeyDocURL],
 		HomeContent:                      settings[SettingKeyHomeContent],
@@ -957,7 +957,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Sub2API"),
 		SiteLogo:                         settings[SettingKeySiteLogo],
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
-		APIBaseURL:                       settings[SettingKeyAPIBaseURL],
+		APIBaseURL:                       s.resolveAPIBaseURL(settings),
 		ContactInfo:                      settings[SettingKeyContactInfo],
 		DocURL:                           settings[SettingKeyDocURL],
 		HomeContent:                      settings[SettingKeyHomeContent],
@@ -1091,6 +1091,18 @@ func (s *SettingService) getStringOrDefault(settings map[string]string, key, def
 		return value
 	}
 	return defaultValue
+}
+
+// resolveAPIBaseURL returns the API base URL for clients. DB setting takes
+// precedence; if empty, falls back to the config-level gateway_url.
+func (s *SettingService) resolveAPIBaseURL(settings map[string]string) string {
+	if v, ok := settings[SettingKeyAPIBaseURL]; ok && strings.TrimSpace(v) != "" {
+		return strings.TrimSpace(v)
+	}
+	if s.cfg != nil {
+		return s.cfg.GatewayURL
+	}
+	return ""
 }
 
 // IsTurnstileEnabled 检查是否启用 Turnstile 验证

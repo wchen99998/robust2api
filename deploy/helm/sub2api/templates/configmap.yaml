@@ -11,6 +11,7 @@ data:
   RUN_MODE: {{ .Values.config.runMode | quote }}
   TZ: {{ .Values.config.timezone | quote }}
   GRAFANA_URL: {{ .Values.config.grafanaUrl | quote }}
+  GATEWAY_URL: {{ .Values.config.gatewayUrl | quote }}
   # Database (non-sensitive)
   DATABASE_HOST: {{ include "sub2api.databaseHost" . | quote }}
   DATABASE_PORT: {{ include "sub2api.databasePort" . | quote }}

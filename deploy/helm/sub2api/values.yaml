@@ -155,6 +155,9 @@ config:
   serverMode: "release"
   runMode: "standard"
   timezone: "Asia/Shanghai"
+  # Public gateway base URL shown to API clients in the "Use API Key" dialog.
+  # Example: https://gateway-sub2api.example.com
+  gatewayUrl: ""
   # Public Grafana base URL exposed to the app for the admin dashboard iframe.
   # Example: https://grafana-monitoring.example.com
   grafanaUrl: ""
