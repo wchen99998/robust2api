@@ -50,31 +50,6 @@ variable "max_nodes" {
   default     = 3
 }
 
-# --- Kubernetes bootstrap ---
-
-variable "letsencrypt_email" {
-  description = "Email for Let's Encrypt certificate notifications"
-  type        = string
-}
-
-# --- DNS ---
-
-variable "cloudflare_zone_id" {
-  description = "Cloudflare zone ID for the domain"
-  type        = string
-}
-
-variable "domain_suffix" {
-  description = "Domain suffix for convention-based DNS (<service>-<namespace>.<suffix>)"
-  type        = string
-}
-
-variable "cloudflare_proxied" {
-  description = "Enable Cloudflare proxy (CDN/WAF)"
-  type        = bool
-  default     = true
-}
-
 # --- Database (optional) ---
 
 variable "enable_managed_database" {
@@ -107,76 +82,4 @@ variable "cloudflare_account_id" {
   description = "Cloudflare account ID (required when enable_observability_storage=true)"
   type        = string
   default     = ""
-}
-
-# --- Monitoring (optional) ---
-
-variable "enable_monitoring" {
-  description = "Deploy the LGTM monitoring stack via Helm"
-  type        = bool
-  default     = false
-}
-
-variable "grafana_hostname_prefix" {
-  description = "Hostname prefix used for the Grafana URL (<prefix>.<suffix>)"
-  type        = string
-  default     = "grafana"
-}
-
-variable "existing_grafana_admin_password" {
-  description = "Existing Grafana admin password to preserve during migration"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "r2_access_key" {
-  description = "Cloudflare R2 access key for Tempo/Loki storage (required when enable_monitoring=true)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "r2_secret_key" {
-  description = "Cloudflare R2 secret key for Tempo/Loki storage (required when enable_monitoring=true)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "grafana_db_host" {
-  description = "External PostgreSQL host for Grafana datasource (used when enable_managed_database=false)"
-  type        = string
-  default     = ""
-}
-
-variable "grafana_db_port" {
-  description = "External PostgreSQL port for Grafana datasource (used when enable_managed_database=false)"
-  type        = number
-  default     = 5432
-}
-
-variable "grafana_db_name" {
-  description = "External PostgreSQL database name for Grafana datasource (used when enable_managed_database=false)"
-  type        = string
-  default     = "sub2api"
-}
-
-variable "grafana_db_user" {
-  description = "External PostgreSQL read-only username for Grafana datasource (used when enable_managed_database=false)"
-  type        = string
-  default     = ""
-}
-
-variable "grafana_db_password" {
-  description = "External PostgreSQL read-only password for Grafana datasource (used when enable_managed_database=false)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
-variable "grafana_db_sslmode" {
-  description = "External PostgreSQL SSL mode for Grafana datasource (used when enable_managed_database=false)"
-  type        = string
-  default     = "require"
 }
