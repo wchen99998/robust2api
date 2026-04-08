@@ -10,55 +10,66 @@ on:
         description: 'Tag to release (e.g., v1.0.0)'
         required: true
         type: string
-      simple_release:
-        description: 'Simple release: only x86_64 GHCR image, skip other artifacts'
-        required: false
-        type: boolean
-        default: false
-
-# 环境变量：合并 workflow_dispatch 输入和 repository variable
-# tag push 触发时读取 vars.SIMPLE_RELEASE，workflow_dispatch 时使用输入参数
-env:
-  SIMPLE_RELEASE: ${{ github.event.inputs.simple_release == 'true' || vars.SIMPLE_RELEASE == 'true' }}
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  # Update VERSION file with tag version
-  update-version:
+  metadata:
     runs-on: ubuntu-latest
+    outputs:
+      tag_name: ${{ steps.meta.outputs.tag_name }}
+      version: ${{ steps.meta.outputs.version }}
+      release_commit: ${{ steps.meta.outputs.release_commit }}
+      owner_lower: ${{ steps.meta.outputs.owner_lower }}
+      repo_name: ${{ steps.meta.outputs.repo_name }}
+      build_date: ${{ steps.meta.outputs.build_date }}
+      is_prerelease: ${{ steps.meta.outputs.is_prerelease }}
+      release_notes: ${{ steps.meta.outputs.release_notes }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
-      - name: Update VERSION files
+      - name: Resolve release metadata
+        id: meta
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION=${{ github.event.inputs.tag }}
-            VERSION=${VERSION#v}
+            TAG_NAME=${{ github.event.inputs.tag }}
           else
-            VERSION=${GITHUB_REF#refs/tags/v}
+            TAG_NAME=${GITHUB_REF#refs/tags/}
           fi
-          echo "$VERSION" > backend/cmd/gateway/VERSION
-          echo "$VERSION" > backend/cmd/control/VERSION
-          echo "$VERSION" > backend/cmd/worker/VERSION
-          echo "$VERSION" > backend/cmd/bootstrap/VERSION
-          echo "Updated VERSION files to: $VERSION"
 
-      - name: Upload VERSION artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: version-files
-          path: |
-            backend/cmd/gateway/VERSION
-            backend/cmd/control/VERSION
-            backend/cmd/worker/VERSION
-            backend/cmd/bootstrap/VERSION
-          retention-days: 1
+          VERSION=${TAG_NAME#v}
+          OWNER_LOWER=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')
+          RELEASE_COMMIT=$(git rev-list -n 1 "${TAG_NAME}^{commit}")
+          BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          IS_PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            IS_PRERELEASE=true
+          fi
 
-  build-frontend:
+          git fetch --tags --force
+          TAG_MESSAGE=$(git tag -l --format='%(contents:body)' "$TAG_NAME")
+
+          {
+            echo "tag_name=$TAG_NAME"
+            echo "version=$VERSION"
+            echo "release_commit=$RELEASE_COMMIT"
+            echo "owner_lower=$OWNER_LOWER"
+            echo "repo_name=${{ github.event.repository.name }}"
+            echo "build_date=$BUILD_DATE"
+            echo "is_prerelease=$IS_PRERELEASE"
+            echo "release_notes<<EOF"
+            echo "$TAG_MESSAGE"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+  build-frontend-dist:
+    needs: metadata
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -91,43 +102,36 @@ jobs:
           path: frontend/dist/
           retention-days: 1
 
-  release:
-    needs: [update-version, build-frontend]
-    runs-on: ubuntu-latest
+  build-backend-images:
+    needs: metadata
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: gateway
+            dockerfile: Dockerfile.gateway
+          - name: control
+            dockerfile: Dockerfile.control
+          - name: worker
+            dockerfile: Dockerfile.worker
+          - name: bootstrap
+            dockerfile: Dockerfile.bootstrap
+        platform:
+          - name: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.platform.runner }}
+    env:
+      IMAGE_NAME: ghcr.io/${{ needs.metadata.outputs.owner_lower }}/${{ needs.metadata.outputs.repo_name }}/${{ matrix.service.name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: ${{ github.event.inputs.tag || github.ref }}
-
-      - name: Download VERSION artifacts
-        uses: actions/download-artifact@v8
-        with:
-          name: version-files
-          path: backend/
-
-      - name: Download frontend artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: frontend-dist
-          path: frontend/dist/
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: backend/go.mod
-          check-latest: false
-          cache-dependency-path: backend/go.sum
-
-      - name: Verify Go version
-        run: |
-          go version | grep -q 'go1.26.2'
-
-      # QEMU needed for arm64 Docker image layers (apk add, etc.)
-      # Go cross-compilation itself doesn't need it
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+          ref: ${{ needs.metadata.outputs.tag_name }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -139,148 +143,253 @@ jobs:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fetch tags with annotations
-        run: |
-          # 确保获取完整的 annotated tag 信息
-          git fetch --tags --force
-
-      - name: Get tag message
-        id: tag_message
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME=${{ github.event.inputs.tag }}
-          else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-          fi
-          echo "Processing tag: $TAG_NAME"
-
-          # 获取完整的 tag message（跳过第一行标题）
-          TAG_MESSAGE=$(git tag -l --format='%(contents:body)' "$TAG_NAME")
-
-          # 调试输出
-          echo "Tag message length: ${#TAG_MESSAGE}"
-          echo "Tag message preview:"
-          echo "$TAG_MESSAGE" | head -10
-
-          # 使用 EOF 分隔符处理多行内容
-          echo "message<<EOF" >> $GITHUB_OUTPUT
-          echo "$TAG_MESSAGE" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Set lowercase owner for GHCR
-        id: lowercase
-        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@v7
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
         with:
-          version: '~> v2'
-          args: release --clean --skip=validate ${{ env.SIMPLE_RELEASE == 'true' && '--config=.goreleaser.simple.yaml' || '' }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG_MESSAGE: ${{ steps.tag_message.outputs.message }}
-          GITHUB_REPO_OWNER: ${{ github.repository_owner }}
-          GITHUB_REPO_OWNER_LOWER: ${{ steps.lowercase.outputs.owner }}
-          GITHUB_REPO_NAME: ${{ github.event.repository.name }}
+          context: .
+          file: ${{ matrix.service.dockerfile }}
+          platforms: ${{ matrix.platform.name }}
+          build-args: |
+            VERSION=${{ needs.metadata.outputs.version }}
+            COMMIT=${{ needs.metadata.outputs.release_commit }}
+            DATE=${{ needs.metadata.outputs.build_date }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.metadata.outputs.release_commit }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.created=${{ needs.metadata.outputs.build_date }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+          sbom: false
 
-      - name: Build and push frontend image
+      - name: Export digest
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME=${{ github.event.inputs.tag }}
-          else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-          fi
-          VERSION=${TAG_NAME#v}
-          IMAGE="ghcr.io/${{ steps.lowercase.outputs.owner }}/${{ github.event.repository.name }}/frontend"
-          TAG_ARGS=(-t "${IMAGE}:${VERSION}" -t "${IMAGE}:latest")
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
 
-          if [ "${{ env.SIMPLE_RELEASE }}" = "true" ]; then
-            PLATFORMS="linux/amd64"
-          else
-            MAJOR=${VERSION%%.*}
-            REST=${VERSION#*.}
-            MINOR=${REST%%.*}
-            TAG_ARGS+=(-t "${IMAGE}:${MAJOR}.${MINOR}" -t "${IMAGE}:${MAJOR}")
-            PLATFORMS="linux/amd64,linux/arm64"
-          fi
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-${{ matrix.service.name }}-${{ matrix.platform.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
 
-          docker buildx build \
-            --platform "${PLATFORMS}" \
-            "${TAG_ARGS[@]}" \
-            -f Dockerfile.goreleaser.frontend \
-            --push \
-            .
+  build-frontend-images:
+    needs: [metadata, build-frontend-dist]
+    strategy:
+      fail-fast: false
+      matrix:
+        platform:
+          - name: linux/amd64
+            arch: amd64
+            runner: ubuntu-24.04
+          - name: linux/arm64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.platform.runner }}
+    env:
+      IMAGE_NAME: ghcr.io/${{ needs.metadata.outputs.owner_lower }}/${{ needs.metadata.outputs.repo_name }}/frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.metadata.outputs.tag_name }}
 
-      # Send Telegram notification
-      - name: Send Telegram Notification
-        if: ${{ env.SIMPLE_RELEASE != 'true' }}
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        continue-on-error: true
+      - name: Download frontend artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: Dockerfile.frontend.release
+          platforms: ${{ matrix.platform.name }}
+          labels: |
+            org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
+            org.opencontainers.image.revision=${{ needs.metadata.outputs.release_commit }}
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.created=${{ needs.metadata.outputs.build_date }}
+          outputs: type=image,name=${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          provenance: false
+          sbom: false
+
+      - name: Export digest
         run: |
-          # 检查必要的环境变量
-          if [ -z "$TELEGRAM_BOT_TOKEN" ] || [ -z "$TELEGRAM_CHAT_ID" ]; then
-            echo "Telegram credentials not configured, skipping notification"
-            exit 0
+          mkdir -p "$RUNNER_TEMP/digests"
+          digest="${{ steps.build.outputs.digest }}"
+          touch "$RUNNER_TEMP/digests/${digest#sha256:}"
+
+      - name: Upload digest artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: digests-frontend-${{ matrix.platform.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  merge-manifests:
+    needs: [metadata, build-backend-images, build-frontend-images]
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - gateway
+          - control
+          - worker
+          - bootstrap
+          - frontend
+    steps:
+      - name: Download digest artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: digests-${{ matrix.service }}-*
+          path: ${{ runner.temp }}/digests/${{ matrix.service }}
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest
+        env:
+          IMAGE_NAME: ghcr.io/${{ needs.metadata.outputs.owner_lower }}/${{ needs.metadata.outputs.repo_name }}/${{ matrix.service }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          IS_PRERELEASE: ${{ needs.metadata.outputs.is_prerelease }}
+        run: |
+          TAG_ARGS=(-t "${IMAGE_NAME}:${VERSION}")
+          if [ "${IS_PRERELEASE}" != "true" ]; then
+            major=${VERSION%%.*}
+            rest=${VERSION#*.}
+            minor=${rest%%.*}
+            TAG_ARGS+=(-t "${IMAGE_NAME}:latest" -t "${IMAGE_NAME}:${major}.${minor}" -t "${IMAGE_NAME}:${major}")
           fi
 
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG_NAME=${{ github.event.inputs.tag }}
-          else
-            TAG_NAME=${GITHUB_REF#refs/tags/}
-          fi
-          VERSION=${TAG_NAME#v}
-          REPO="${{ github.repository }}"
-          GHCR_IMAGE="ghcr.io/${REPO,,}"  # ${,,} converts to lowercase
+          DIGEST_REFS=()
+          while IFS= read -r file; do
+            DIGEST_REFS+=("${IMAGE_NAME}@sha256:$(basename "$file")")
+          done < <(find "${RUNNER_TEMP}/digests/${{ matrix.service }}" -type f | sort)
 
-          # 获取 tag message 内容并转义 Markdown 特殊字符
-          TAG_MESSAGE='${{ steps.tag_message.outputs.message }}'
-          TAG_MESSAGE=$(echo "$TAG_MESSAGE" | sed 's/\([_*`\[]\)/\\\1/g')
-
-          # 限制消息长度（Telegram 消息限制 4096 字符，预留空间给头尾固定内容）
-          if [ ${#TAG_MESSAGE} -gt 3500 ]; then
-            TAG_MESSAGE="${TAG_MESSAGE:0:3500}..."
+          if [ "${#DIGEST_REFS[@]}" -eq 0 ]; then
+            echo "No digests found for $IMAGE_NAME" >&2
+            exit 1
           fi
 
-          # 构建消息内容
-          MESSAGE="🚀 *Sub2API 新版本发布！*"$'\n'$'\n'
-          MESSAGE+="📦 版本号: \`${VERSION}\`"$'\n'$'\n'
+          docker buildx imagetools create "${TAG_ARGS[@]}" "${DIGEST_REFS[@]}"
+          docker buildx imagetools inspect "${IMAGE_NAME}:${VERSION}"
 
-          # 添加更新内容
-          if [ -n "$TAG_MESSAGE" ]; then
-            MESSAGE+="${TAG_MESSAGE}"$'\n'$'\n'
-          fi
+  publish-release:
+    needs: [metadata, merge-manifests]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Create or update GitHub Release
+        uses: actions/github-script@v8
+        env:
+          TAG_NAME: ${{ needs.metadata.outputs.tag_name }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          OWNER_LOWER: ${{ needs.metadata.outputs.owner_lower }}
+          REPO_NAME: ${{ needs.metadata.outputs.repo_name }}
+          RELEASE_NOTES: ${{ needs.metadata.outputs.release_notes }}
+          IS_PRERELEASE: ${{ needs.metadata.outputs.is_prerelease }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tagName = process.env.TAG_NAME;
+            const version = process.env.VERSION;
+            const ownerLower = process.env.OWNER_LOWER;
+            const repoName = process.env.REPO_NAME;
+            const releaseNotes = process.env.RELEASE_NOTES || "";
+            const prerelease = process.env.IS_PRERELEASE === "true";
+            const body = [
+              "> AI API Gateway Platform - 将 AI 订阅配额分发和管理",
+              "",
+              releaseNotes,
+              "",
+              "---",
+              "",
+              "## 📥 Installation",
+              "",
+              "**Docker:**",
+              "```bash",
+              `docker pull ghcr.io/${ownerLower}/${repoName}/gateway:${version}`,
+              `docker pull ghcr.io/${ownerLower}/${repoName}/control:${version}`,
+              `docker pull ghcr.io/${ownerLower}/${repoName}/frontend:${version}`,
+              `docker pull ghcr.io/${ownerLower}/${repoName}/worker:${version}`,
+              `docker pull ghcr.io/${ownerLower}/${repoName}/bootstrap:${version}`,
+              "```",
+              "",
+              "## 📚 Documentation",
+              "",
+              `- [GitHub Repository](https://github.com/${context.repo.owner}/${context.repo.repo})`,
+              `- [Deployment Guide](https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/DEPLOY.md)`,
+            ].join("\n");
 
-          MESSAGE+="🐳 *Docker 部署:*"$'\n'
-          MESSAGE+="\`\`\`bash"$'\n'
-          MESSAGE+="docker pull ${GHCR_IMAGE}/gateway:${TAG_NAME}"$'\n'
-          MESSAGE+="docker pull ${GHCR_IMAGE}/control:${TAG_NAME}"$'\n'
-          MESSAGE+="docker pull ${GHCR_IMAGE}/frontend:${TAG_NAME}"$'\n'
-          MESSAGE+="docker pull ${GHCR_IMAGE}/worker:${TAG_NAME}"$'\n'
-          MESSAGE+="docker pull ${GHCR_IMAGE}/bootstrap:${TAG_NAME}"$'\n'
-          MESSAGE+="\`\`\`"$'\n'$'\n'
-          MESSAGE+="🔗 *相关链接:*"$'\n'
-          MESSAGE+="• [GitHub Release](https://github.com/${REPO}/releases/tag/${TAG_NAME})"$'\n'
-          MESSAGE+="• [GitHub Packages](https://github.com/${REPO}/pkgs/container/sub2api)"$'\n'$'\n'
-          MESSAGE+="#Sub2API #Release #${TAG_NAME//./_}"
+            let releaseId;
+            try {
+              const existing = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: tagName,
+              });
+              releaseId = existing.data.id;
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+            }
 
-          # 发送消息
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -H "Content-Type: application/json" \
-            -d "$(jq -n \
-              --arg chat_id "${TELEGRAM_CHAT_ID}" \
-              --arg text "${MESSAGE}" \
-              '{
-                chat_id: $chat_id,
-                text: $text,
-                parse_mode: "Markdown",
-                disable_web_page_preview: true
-              }')"
+            if (releaseId) {
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: releaseId,
+                tag_name: tagName,
+                name: `Sub2API ${version}`,
+                body,
+                draft: false,
+                prerelease,
+              });
+              core.info(`Updated release for ${tagName}`);
+            } else {
+              await github.rest.repos.createRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag_name: tagName,
+                name: `Sub2API ${version}`,
+                body,
+                draft: false,
+                prerelease,
+              });
+              core.info(`Created release for ${tagName}`);
+            }
 
   sync-version-file:
-    needs: [release]
-    if: ${{ needs.release.result == 'success' }}
+    needs: [metadata, publish-release]
+    if: ${{ needs.publish-release.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout default branch
@@ -290,12 +399,7 @@ jobs:
 
       - name: Sync VERSION files to released tag
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION=${{ github.event.inputs.tag }}
-            VERSION=${VERSION#v}
-          else
-            VERSION=${GITHUB_REF#refs/tags/v}
-          fi
+          VERSION=${{ needs.metadata.outputs.version }}
 
           CURRENT_VERSION=$(tr -d '\r\n' < backend/cmd/gateway/VERSION || true)
           if [ "$CURRENT_VERSION" = "$VERSION" ]; then
