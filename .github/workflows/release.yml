@@ -122,7 +122,7 @@ jobs:
 
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.26.1'
+          go version | grep -q 'go1.26.2'
 
       # QEMU needed for arm64 Docker image layers (apk add, etc.)
       # Go cross-compilation itself doesn't need it
