@@ -1,6 +1,6 @@
 {{- $ing := .Values.ingress -}}
 {{- if and $ing.enabled ($ing.gateway.enabled) }}
-{{- $gatewayHost := include "sub2api.gatewayHost" . | trim -}}
+{{- $gatewayHost := required "ingress.gateway.host or public.baseDomain must be set when ingress.enabled and ingress.gateway.enabled are true" (include "sub2api.gatewayHost" . | trim) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

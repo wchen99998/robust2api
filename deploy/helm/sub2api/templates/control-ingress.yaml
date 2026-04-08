@@ -1,6 +1,6 @@
 {{- $ing := .Values.ingress -}}
 {{- if and $ing.enabled ($ing.control.enabled) }}
-{{- $controlHost := include "sub2api.controlHost" . | trim -}}
+{{- $controlHost := required "ingress.control.host or public.baseDomain must be set when ingress.enabled and ingress.control.enabled are true" (include "sub2api.controlHost" . | trim) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
