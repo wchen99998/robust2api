@@ -170,19 +170,6 @@ func appendOpsUpstreamError(c *gin.Context, ev OpsUpstreamErrorEvent) {
 	c.Set(OpsUpstreamErrorsKey, existing)
 }
 
-func marshalOpsUpstreamErrors(events []*OpsUpstreamErrorEvent) *string {
-	if len(events) == 0 {
-		return nil
-	}
-	// Ensure we always store a valid JSON value.
-	raw, err := json.Marshal(events)
-	if err != nil || len(raw) == 0 {
-		return nil
-	}
-	s := string(raw)
-	return &s
-}
-
 func ParseOpsUpstreamErrors(raw string) ([]*OpsUpstreamErrorEvent, error) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
