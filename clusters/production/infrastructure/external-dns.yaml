@@ -1,0 +1,44 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: external-dns
+  namespace: external-dns
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: external-dns
+      version: "1.16.1"
+      sourceRef:
+        kind: HelmRepository
+        name: external-dns
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 5m
+  values:
+    provider:
+      name: cloudflare
+    env:
+      - name: CF_API_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: cloudflare-api-token
+            key: api-token
+    policy: sync
+    # CHANGEME: Set your cluster name for TXT record ownership
+    txtOwnerId: sub2api
+    # CHANGEME: Set your domain suffix
+    domainFilters:
+      - do-prod.yourdomain.com
+    sources:
+      - ingress
+    # Uncomment to enable Cloudflare proxy on DNS records
+    # extraArgs:
+    #   - --cloudflare-proxied
