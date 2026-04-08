@@ -161,6 +161,35 @@ terraform output            # Show outputs (LB IP, cluster endpoint, etc.)
 - Sub2API itself is deployed via Helm (`deploy/helm/sub2api/`), not Terraform
 - See `DEPLOY.md` for the full deployment guide
 
+## Deployment (`deploy/helm/sub2api/`)
+
+The application is deployed as three separate services via Helm:
+
+- **Gateway** (`cmd/gateway`) — AI inference proxy, serves `/v1/*` API endpoints
+- **Control** (`cmd/control`) — admin/auth backend, serves `/api/*` endpoints; includes a frontend sidecar (Nginx-served Vue SPA)
+- **Worker** (`cmd/worker`) — background jobs (usage recording, billing)
+
+### Quick Deploy/Upgrade
+
+```bash
+helm dependency build deploy/helm/sub2api
+helm upgrade sub2api deploy/helm/sub2api -n sub2api --reuse-values \
+  --set image.gateway.tag=<version> \
+  --set image.control.tag=<version> \
+  --set image.frontend.tag=<version> \
+  --set image.worker.tag=<version> \
+  --set image.bootstrap.tag=<version>
+```
+
+### Key Deployment Notes
+
+- TLS must be enabled per-ingress: `ingress.gateway.tls.enabled=true` and `ingress.control.tls.enabled=true`
+- Use `--set-string` for annotation values that look like booleans (e.g., `ssl-redirect=true`)
+- PostgreSQL/Redis StatefulSet `persistence.size` is immutable after first install
+- Bootstrap job runs DB migrations; it retries on failure (may CrashLoop briefly while PG starts)
+- The control pod has 2 containers: `control` (Go backend) + `frontend` (Nginx SPA)
+- See `DEPLOY.md` for the full deployment guide including secrets, monitoring, and troubleshooting
+
 ## PR Checklist
 
 - `go test -tags=unit ./...` passes

@@ -152,14 +152,20 @@ For the default deployment path, keep PostgreSQL and Redis in-cluster and instal
 helm upgrade --install sub2api deploy/helm/sub2api \
   -n sub2api \
   --create-namespace \
-  --set image.gateway.tag=0.1.8 \
-  --set image.control.tag=0.1.8 \
-  --set image.bootstrap.tag=0.1.8 \
-  --set replicaCount=1 \
+  --set image.gateway.tag=0.3.0 \
+  --set image.control.tag=0.3.0 \
+  --set image.frontend.tag=0.3.0 \
+  --set image.worker.tag=0.3.0 \
+  --set image.bootstrap.tag=0.3.0 \
+  --set gateway.replicaCount=1 \
+  --set gateway.autoscaling.enabled=false \
+  --set control.replicaCount=1 \
+  --set control.autoscaling.enabled=false \
   --set ingress.gateway.host=gateway-sub2api.do-prod.yourdomain.com \
   --set ingress.control.host=app-sub2api.do-prod.yourdomain.com \
-  --set ingress.tls.enabled=true \
-  --set ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/ssl-redirect=true \
+  --set ingress.gateway.tls.enabled=true \
+  --set ingress.control.tls.enabled=true \
+  --set-string 'ingress.annotations.nginx\.ingress\.kubernetes\.io/ssl-redirect=true' \
   --set config.grafanaUrl=https://grafana-monitoring.do-prod.yourdomain.com \
   --set 'control.frontend.extraFrameSrcOrigins[0]=https://grafana-monitoring.do-prod.yourdomain.com' \
   --set secrets.jwtSecret="$JWT_SECRET" \
@@ -172,6 +178,10 @@ helm upgrade --install sub2api deploy/helm/sub2api \
   --set observability.enabled=false \
   --set observability.serviceMonitor.enabled=false
 ```
+
+> **Important:** TLS must be enabled per-ingress with `ingress.gateway.tls.enabled=true` and `ingress.control.tls.enabled=true`. The global `ingress.tls.enabled` only sets a default secret name — it does not enable TLS on the ingresses.
+
+> **Important:** Use `--set-string` for annotation values that look like booleans (e.g., `ssl-redirect=true`), otherwise Helm encodes them as YAML booleans and Kubernetes rejects the Ingress with a decode error.
 
 This path uses:
 - The chart-managed PostgreSQL subchart for the application database
@@ -198,12 +208,29 @@ Because the bundled PostgreSQL and Redis instances are created by the `sub2api` 
 >   --set redis.image.tag=latest
 > ```
 
+> **StatefulSet persistence:** The PostgreSQL and Redis subcharts use StatefulSets with immutable `volumeClaimTemplates`. If you change `postgresql.primary.persistence.size` or `redis.master.persistence.size` after the initial install, the upgrade will fail with a `Forbidden: updates to statefulset spec` error. You must either delete and recreate the StatefulSet or keep the same persistence size.
+
 ### Verify
 
 ```bash
-kubectl -n sub2api get pods        # all pods should be Running
-kubectl -n sub2api get ingress     # should show your host + LB IP
-kubectl -n sub2api get certificate # TLS cert should show READY=True
+kubectl -n sub2api get pods        # gateway, control (2/2), worker, pg, redis should be Running
+kubectl -n sub2api get ingress     # should show gateway + control hosts with LB IP and ports 80,443
+kubectl -n sub2api get certificate # both gateway-tls and control-tls should show READY=True
+```
+
+Verify internal health:
+
+```bash
+# All three services should return {"status":"ok"}
+kubectl -n sub2api exec deploy/sub2api-gateway -- wget -q -O - http://localhost:8080/livez
+kubectl -n sub2api exec deploy/sub2api-control -c control -- wget -q -O - http://localhost:8080/livez
+kubectl -n sub2api exec deploy/sub2api-worker -- wget -q -O - http://localhost:8081/livez
+
+# Control readiness should show postgresql and redis as "ok"
+kubectl -n sub2api exec deploy/sub2api-control -c control -- wget -q -O - http://localhost:8080/readyz
+
+# Metrics endpoint (if observability enabled)
+kubectl -n sub2api exec deploy/sub2api-gateway -- wget -q -O - http://localhost:9090/metrics | head -5
 ```
 
 Your app should be accessible at `https://gateway-sub2api.do-prod.yourdomain.com` for the inference gateway and `https://app-sub2api.do-prod.yourdomain.com` for the control/admin UI.
