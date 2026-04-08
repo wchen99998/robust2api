@@ -1,0 +1,58 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: monitoring
+  namespace: monitoring
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: deploy/helm/monitoring
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 15m
+  valuesFrom:
+    - kind: Secret
+      name: monitoring-secrets
+      optional: false
+  values:
+    # CHANGEME: Set your Grafana hostname
+    grafanaIngress:
+      host: grafana.do-prod.yourdomain.com
+
+    # CHANGEME: Set your R2 endpoint and bucket names
+    tempo:
+      tempo:
+        storage:
+          trace:
+            s3:
+              bucket: sub2api-tempo
+              endpoint: your-account-id.r2.cloudflarestorage.com
+
+    loki:
+      loki:
+        storage:
+          s3:
+            endpoint: your-account-id.r2.cloudflarestorage.com
+          bucketNames:
+            chunks: sub2api-loki
+            ruler: sub2api-loki
+            admin: sub2api-loki
+
+    grafanaPostgresDatasource:
+      enabled: true
+      # CHANGEME: Set your DB host (non-sensitive, sensitive fields come from monitoring-secrets)
+      host: your-db-host.db.ondigitalocean.com
+      port: 25060
+      database: sub2api
+      sslmode: require
