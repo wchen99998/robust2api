@@ -2349,7 +2349,7 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	token string,
 	firstClientMessage []byte,
 	hooks *OpenAIWSIngressHooks,
-) error {
+) (retErr error) {
 	if s == nil {
 		return errors.New("service is nil")
 	}
@@ -2365,8 +2365,33 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 	if strings.TrimSpace(token) == "" {
 		return errors.New("token is empty")
 	}
+	requestModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())
 
 	wsDecision := s.getOpenAIWSProtocolResolver().Resolve(account)
+	attemptCtx, attemptSpan, attemptStartedAt := startOpenAIUpstreamAttemptSpan(
+		ctx,
+		account,
+		requestModel,
+		account.GetMappedModel(requestModel),
+		string(wsDecision.Transport),
+	)
+	defer func() {
+		statusCode := 0
+		if retErr == nil {
+			statusCode = http.StatusSwitchingProtocols
+		}
+		finishOpenAIUpstreamAttemptSpan(
+			attemptCtx,
+			attemptSpan,
+			account,
+			string(wsDecision.Transport),
+			attemptStartedAt,
+			statusCode,
+			openAIAttemptOutcome(statusCode, retErr, false),
+			"",
+			retErr,
+		)
+	}()
 	modeRouterV2Enabled := s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled
 	ingressMode := OpenAIWSIngressModeCtxPool
 	if modeRouterV2Enabled {

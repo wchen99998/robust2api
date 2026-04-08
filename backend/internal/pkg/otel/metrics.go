@@ -33,6 +33,7 @@ type Metrics struct {
 	httpRequestsTotal        metric.Int64Counter
 	httpRequestDuration      metric.Float64Histogram
 	httpRequestTTFT          metric.Float64Histogram
+	upstreamRequestDuration  metric.Float64Histogram
 	tokensTotal              metric.Int64Counter
 	upstreamErrorsTotal      metric.Int64Counter
 	accountFailoversTotal    metric.Int64Counter
@@ -58,7 +59,7 @@ func NewMetrics() (*Metrics, error) {
 	m.httpRequestDuration, err = meter.Float64Histogram("sub2api.http.request.duration",
 		metric.WithDescription("HTTP request duration in seconds"),
 		metric.WithUnit("s"),
-		metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 30, 60),
+		metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 60),
 	)
 	if err != nil {
 		return nil, err
@@ -67,7 +68,16 @@ func NewMetrics() (*Metrics, error) {
 	m.httpRequestTTFT, err = meter.Float64Histogram("sub2api.http.request.ttft",
 		metric.WithDescription("Time to first token in seconds"),
 		metric.WithUnit("s"),
-		metric.WithExplicitBucketBoundaries(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
+		metric.WithExplicitBucketBoundaries(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.upstreamRequestDuration, err = meter.Float64Histogram("sub2api.upstream.request.duration",
+		metric.WithDescription("Per-upstream-attempt request duration in seconds"),
+		metric.WithUnit("s"),
+		metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 60),
 	)
 	if err != nil {
 		return nil, err
@@ -152,6 +162,16 @@ func (m *Metrics) RecordTTFT(ctx context.Context, ttftSec float64, platform, mod
 	attrs := appendOptionalStringAttr(nil, "platform", platform)
 	attrs = appendOptionalStringAttr(attrs, "model", model)
 	m.httpRequestTTFT.Record(ctx, ttftSec,
+		metric.WithAttributes(attrs...),
+	)
+}
+
+func (m *Metrics) RecordUpstreamDuration(ctx context.Context, durationSec float64, platform, transport, statusCode, outcome string) {
+	attrs := appendOptionalStringAttr(nil, "platform", platform)
+	attrs = appendOptionalStringAttr(attrs, "transport", transport)
+	attrs = appendOptionalStringAttr(attrs, "status_code", statusCode)
+	attrs = appendOptionalStringAttr(attrs, "outcome", outcome)
+	m.upstreamRequestDuration.Record(ctx, durationSec,
 		metric.WithAttributes(attrs...),
 	)
 }

@@ -142,6 +142,42 @@ Resolved public Grafana URL used by the control app.
 {{- end }}
 
 {{/*
+Resolve a component-specific OTEL service name while preserving the configured
+base service name.
+*/}}
+{{- define "sub2api.otelServiceName" -}}
+{{- $base := trim (default "sub2api" .base) -}}
+{{- $component := trim (default "" .component) -}}
+{{- if $component -}}
+{{- printf "%s-%s" $base $component -}}
+{{- else -}}
+{{- $base -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve OTEL resource attributes injected by the deployment.
+*/}}
+{{- define "sub2api.otelResourceAttributes" -}}
+{{- $root := .root -}}
+{{- $component := trim (default "" .component) -}}
+{{- $environment := trim (default "" $root.Values.observability.otel.environment) -}}
+{{- $deploymentName := printf "%s-%s" (include "sub2api.fullname" $root) $component -}}
+{{- $attrs := list
+  (printf "service.namespace=%s" $root.Release.Namespace)
+  "service.version=$(APP_VERSION)"
+  "k8s.namespace.name=$(POD_NAMESPACE)"
+  "k8s.pod.name=$(POD_NAME)"
+  (printf "k8s.deployment.name=%s" $deploymentName)
+  (printf "sub2api.component=%s" $component)
+-}}
+{{- if $environment -}}
+{{- $attrs = append $attrs (printf "deployment.environment=%s" $environment) -}}
+{{- end -}}
+{{- join "," $attrs -}}
+{{- end }}
+
+{{/*
 Database host: subchart service or external.
 */}}
 {{- define "sub2api.databaseHost" -}}

@@ -2,23 +2,80 @@ package otel
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
+
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
+	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 )
 
-func TestMetrics_RecordRequest(t *testing.T) {
+func TestMetricsPrometheusScrapeIncludesObservabilityContracts(t *testing.T) {
+	m, meterProvider, registry := newTestMetrics(t)
+
+	ctx := context.Background()
+	m.RecordRequest(ctx, http.MethodPost, "/v1/responses", http.StatusOK, "openai")
+	m.RecordDuration(ctx, 16, http.MethodPost, "/v1/responses", http.StatusOK, "openai")
+	m.RecordTTFT(ctx, 2.5, "openai", "gpt-5.1")
+	m.RecordTokens(ctx, 100, "input", "openai", "gpt-5.1")
+	m.RecordTokens(ctx, 200, "output", "openai", "gpt-5.1")
+	m.RecordUpstreamDuration(ctx, 1.25, "openai", "ws", "502", "http_error")
+	m.SetConcurrencyQueueDepth(ctx, 0)
+
+	require.NoError(t, meterProvider.ForceFlush(ctx))
+
+	body := scrapePrometheus(t, registry)
+	require.Contains(t, body, `sub2api_tokens_total{direction="input",model="gpt-5.1",platform="openai"} 100`)
+	require.Contains(t, body, `sub2api_tokens_total{direction="output",model="gpt-5.1",platform="openai"} 200`)
+	require.Contains(t, body, `sub2api_http_request_duration_seconds_bucket{http_method="POST",http_route="/v1/responses",http_status_code="200",platform="openai",le="15"} 0`)
+	require.Contains(t, body, `sub2api_http_request_duration_seconds_bucket{http_method="POST",http_route="/v1/responses",http_status_code="200",platform="openai",le="20"} 1`)
+	require.Contains(t, body, `sub2api_http_request_ttft_seconds_bucket{model="gpt-5.1",platform="openai",le="3"} 1`)
+	require.Contains(t, body, `sub2api_upstream_request_duration_seconds_bucket{outcome="http_error",platform="openai",status_code="502",transport="ws",le="2.5"} 1`)
+	require.Contains(t, body, "sub2api_concurrency_queue_depth 0")
+}
+
+func newTestMetrics(t *testing.T) (*Metrics, *sdkmetric.MeterProvider, *prometheus.Registry) {
+	t.Helper()
+
+	registry := prometheus.NewRegistry()
+	exporter, err := promexporter.New(
+		promexporter.WithRegisterer(registry),
+		promexporter.WithoutScopeInfo(),
+		promexporter.WithoutTargetInfo(),
+	)
+	require.NoError(t, err)
+
+	meterProvider := sdkmetric.NewMeterProvider(sdkmetric.WithReader(exporter))
+	previousProvider := otel.GetMeterProvider()
+	otel.SetMeterProvider(meterProvider)
+
+	globalMetrics = nil
+	globalMetricsOnce = sync.Once{}
+
+	t.Cleanup(func() {
+		require.NoError(t, meterProvider.Shutdown(context.Background()))
+		otel.SetMeterProvider(previousProvider)
+		globalMetrics = nil
+		globalMetricsOnce = sync.Once{}
+	})
+
 	m, err := NewMetrics()
-	if err != nil {
-		t.Fatalf("NewMetrics() error = %v", err)
-	}
-	// Should not panic when recording metrics
-	m.RecordRequest(context.Background(), "POST", "/v1/messages", 200, "anthropic")
-	m.RecordDuration(context.Background(), 0.150, "POST", "/v1/messages", 200, "anthropic")
-	m.RecordTTFT(context.Background(), 0.050, "anthropic", "claude-sonnet-4-20250514")
-	m.RecordTokens(context.Background(), 100, "input", "anthropic", "claude-sonnet-4-20250514")
-	m.RecordTokens(context.Background(), 200, "output", "anthropic", "claude-sonnet-4-20250514")
-	m.RecordUpstreamError(context.Background(), "anthropic", "429")
-	m.RecordAccountFailover(context.Background(), "anthropic")
-	m.RecordRateLimitRejection(context.Background(), "api_key")
-	m.SetConcurrencyQueueDepth(context.Background(), 42)
-	m.SetUpstreamAccountsActive(context.Background(), 10, "anthropic")
+	require.NoError(t, err)
+	return m, meterProvider, registry
+}
+
+func scrapePrometheus(t *testing.T, registry *prometheus.Registry) string {
+	t.Helper()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	promhttp.HandlerFor(registry, promhttp.HandlerOpts{}).ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	return strings.TrimSpace(recorder.Body.String())
 }

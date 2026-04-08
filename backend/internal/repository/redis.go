@@ -24,7 +24,7 @@ import (
 func InitRedis(cfg *config.Config) *redis.Client {
 	client := redis.NewClient(buildRedisOptions(cfg))
 	// Add OpenTelemetry tracing hook — produces a child span per Redis command.
-	if err := redisotel.InstrumentTracing(client); err != nil {
+	if err := redisotel.InstrumentTracing(client, redisotel.WithDialFilter(true)); err != nil {
 		log.Printf("redisotel: failed to instrument tracing (best-effort, continuing): %v", err)
 	}
 	return client

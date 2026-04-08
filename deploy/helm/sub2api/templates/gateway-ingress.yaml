@@ -2,6 +2,11 @@
 {{- if and $ing.enabled ($ing.gateway.enabled) }}
 {{- $gatewayHost := required "ingress.gateway.host or public.baseDomain must be set when ingress.enabled and ingress.gateway.enabled are true" (include "sub2api.gatewayHost" . | trim) -}}
 {{- $gatewayMaxBodySize := default $ing.maxBodySize $ing.gateway.maxBodySize -}}
+{{- $annotations := dict
+      "external-dns.alpha.kubernetes.io/cloudflare-proxied" ($ing.cloudflareProxied | toString)
+      "nginx.ingress.kubernetes.io/proxy-body-size" ($gatewayMaxBodySize | toString)
+  -}}
+{{- $annotations = mergeOverwrite $annotations (default dict $ing.annotations) (default dict $ing.gateway.annotations) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -12,11 +17,7 @@ metadata:
   annotations:
     external-dns.alpha.kubernetes.io/hostname: >-
       {{ $gatewayHost }}{{ range $ing.gateway.extraHosts }},{{ .host }}{{ end }}
-    external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ $ing.cloudflareProxied | quote }}
-    nginx.ingress.kubernetes.io/proxy-body-size: {{ $gatewayMaxBodySize | quote }}
-    {{- with $ing.annotations }}
-    {{- toYaml . | nindent 4 }}
-    {{- end }}
+    {{- toYaml $annotations | nindent 4 }}
 spec:
   {{- if $ing.className }}
   ingressClassName: {{ $ing.className | quote }}

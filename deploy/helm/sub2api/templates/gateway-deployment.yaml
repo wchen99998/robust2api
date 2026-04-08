@@ -33,6 +33,23 @@ spec:
         - name: gateway
           image: "{{ .Values.image.gateway.repository }}:{{ .Values.image.gateway.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.gateway.pullPolicy }}
+          {{- if ((.Values.observability).enabled) }}
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: APP_VERSION
+              value: {{ .Values.image.gateway.tag | default .Chart.AppVersion | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ include "sub2api.otelServiceName" (dict "base" .Values.observability.otel.serviceName "component" "gateway") | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ include "sub2api.otelResourceAttributes" (dict "root" . "component" "gateway") | quote }}
+          {{- end }}
           ports:
             - name: http
               containerPort: 8080

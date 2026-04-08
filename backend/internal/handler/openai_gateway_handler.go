@@ -15,6 +15,7 @@ import (
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -22,6 +23,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -86,21 +89,33 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	compactStartedAt := time.Now()
 	defer h.logOpenAIRemoteCompactOutcome(c, compactStartedAt)
 	setOpenAIClientTransportHTTP(c)
+	_, span := startOpenAIHandlerSpan(c, "gateway.responses")
+	defer span.End()
+	tracer := appelotel.GatewayTracer()
 
 	requestStart := time.Now()
 
 	// Get apiKey and user from context (set by ApiKeyAuth middleware)
+	_, authSpan := tracer.Start(c.Request.Context(), "gateway.auth")
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
+		appelotel.RecordSpanError(authSpan, nil, "invalid api key")
+		authSpan.End()
+		appelotel.RecordSpanError(span, nil, "invalid api key")
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
 
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
+		appelotel.RecordSpanError(authSpan, nil, "user context not found")
+		authSpan.End()
+		appelotel.RecordSpanError(span, nil, "user context not found")
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
+	setOpenAIRequestSpanIdentity(authSpan, apiKey, subject.UserID, "", false)
+	authSpan.End()
 	reqLog := requestLogger(
 		c,
 		"handler.openai_gateway.responses",
@@ -164,6 +179,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 	reqStream := streamResult.Bool()
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	setOpenAIRequestSpanIdentity(span, apiKey, subject.UserID, reqModel, reqStream)
 	previousResponseID := strings.TrimSpace(gjson.GetBytes(body, "previous_response_id").String())
 	if previousResponseID != "" {
 		previousResponseIDKind := service.ClassifyOpenAIPreviousResponseIDKind(previousResponseID)
@@ -210,12 +226,17 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	}
 
 	// 2. Re-check billing eligibility after wait
+	_, billingSpan := tracer.Start(c.Request.Context(), "gateway.billing")
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+		appelotel.RecordSpanError(billingSpan, err, err.Error())
+		billingSpan.End()
+		appelotel.RecordSpanError(span, err, err.Error())
 		reqLog.Info("openai.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message := billingErrorDetails(err)
 		h.handleStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+	billingSpan.End()
 
 	// Generate session hash (header first; fallback to prompt_cache_key)
 	sessionHash := h.gatewayService.GenerateSessionHash(c, sessionHashBody)
@@ -229,8 +250,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	for {
 		// Select account supporting the requested model
 		reqLog.Debug("openai.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
+		selectCtx, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-			c.Request.Context(),
+			selectCtx,
 			apiKey.GroupID,
 			previousResponseID,
 			sessionHash,
@@ -239,6 +261,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			service.OpenAIUpstreamTransportAny,
 		)
 		if err != nil {
+			appelotel.RecordSpanError(selectSpan, err, err.Error())
+			selectSpan.End()
+			appelotel.RecordSpanError(span, err, err.Error())
 			reqLog.Warn("openai.account_select_failed",
 				zap.Error(err),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
@@ -255,9 +280,14 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			return
 		}
 		if selection == nil || selection.Account == nil {
+			appelotel.RecordSpanError(selectSpan, nil, "no available accounts")
+			selectSpan.End()
+			appelotel.RecordSpanError(span, nil, "no available accounts")
 			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
 			return
 		}
+		setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
+		selectSpan.End()
 		if previousResponseID != "" && selection != nil && selection.Account != nil {
 			reqLog.Debug("openai.account_selected_with_previous_response_id", zap.Int64("account_id", selection.Account.ID))
 		}
@@ -273,6 +303,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		account := selection.Account
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
+		setOpenAIAccountSpanIdentity(span, account, "")
 
 		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
 		if !acquired {
@@ -304,12 +335,23 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				appelotel.AddSpanEvent(span, appelotel.EventFailoverCandidate,
+					appelotel.AttrAccountID(account.ID),
+					appelotel.AttrPlatform(account.Platform),
+					appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
+				)
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				// 池模式：同账号重试
 				if failoverErr.RetryableOnSameAccount {
 					retryLimit := account.GetPoolModeRetryCount()
 					if sameAccountRetryCount[account.ID] < retryLimit {
 						sameAccountRetryCount[account.ID]++
+						appelotel.AddSpanEvent(span, appelotel.EventSameAccountRetry,
+							appelotel.AttrAccountID(account.ID),
+							appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
+							attribute.Int("sub2api.retry_count", sameAccountRetryCount[account.ID]),
+							attribute.Int("sub2api.retry_limit", retryLimit),
+						)
 						reqLog.Warn("openai.pool_mode_same_account_retry",
 							zap.Int64("account_id", account.ID),
 							zap.Int("upstream_status", failoverErr.StatusCode),
@@ -328,10 +370,17 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
 				if switchCount >= maxAccountSwitches {
+					appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
 					h.handleFailoverExhausted(c, failoverErr, streamStarted)
 					return
 				}
 				switchCount++
+				appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
+				appelotel.AddSpanEvent(span, appelotel.EventAccountSwitch,
+					appelotel.AttrAccountID(account.ID),
+					appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
+					appelotel.AttrFailoverSwitchCount(switchCount),
+				)
 				reqLog.Warn("openai.upstream_failover_switching",
 					zap.Int64("account_id", account.ID),
 					zap.Int("upstream_status", failoverErr.StatusCode),
@@ -342,6 +391,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
+			if wroteFallback {
+				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("sub2api.stream_started", streamStarted))
+			}
+			appelotel.RecordSpanError(span, err, err.Error())
 			fields := []zap.Field{
 				zap.Int64("account_id", account.ID),
 				zap.Bool("fallback_error_response_written", wroteFallback),
@@ -359,6 +412,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				h.gatewayService.UpdateCodexUsageSnapshotFromHeaders(c.Request.Context(), account.ID, result.ResponseHeaders)
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
+			setOpenAIAccountSpanIdentity(span, account, result.UpstreamModel)
+			appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
+			if result.RequestID != "" {
+				appelotel.SetSpanAttributes(span, appelotel.AttrUpstreamRequestID(result.RequestID))
+			}
 		} else {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
 		}
@@ -369,8 +427,17 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 
 		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+		requestSpanCtx := trace.SpanContextFromContext(c.Request.Context())
 		h.submitUsageRecordTask(func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
+			usageCtx := ctx
+			if requestSpanCtx.IsValid() {
+				usageCtx = trace.ContextWithSpanContext(ctx, requestSpanCtx)
+			}
+			usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")
+			setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, reqModel, reqStream)
+			setOpenAIAccountSpanIdentity(usageSpan, account, result.UpstreamModel)
+			defer usageSpan.End()
+			if err := h.gatewayService.RecordUsage(usageCtx, &service.OpenAIRecordUsageInput{
 				Result:             result,
 				APIKey:             apiKey,
 				User:               apiKey.User,
@@ -384,6 +451,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				APIKeyService:      h.apiKeyService,
 				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 			}); err != nil {
+				appelotel.RecordSpanError(usageSpan, err, err.Error())
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.responses"),
 					zap.Int64("user_id", subject.UserID),
@@ -487,20 +555,33 @@ func (h *OpenAIGatewayHandler) logOpenAIRemoteCompactOutcome(c *gin.Context, sta
 func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	streamStarted := false
 	defer h.recoverAnthropicMessagesPanic(c, &streamStarted)
+	setOpenAIClientTransportHTTP(c)
+	_, span := startOpenAIHandlerSpan(c, "gateway.messages")
+	defer span.End()
+	tracer := appelotel.GatewayTracer()
 
 	requestStart := time.Now()
 
+	_, authSpan := tracer.Start(c.Request.Context(), "gateway.auth")
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
+		appelotel.RecordSpanError(authSpan, nil, "invalid api key")
+		authSpan.End()
+		appelotel.RecordSpanError(span, nil, "invalid api key")
 		h.anthropicErrorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
 
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
+		appelotel.RecordSpanError(authSpan, nil, "user context not found")
+		authSpan.End()
+		appelotel.RecordSpanError(span, nil, "user context not found")
 		h.anthropicErrorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
+	setOpenAIRequestSpanIdentity(authSpan, apiKey, subject.UserID, "", false)
+	authSpan.End()
 	reqLog := requestLogger(
 		c,
 		"handler.openai_gateway.messages",
@@ -549,6 +630,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
+	setOpenAIRequestSpanIdentity(span, apiKey, subject.UserID, reqModel, reqStream)
 
 	// 解析渠道级模型映射
 	channelMappingMsg, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
@@ -571,12 +653,17 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		defer userReleaseFunc()
 	}
 
+	_, billingSpan := tracer.Start(c.Request.Context(), "gateway.billing")
 	if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+		appelotel.RecordSpanError(billingSpan, err, err.Error())
+		billingSpan.End()
+		appelotel.RecordSpanError(span, err, err.Error())
 		reqLog.Info("openai_messages.billing_eligibility_check_failed", zap.Error(err))
 		status, code, message := billingErrorDetails(err)
 		h.anthropicStreamingAwareError(c, status, code, message, streamStarted)
 		return
 	}
+	billingSpan.End()
 
 	sessionHash := h.gatewayService.GenerateSessionHash(c, body)
 	promptCacheKey := h.gatewayService.ExtractSessionID(c, body)
@@ -606,8 +693,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		// 清除上一次迭代的降级模型标记，避免残留影响本次迭代
 		c.Set("openai_messages_fallback_model", "")
 		reqLog.Debug("openai_messages.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
+		selectCtx, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-			c.Request.Context(),
+			selectCtx,
 			apiKey.GroupID,
 			"", // no previous_response_id
 			sessionHash,
@@ -616,6 +704,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			service.OpenAIUpstreamTransportAny,
 		)
 		if err != nil {
+			appelotel.RecordSpanError(selectSpan, err, err.Error())
+			selectSpan.End()
+			appelotel.RecordSpanError(span, err, err.Error())
 			reqLog.Warn("openai_messages.account_select_failed",
 				zap.Error(err),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
@@ -657,13 +748,19 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			}
 		}
 		if selection == nil || selection.Account == nil {
+			appelotel.RecordSpanError(selectSpan, nil, "no available accounts")
+			selectSpan.End()
+			appelotel.RecordSpanError(span, nil, "no available accounts")
 			h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
 			return
 		}
+		setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
+		selectSpan.End()
 		account := selection.Account
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai_messages.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
 		_ = scheduleDecision
+		setOpenAIAccountSpanIdentity(span, account, "")
 
 		accountReleaseFunc, acquired := h.acquireResponsesAccountSlot(c, apiKey.GroupID, sessionHash, selection, reqStream, &streamStarted, reqLog)
 		if !acquired {
@@ -699,12 +796,23 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		if err != nil {
 			var failoverErr *service.UpstreamFailoverError
 			if errors.As(err, &failoverErr) {
+				appelotel.AddSpanEvent(span, appelotel.EventFailoverCandidate,
+					appelotel.AttrAccountID(account.ID),
+					appelotel.AttrPlatform(account.Platform),
+					appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
+				)
 				h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 				// 池模式：同账号重试
 				if failoverErr.RetryableOnSameAccount {
 					retryLimit := account.GetPoolModeRetryCount()
 					if sameAccountRetryCount[account.ID] < retryLimit {
 						sameAccountRetryCount[account.ID]++
+						appelotel.AddSpanEvent(span, appelotel.EventSameAccountRetry,
+							appelotel.AttrAccountID(account.ID),
+							appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
+							attribute.Int("sub2api.retry_count", sameAccountRetryCount[account.ID]),
+							attribute.Int("sub2api.retry_limit", retryLimit),
+						)
 						reqLog.Warn("openai_messages.pool_mode_same_account_retry",
 							zap.Int64("account_id", account.ID),
 							zap.Int("upstream_status", failoverErr.StatusCode),
@@ -723,10 +831,17 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				failedAccountIDs[account.ID] = struct{}{}
 				lastFailoverErr = failoverErr
 				if switchCount >= maxAccountSwitches {
+					appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
 					h.handleAnthropicFailoverExhausted(c, failoverErr, streamStarted)
 					return
 				}
 				switchCount++
+				appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
+				appelotel.AddSpanEvent(span, appelotel.EventAccountSwitch,
+					appelotel.AttrAccountID(account.ID),
+					appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
+					appelotel.AttrFailoverSwitchCount(switchCount),
+				)
 				reqLog.Warn("openai_messages.upstream_failover_switching",
 					zap.Int64("account_id", account.ID),
 					zap.Int("upstream_status", failoverErr.StatusCode),
@@ -737,6 +852,10 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureAnthropicErrorResponse(c, streamStarted)
+			if wroteFallback {
+				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("sub2api.stream_started", streamStarted))
+			}
+			appelotel.RecordSpanError(span, err, err.Error())
 			reqLog.Warn("openai_messages.forward_failed",
 				zap.Int64("account_id", account.ID),
 				zap.Bool("fallback_error_response_written", wroteFallback),
@@ -746,6 +865,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		}
 		if result != nil {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
+			setOpenAIAccountSpanIdentity(span, account, result.UpstreamModel)
+			appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
+			if result.RequestID != "" {
+				appelotel.SetSpanAttributes(span, appelotel.AttrUpstreamRequestID(result.RequestID))
+			}
 		} else {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, nil)
 		}
@@ -754,8 +878,17 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		clientIP := ip.GetClientIP(c)
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 
+		requestSpanCtx := trace.SpanContextFromContext(c.Request.Context())
 		h.submitUsageRecordTask(func(ctx context.Context) {
-			if err := h.gatewayService.RecordUsage(ctx, &service.OpenAIRecordUsageInput{
+			usageCtx := ctx
+			if requestSpanCtx.IsValid() {
+				usageCtx = trace.ContextWithSpanContext(ctx, requestSpanCtx)
+			}
+			usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")
+			setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, reqModel, reqStream)
+			setOpenAIAccountSpanIdentity(usageSpan, account, result.UpstreamModel)
+			defer usageSpan.End()
+			if err := h.gatewayService.RecordUsage(usageCtx, &service.OpenAIRecordUsageInput{
 				Result:             result,
 				APIKey:             apiKey,
 				User:               apiKey.User,
@@ -769,6 +902,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				APIKeyService:      h.apiKeyService,
 				ChannelUsageFields: channelMappingMsg.ToUsageFields(reqModel, result.UpstreamModel),
 			}); err != nil {
+				appelotel.RecordSpanError(usageSpan, err, err.Error())
 				logger.L().With(
 					zap.String("component", "handler.openai_gateway.messages"),
 					zap.Int64("user_id", subject.UserID),
@@ -883,22 +1017,37 @@ func (h *OpenAIGatewayHandler) acquireResponsesUserSlot(
 	reqLog *zap.Logger,
 ) (func(), bool) {
 	ctx := c.Request.Context()
+	queueStart := time.Now()
+	_, queueSpan := appelotel.GatewayTracer().Start(ctx, "gateway.queue_wait.user")
+	appelotel.SetSpanAttributes(queueSpan,
+		appelotel.AttrUserID(userID),
+		appelotel.AttrStream(reqStream),
+		appelotel.AttrTransport(string(service.GetOpenAIClientTransport(c))),
+	)
+	defer func() {
+		appelotel.SetSpanAttributes(queueSpan, attribute.Int64("sub2api.queue_wait_ms", time.Since(queueStart).Milliseconds()))
+		queueSpan.End()
+	}()
 	userReleaseFunc, userAcquired, err := h.concurrencyHelper.TryAcquireUserSlot(ctx, userID, userConcurrency)
 	if err != nil {
+		appelotel.RecordSpanError(queueSpan, err, err.Error())
 		reqLog.Warn("openai.user_slot_acquire_failed", zap.Error(err))
 		h.handleConcurrencyError(c, err, "user", *streamStarted)
 		return nil, false
 	}
 	if userAcquired {
+		appelotel.SetSpanAttributes(queueSpan, attribute.Bool("sub2api.acquired_immediately", true))
 		return wrapReleaseOnDone(ctx, userReleaseFunc), true
 	}
 
 	maxWait := service.CalculateMaxWait(userConcurrency)
 	canWait, waitErr := h.concurrencyHelper.IncrementWaitCount(ctx, userID, maxWait)
 	if waitErr != nil {
+		appelotel.RecordSpanError(queueSpan, waitErr, waitErr.Error())
 		reqLog.Warn("openai.user_wait_counter_increment_failed", zap.Error(waitErr))
 		// 按现有降级语义：等待计数异常时放行后续抢槽流程
 	} else if !canWait {
+		appelotel.RecordSpanError(queueSpan, nil, "user wait queue full")
 		reqLog.Info("openai.user_wait_queue_full", zap.Int("max_wait", maxWait))
 		h.errorResponse(c, http.StatusTooManyRequests, "rate_limit_error", "Too many pending requests, please retry later")
 		return nil, false
@@ -913,6 +1062,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesUserSlot(
 
 	userReleaseFunc, err = h.concurrencyHelper.AcquireUserSlotWithWait(c, userID, userConcurrency, reqStream, streamStarted)
 	if err != nil {
+		appelotel.RecordSpanError(queueSpan, err, err.Error())
 		reqLog.Warn("openai.user_slot_acquire_failed_after_wait", zap.Error(err))
 		h.handleConcurrencyError(c, err, "user", *streamStarted)
 		return nil, false
@@ -942,10 +1092,24 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 
 	ctx := c.Request.Context()
 	account := selection.Account
+	queueStart := time.Now()
+	_, queueSpan := appelotel.GatewayTracer().Start(ctx, "gateway.queue_wait.account")
+	appelotel.SetSpanAttributes(queueSpan,
+		appelotel.AttrAccountID(account.ID),
+		appelotel.AttrPlatform(account.Platform),
+		appelotel.AttrStream(reqStream),
+		appelotel.AttrTransport(string(service.GetOpenAIClientTransport(c))),
+	)
+	defer func() {
+		appelotel.SetSpanAttributes(queueSpan, attribute.Int64("sub2api.queue_wait_ms", time.Since(queueStart).Milliseconds()))
+		queueSpan.End()
+	}()
 	if selection.Acquired {
+		appelotel.SetSpanAttributes(queueSpan, attribute.Bool("sub2api.acquired_immediately", true))
 		return wrapReleaseOnDone(ctx, selection.ReleaseFunc), true
 	}
 	if selection.WaitPlan == nil {
+		appelotel.RecordSpanError(queueSpan, nil, "no available accounts")
 		h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", *streamStarted)
 		return nil, false
 	}
@@ -956,6 +1120,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 		selection.WaitPlan.MaxConcurrency,
 	)
 	if err != nil {
+		appelotel.RecordSpanError(queueSpan, err, err.Error())
 		reqLog.Warn("openai.account_slot_quick_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		h.handleConcurrencyError(c, err, "account", *streamStarted)
 		return nil, false
@@ -969,8 +1134,10 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 
 	canWait, waitErr := h.concurrencyHelper.IncrementAccountWaitCount(ctx, account.ID, selection.WaitPlan.MaxWaiting)
 	if waitErr != nil {
+		appelotel.RecordSpanError(queueSpan, waitErr, waitErr.Error())
 		reqLog.Warn("openai.account_wait_counter_increment_failed", zap.Int64("account_id", account.ID), zap.Error(waitErr))
 	} else if !canWait {
+		appelotel.RecordSpanError(queueSpan, nil, "account wait queue full")
 		reqLog.Info("openai.account_wait_queue_full",
 			zap.Int64("account_id", account.ID),
 			zap.Int("max_waiting", selection.WaitPlan.MaxWaiting),
@@ -997,6 +1164,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 		streamStarted,
 	)
 	if err != nil {
+		appelotel.RecordSpanError(queueSpan, err, err.Error())
 		reqLog.Warn("openai.account_slot_acquire_failed", zap.Int64("account_id", account.ID), zap.Error(err))
 		h.handleConcurrencyError(c, err, "account", *streamStarted)
 		return nil, false
@@ -1018,17 +1186,29 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		return
 	}
 	setOpenAIClientTransportWS(c)
+	_, span := startOpenAIHandlerSpan(c, "gateway.responses_ws")
+	defer span.End()
+	tracer := appelotel.GatewayTracer()
 
+	_, authSpan := tracer.Start(c.Request.Context(), "gateway.auth")
 	apiKey, ok := middleware2.GetAPIKeyFromContext(c)
 	if !ok {
+		appelotel.RecordSpanError(authSpan, nil, "invalid api key")
+		authSpan.End()
+		appelotel.RecordSpanError(span, nil, "invalid api key")
 		h.errorResponse(c, http.StatusUnauthorized, "authentication_error", "Invalid API key")
 		return
 	}
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
+		appelotel.RecordSpanError(authSpan, nil, "user context not found")
+		authSpan.End()
+		appelotel.RecordSpanError(span, nil, "user context not found")
 		h.errorResponse(c, http.StatusInternalServerError, "api_error", "User context not found")
 		return
 	}
+	setOpenAIRequestSpanIdentity(authSpan, apiKey, subject.UserID, "", true)
+	authSpan.End()
 
 	reqLog := requestLogger(
 		c,
@@ -1092,6 +1272,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 	reqModel := strings.TrimSpace(gjson.GetBytes(firstMessage, "model").String())
 	if reqModel == "" {
+		appelotel.RecordSpanError(span, nil, "model is required")
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "model is required in first response.create payload")
 		return
 	}
@@ -1107,6 +1288,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		zap.Bool("has_previous_response_id", previousResponseID != ""),
 		zap.String("previous_response_id_kind", previousResponseIDKind),
 	)
+	setOpenAIRequestSpanIdentity(span, apiKey, subject.UserID, reqModel, true)
 	// 解析渠道级模型映射
 	channelMappingWS, _ := h.gatewayService.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, reqModel)
 
@@ -1138,19 +1320,25 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	currentUserRelease = wrapReleaseOnDone(ctx, userReleaseFunc)
 
 	subscription, _ := middleware2.GetSubscriptionFromContext(c)
+	_, billingSpan := tracer.Start(ctx, "gateway.billing")
 	if err := h.billingCacheService.CheckBillingEligibility(ctx, apiKey.User, apiKey, apiKey.Group, subscription); err != nil {
+		appelotel.RecordSpanError(billingSpan, err, err.Error())
+		billingSpan.End()
+		appelotel.RecordSpanError(span, err, err.Error())
 		reqLog.Info("openai.websocket_billing_eligibility_check_failed", zap.Error(err))
 		closeOpenAIClientWS(wsConn, coderws.StatusPolicyViolation, "billing check failed")
 		return
 	}
+	billingSpan.End()
 
 	sessionHash := h.gatewayService.GenerateSessionHashWithFallback(
 		c,
 		firstMessage,
 		openAIWSIngressFallbackSessionSeed(subject.UserID, apiKey.ID, apiKey.GroupID),
 	)
+	selectCtx, selectSpan := tracer.Start(ctx, "gateway.select_account")
 	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-		ctx,
+		selectCtx,
 		apiKey.GroupID,
 		previousResponseID,
 		sessionHash,
@@ -1159,16 +1347,25 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		service.OpenAIUpstreamTransportResponsesWebsocketV2,
 	)
 	if err != nil {
+		appelotel.RecordSpanError(selectSpan, err, err.Error())
+		selectSpan.End()
+		appelotel.RecordSpanError(span, err, err.Error())
 		reqLog.Warn("openai.websocket_account_select_failed", zap.Error(err))
 		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
 		return
 	}
 	if selection == nil || selection.Account == nil {
+		appelotel.RecordSpanError(selectSpan, nil, "no available account")
+		selectSpan.End()
+		appelotel.RecordSpanError(span, nil, "no available account")
 		closeOpenAIClientWS(wsConn, coderws.StatusTryAgainLater, "no available account")
 		return
 	}
+	setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
+	selectSpan.End()
 
 	account := selection.Account
+	setOpenAIAccountSpanIdentity(span, account, "")
 	accountMaxConcurrency := account.Concurrency
 	if selection.WaitPlan != nil && selection.WaitPlan.MaxConcurrency > 0 {
 		accountMaxConcurrency = selection.WaitPlan.MaxConcurrency
@@ -1249,14 +1446,26 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
 			releaseTurnSlots()
 			if turnErr != nil || result == nil {
+				if turnErr != nil {
+					appelotel.RecordSpanError(span, turnErr, turnErr.Error())
+				}
 				return
 			}
 			if account.Type == service.AccountTypeOAuth {
 				h.gatewayService.UpdateCodexUsageSnapshotFromHeaders(ctx, account.ID, result.ResponseHeaders)
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, true, result.FirstTokenMs)
+			setOpenAIAccountSpanIdentity(span, account, result.UpstreamModel)
+			if result.RequestID != "" {
+				appelotel.SetSpanAttributes(span, appelotel.AttrUpstreamRequestID(result.RequestID))
+			}
 			h.submitUsageRecordTask(func(taskCtx context.Context) {
-				if err := h.gatewayService.RecordUsage(taskCtx, &service.OpenAIRecordUsageInput{
+				usageCtx := openAIRequestSpanContext(c.Request.Context(), taskCtx)
+				usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")
+				setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, reqModel, true)
+				setOpenAIAccountSpanIdentity(usageSpan, account, result.UpstreamModel)
+				defer usageSpan.End()
+				if err := h.gatewayService.RecordUsage(usageCtx, &service.OpenAIRecordUsageInput{
 					Result:             result,
 					APIKey:             apiKey,
 					User:               apiKey.User,
@@ -1270,6 +1479,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					APIKeyService:      h.apiKeyService,
 					ChannelUsageFields: channelMappingWS.ToUsageFields(reqModel, result.UpstreamModel),
 				}); err != nil {
+					appelotel.RecordSpanError(usageSpan, err, err.Error())
 					reqLog.Error("openai.websocket_record_usage_failed",
 						zap.Int64("account_id", account.ID),
 						zap.String("request_id", result.RequestID),
@@ -1288,6 +1498,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 
 	if err := h.gatewayService.ProxyResponsesWebSocketFromClient(ctx, c, wsConn, account, token, wsFirstMessage, hooks); err != nil {
 		h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
+		appelotel.RecordSpanError(span, err, err.Error())
 		closeStatus, closeReason := summarizeWSCloseErrorForLog(err)
 		reqLog.Warn("openai.websocket_proxy_failed",
 			zap.Int64("account_id", account.ID),
