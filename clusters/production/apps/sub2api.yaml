@@ -41,6 +41,10 @@ spec:
       targetPath: postgresql.auth.password
     - kind: Secret
       name: sub2api-secrets
+      valuesKey: postgresql.auth.postgresPassword
+      targetPath: postgresql.auth.postgresPassword
+    - kind: Secret
+      name: sub2api-secrets
       valuesKey: redis.auth.password
       targetPath: redis.auth.password
     - kind: Secret
@@ -51,6 +55,14 @@ spec:
       name: sub2api-secrets
       valuesKey: externalRedis.password
       targetPath: externalRedis.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: grafanaProvisioning.reader.username
+      targetPath: grafanaProvisioning.reader.username
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: grafanaProvisioning.reader.password
+      targetPath: grafanaProvisioning.reader.password
   values:
     # --- Image tags (update these to deploy new versions) ---
     image:
@@ -103,6 +115,14 @@ spec:
       serverMode: release
       runMode: standard
       timezone: Asia/Shanghai
+
+    grafanaProvisioning:
+      enabled: true
+      monitoringNamespace: monitoring
+      datasource:
+        name: Sub2API PostgreSQL
+        uid: sub2api-pg
+        postgresVersion: 1700
 
     # --- Observability ---
     observability:

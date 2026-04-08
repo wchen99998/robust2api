@@ -299,6 +299,7 @@ affinity: {}
 postgresql:
   enabled: true
   auth:
+    postgresPassword: ""
     username: sub2api
     password: ""
     database: sub2api
@@ -321,6 +322,20 @@ externalDatabase:
   password: ""
   database: sub2api
   sslmode: require
+
+# =============================================================================
+# Grafana provisioning
+# =============================================================================
+grafanaProvisioning:
+  enabled: false
+  monitoringNamespace: monitoring
+  datasource:
+    name: Sub2API PostgreSQL
+    uid: sub2api-pg
+    postgresVersion: 1700
+  reader:
+    username: grafana_reader
+    password: ""
 
 # =============================================================================
 # Redis Subchart (Bitnami)

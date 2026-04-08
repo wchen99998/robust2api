@@ -51,18 +51,6 @@ grafanaIngress:
     enabled: true
     secretName: ""
 
-## Grafana PostgreSQL datasource for business analytics dashboards
-grafanaPostgresDatasource:
-  enabled: false
-  name: Sub2API PostgreSQL
-  uid: sub2api-pg
-  host: ""
-  port: 5432
-  database: ""
-  user: ""
-  password: ""
-  sslmode: require
-
 ## Grafana Tempo (distributed tracing)
 tempo:
   enabled: true

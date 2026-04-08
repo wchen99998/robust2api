@@ -43,14 +43,6 @@ spec:
       name: monitoring-secrets
       valuesKey: loki.loki.storage.s3.secretAccessKey
       targetPath: loki.loki.storage.s3.secretAccessKey
-    - kind: Secret
-      name: monitoring-secrets
-      valuesKey: grafanaPostgresDatasource.user
-      targetPath: grafanaPostgresDatasource.user
-    - kind: Secret
-      name: monitoring-secrets
-      valuesKey: grafanaPostgresDatasource.password
-      targetPath: grafanaPostgresDatasource.password
   values:
     public:
       baseDomain: wuhao99.com
@@ -75,10 +67,3 @@ spec:
             chunks: sub2api-loki
             ruler: sub2api-loki
             admin: sub2api-loki
-
-    grafanaPostgresDatasource:
-      enabled: true
-      host: sub2api-postgresql.sub2api.svc
-      port: 5432
-      database: sub2api
-      sslmode: disable

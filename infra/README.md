@@ -40,6 +40,8 @@ helm install sub2api ../../deploy/helm/sub2api \
   --set secrets.adminPassword=<value>
 ```
 
+If you enabled managed PostgreSQL, Terraform also outputs `grafana_reader_user` and `grafana_reader_password`. Copy those values into the Sub2API release secret keys `grafanaProvisioning.reader.username` and `grafanaProvisioning.reader.password` so Grafana uses the dedicated read-only account instead of the app user.
+
 ## Modules
 
 | Module | Description |

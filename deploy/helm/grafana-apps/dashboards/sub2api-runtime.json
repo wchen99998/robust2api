@@ -1,0 +1,159 @@
+{
+  "annotations": { "list": [] },
+  "title": "Sub2API Runtime",
+  "uid": "sub2api-runtime",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "platform",
+        "type": "query",
+        "datasource": { "type": "prometheus", "uid": "prometheus" },
+        "query": "label_values(sub2api_http_requests_total, platform)",
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Request Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(sub2api_http_requests_total{platform=~\"$platform\"}[5m]))",
+          "legendFormat": "RPS"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Error Rate (5xx)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(sub2api_http_requests_total{http_status_code=~\"5..\",platform=~\"$platform\"}[5m])) / clamp_min(sum(rate(sub2api_http_requests_total{platform=~\"$platform\"}[5m])), 1)",
+          "legendFormat": "5xx"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Latency p95 (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(sub2api_http_request_duration_seconds_bucket{platform=~\"$platform\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "TTFT p95 (s)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(sub2api_http_request_ttft_seconds_bucket{platform=~\"$platform\"}[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Token Throughput",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(sub2api_tokens_total{direction=\"input\",platform=~\"$platform\"}[5m]))",
+          "legendFormat": "Input TPS"
+        },
+        {
+          "expr": "sum(rate(sub2api_tokens_total{direction=\"output\",platform=~\"$platform\"}[5m]))",
+          "legendFormat": "Output TPS"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Upstream Errors",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(rate(sub2api_upstream_errors_total{platform=~\"$platform\"}[5m]))",
+          "legendFormat": "Errors/s"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Account Failovers (Last Hour)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(sub2api_account_failovers_total{platform=~\"$platform\"}[1h]))",
+          "legendFormat": "failovers"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "title": "Rate Limit Rejections (Last Hour)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(increase(sub2api_ratelimit_rejections_total[1h]))",
+          "legendFormat": "rejections"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "title": "Concurrency Queue Depth",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "max(sub2api_concurrency_queue_depth)",
+          "legendFormat": "queue"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "title": "Active Upstream Accounts",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 16 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(sub2api_upstream_accounts_active{platform=~\"$platform\"})",
+          "legendFormat": "accounts"
+        }
+      ]
+    }
+  ]
+}

@@ -27,8 +27,7 @@ Monitoring (namespace: monitoring)
 
 Flux CD (namespace: flux-system)
     +-- Watches: clusters/production/ in this Git repo
-    +-- Reconciles: infrastructure -> cert-manager-issuers -> apps
-    +-- Also reconciles: monitoring (independent of apps)
+    +-- Reconciles: infrastructure -> cert-manager-issuers -> monitoring -> apps -> grafana-apps
 ```
 
 ## Prerequisites
@@ -62,10 +61,11 @@ Flux CD (namespace: flux-system)
 |--------------|------|-----------|
 | `infrastructure` | `clusters/production/infrastructure/` | ingress-nginx, cert-manager, external-dns, namespaces, Helm sources |
 | `cert-manager-issuers` | `clusters/production/infrastructure/issuers/` | ClusterIssuer (depends on cert-manager CRDs) |
-| `apps` | `clusters/production/apps/` | Sub2API HelmRelease (gateway, control, worker, bootstrap) |
 | `monitoring` | `clusters/production/monitoring/` | Monitoring HelmRelease (Prometheus, Grafana, Tempo, Loki, Alloy) |
+| `apps` | `clusters/production/apps/` | Sub2API HelmRelease (gateway, control, worker, bootstrap, Grafana datasource, in-cluster DB reader-role provisioning) |
+| `grafana-apps` | `clusters/production/grafana-apps/` | Sub2API Grafana dashboards (post-app provisioning) |
 
-Dependency chain: `infrastructure` -> `cert-manager-issuers` -> `apps`. Monitoring reconciles independently.
+Dependency chain: `infrastructure` -> `cert-manager-issuers` -> `monitoring` -> `apps` -> `grafana-apps`.
 
 ## 1. Provision Infrastructure
 
@@ -127,14 +127,19 @@ stringData:
   secrets.jwtSecret: "<random-32-char>"
   secrets.totpEncryptionKey: "<64-hex-char, generate with: openssl rand -hex 32>"
   secrets.adminPassword: "<admin-password>"
+  postgresql.auth.postgresPassword: "<postgres-admin-password or empty if postgresql.enabled=false>"
   postgresql.auth.password: "<db-password>"
   redis.auth.password: "<redis-password>"
   externalDatabase.password: ""
   externalRedis.password: ""
+  grafanaProvisioning.reader.username: "grafana_reader"
+  grafanaProvisioning.reader.password: "<grafana-read-only-db-password>"
 EOF
 ```
 
-If using external PostgreSQL/Redis, set `postgresql.enabled=false` / `redis.enabled=false` in `clusters/production/apps/sub2api.yaml` and put the real passwords in `externalDatabase.password` / `externalRedis.password`. Keep unused keys as empty strings.
+If using external PostgreSQL/Redis, set `postgresql.enabled=false` / `redis.enabled=false` in `clusters/production/apps/sub2api.yaml` and put the real passwords in `externalDatabase.password` / `externalRedis.password`. Keep `postgresql.auth.postgresPassword` empty in that mode.
+
+If you provision DigitalOcean Managed PostgreSQL via Terraform, copy the `grafana_reader_user` / `grafana_reader_password` outputs into `grafanaProvisioning.reader.username` / `grafanaProvisioning.reader.password`.
 
 ### Monitoring Secrets
 
@@ -154,8 +159,6 @@ stringData:
   tempo.tempo.storage.trace.s3.secret_key: "<r2-secret-key>"
   loki.loki.storage.s3.accessKeyId: "<r2-access-key>"
   loki.loki.storage.s3.secretAccessKey: "<r2-secret-key>"
-  grafanaPostgresDatasource.user: "<grafana-db-user>"
-  grafanaPostgresDatasource.password: "<grafana-db-password>"
 EOF
 ```
 
@@ -167,9 +170,10 @@ Edit `clusters/production/` files with your production values before bootstrappi
 |------|-------------|
 | `infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt) |
 | `infrastructure/external-dns.yaml` | `domainFilters`, `txtOwnerId`; uncomment `extraArgs: [--cloudflare-proxied]` if using CF proxy |
-| `monitoring/monitoring.yaml` | `public.baseDomain`, `grafanaIngress.enabled`, R2 endpoints/buckets, `grafanaPostgresDatasource` host/port/database |
+| `monitoring/monitoring.yaml` | `public.baseDomain`, `grafanaIngress.enabled`, optional `grafanaIngress.host`, R2 endpoints/buckets |
 | `monitoring.yaml` | Set `spec.suspend: false` to enable monitoring |
-| `apps/sub2api.yaml` | Image tags, `public.baseDomain`, public URL scheme/host overrides, ingress TLS/override settings, resource limits, `observability` settings |
+| `apps/sub2api.yaml` | Image tags, `public.baseDomain`, public URL scheme/host overrides, ingress TLS/override settings, resource limits, `observability` settings, `grafanaProvisioning` enablement |
+| `grafana-apps/grafana-apps.yaml` | Dashboard release values if you need to override the monitoring namespace |
 
 By default, public ingress hosts follow the shared `service-namespace.domain`
 convention. For example:
@@ -221,6 +225,7 @@ flux get sources git
 # ingress-nginx 4.12.1    True   Helm upgrade succeeded...
 # monitoring    0.1.0+... True   Helm upgrade succeeded...
 # sub2api       0.2.0+... True   Helm upgrade succeeded...
+# grafana-apps  0.1.0+... True   Helm upgrade succeeded...
 
 # Pods
 kubectl get pods -n sub2api
@@ -309,7 +314,7 @@ flux resume kustomization monitoring     # Resume monitoring
 
 ### Dashboards
 
-Four Sub2API dashboards are provisioned automatically via the monitoring Helm chart:
+Four Sub2API dashboards are provisioned automatically via the `grafana-apps` HelmRelease after both the monitoring and app layers are ready:
 
 | Dashboard | Datasource | Description |
 |-----------|-----------|-------------|
@@ -345,7 +350,10 @@ observability:
 
 ### Grafana Datasources
 
-Provisioned automatically: Prometheus, Loki, Tempo, Alertmanager, Sub2API PostgreSQL.
+Provisioned automatically:
+- `monitoring` provisions Prometheus, Loki, Tempo, and Alertmanager.
+- `sub2api` provisions the Sub2API PostgreSQL datasource into the monitoring namespace.
+- In in-cluster PostgreSQL mode, `sub2api` also reconciles the `grafana_reader` role after install/upgrade.
 
 ## Troubleshooting
 

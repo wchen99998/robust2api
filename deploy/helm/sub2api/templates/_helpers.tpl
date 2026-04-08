@@ -153,6 +153,17 @@ Database host: subchart service or external.
 {{- end }}
 
 {{/*
+Database host as resolved from Grafana in the monitoring namespace.
+*/}}
+{{- define "sub2api.grafanaDatasourceHost" -}}
+{{- if .Values.postgresql.enabled }}
+{{- printf "%s-postgresql.%s.svc" .Release.Name .Release.Namespace }}
+{{- else }}
+{{- .Values.externalDatabase.host }}
+{{- end }}
+{{- end }}
+
+{{/*
 Database port.
 */}}
 {{- define "sub2api.databasePort" -}}
@@ -193,6 +204,27 @@ Database SSL mode.
 {{- "disable" }}
 {{- else }}
 {{- default "require" .Values.externalDatabase.sslmode }}
+{{- end }}
+{{- end }}
+
+{{/*
+PostgreSQL admin user for in-cluster provisioning.
+*/}}
+{{- define "sub2api.postgresqlAdminUser" -}}
+{{- "postgres" }}
+{{- end }}
+
+{{/*
+Image used by PostgreSQL maintenance jobs.
+*/}}
+{{- define "sub2api.postgresqlImage" -}}
+{{- $registry := default "docker.io" .Values.postgresql.image.registry -}}
+{{- $repository := default "bitnami/postgresql" .Values.postgresql.image.repository -}}
+{{- $digest := default "" .Values.postgresql.image.digest -}}
+{{- if $digest }}
+{{- printf "%s/%s@%s" $registry $repository $digest -}}
+{{- else }}
+{{- printf "%s/%s:%s" $registry $repository (default "17.6.0-debian-12-r4" .Values.postgresql.image.tag) -}}
 {{- end }}
 {{- end }}
 
@@ -246,6 +278,20 @@ on each upgrade instead of trying to patch an immutable Job spec.
 */}}
 {{- define "sub2api.bootstrapJobName" -}}
 {{- printf "%s-bootstrap-r%d" (include "sub2api.fullname" .) .Release.Revision | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Grafana datasource secret name.
+*/}}
+{{- define "sub2api.grafanaDatasourceSecretName" -}}
+{{- printf "%s-grafana-datasource-postgres" (include "sub2api.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Grafana reader reconciliation job name.
+*/}}
+{{- define "sub2api.grafanaReaderRoleJobName" -}}
+{{- printf "%s-grafana-reader-role" (include "sub2api.fullname" .) | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*

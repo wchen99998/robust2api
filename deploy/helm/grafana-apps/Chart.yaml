@@ -1,0 +1,6 @@
+apiVersion: v2
+name: grafana-apps
+description: Sub2API Grafana dashboard provisioning
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
