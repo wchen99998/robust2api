@@ -82,6 +82,10 @@ resource "kubernetes_secret" "cloudflare_cert_manager" {
     api-token = var.cloudflare_api_token
   }
 
+  lifecycle {
+    ignore_changes = [data, metadata[0].labels, metadata[0].annotations]
+  }
+
   depends_on = [kubernetes_namespace.cert_manager]
 }
 
@@ -103,6 +107,10 @@ resource "kubernetes_secret" "cloudflare_external_dns" {
 
   data = {
     api-token = var.cloudflare_api_token
+  }
+
+  lifecycle {
+    ignore_changes = [data, metadata[0].labels, metadata[0].annotations]
   }
 
   depends_on = [kubernetes_namespace.external_dns]

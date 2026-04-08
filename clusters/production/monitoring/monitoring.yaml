@@ -24,7 +24,32 @@ spec:
   valuesFrom:
     - kind: Secret
       name: monitoring-secrets
-      optional: false
+      valuesKey: kube-prometheus-stack.grafana.adminPassword
+      targetPath: kube-prometheus-stack.grafana.adminPassword
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: tempo.tempo.storage.trace.s3.access_key
+      targetPath: tempo.tempo.storage.trace.s3.access_key
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: tempo.tempo.storage.trace.s3.secret_key
+      targetPath: tempo.tempo.storage.trace.s3.secret_key
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: loki.loki.storage.s3.accessKeyId
+      targetPath: loki.loki.storage.s3.accessKeyId
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: loki.loki.storage.s3.secretAccessKey
+      targetPath: loki.loki.storage.s3.secretAccessKey
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: grafanaPostgresDatasource.user
+      targetPath: grafanaPostgresDatasource.user
+    - kind: Secret
+      name: monitoring-secrets
+      valuesKey: grafanaPostgresDatasource.password
+      targetPath: grafanaPostgresDatasource.password
   values:
     # CHANGEME: Set your Grafana hostname
     grafanaIngress:

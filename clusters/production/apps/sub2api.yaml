@@ -24,7 +24,32 @@ spec:
   valuesFrom:
     - kind: Secret
       name: sub2api-secrets
-      optional: false
+      valuesKey: secrets.jwtSecret
+      targetPath: secrets.jwtSecret
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: secrets.totpEncryptionKey
+      targetPath: secrets.totpEncryptionKey
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: secrets.adminPassword
+      targetPath: secrets.adminPassword
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: postgresql.auth.password
+      targetPath: postgresql.auth.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: redis.auth.password
+      targetPath: redis.auth.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalDatabase.password
+      targetPath: externalDatabase.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalRedis.password
+      targetPath: externalRedis.password
   values:
     # --- Image tags (update these to deploy new versions) ---
     image:

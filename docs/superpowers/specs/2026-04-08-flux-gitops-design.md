@@ -12,26 +12,34 @@ clusters/production/
 │   ├── gotk-components.yaml
 │   ├── gotk-sync.yaml
 │   └── kustomization.yaml
+├── kustomization.yaml              # Root Kustomize entrypoint for Flux bootstrap
+├── infrastructure.yaml             # Flux Kustomization (no dependencies)
+├── cert-manager-issuers.yaml       # Flux Kustomization (dependsOn: infrastructure)
+├── monitoring.yaml                 # Flux Kustomization (dependsOn: cert-manager-issuers)
+├── apps.yaml                       # Flux Kustomization (dependsOn: monitoring)
 ├── infrastructure/
-│   ├── kustomization.yaml          # Flux Kustomization (no dependencies)
+│   ├── kustomization.yaml          # Kustomize entrypoint for infrastructure resources
 │   ├── sources/
 │   │   ├── helmrepo-ingress-nginx.yaml
 │   │   ├── helmrepo-jetstack.yaml
 │   │   └── helmrepo-external-dns.yaml
 │   ├── ingress-nginx.yaml          # HelmRelease
 │   ├── cert-manager.yaml           # HelmRelease
-│   ├── cluster-issuer.yaml         # Raw ClusterIssuer manifest
 │   ├── external-dns.yaml           # HelmRelease
-│   └── namespaces.yaml             # sub2api namespace
+│   ├── namespaces.yaml             # ingress-nginx + sub2api namespaces
+│   └── issuers/
+│       ├── kustomization.yaml
+│       └── cluster-issuer.yaml     # Raw ClusterIssuer manifest
 ├── monitoring/
-│   ├── kustomization.yaml          # Flux Kustomization (dependsOn: infrastructure)
+│   ├── kustomization.yaml          # Kustomize entrypoint for monitoring resources
+│   ├── namespace.yaml              # monitoring namespace
 │   └── monitoring.yaml             # HelmRelease via GitRepository
 └── apps/
-    ├── kustomization.yaml          # Flux Kustomization (dependsOn: monitoring)
+    ├── kustomization.yaml          # Kustomize entrypoint for app resources
     └── sub2api.yaml                # HelmRelease via GitRepository
 ```
 
-Dependency chain: infrastructure -> monitoring -> apps.
+Dependency chain: infrastructure -> cert-manager-issuers -> monitoring -> apps.
 
 ## Sources
 
@@ -68,9 +76,9 @@ The `flux-system` GitRepository created by `flux bootstrap` points at this repo.
 - **Values**:
   - `crds.enabled: true`
 
-### ClusterIssuer (cluster-issuer.yaml)
+### ClusterIssuer (infrastructure/issuers/cluster-issuer.yaml)
 
-Raw Kubernetes manifest (not a HelmRelease) included in the infrastructure Kustomization. Applied after cert-manager is healthy.
+Raw Kubernetes manifest (not a HelmRelease) applied by a dedicated Flux `Kustomization` that depends on the infrastructure layer. This makes the first reconciliation deterministic by waiting for cert-manager and its CRDs before applying the issuer.
 
 ```yaml
 apiVersion: cert-manager.io/v1
@@ -135,8 +143,8 @@ Secrets are created manually in-cluster. HelmReleases reference them via `values
 |--------|-----------|----------|------------|
 | `cloudflare-api-token` | cert-manager | Cloudflare API token | Terraform (kept) |
 | `cloudflare-api-token` | external-dns | Cloudflare API token | Terraform (kept) |
-| `monitoring-secrets` | monitoring | Grafana admin password, R2 access key, R2 secret key, Grafana DB host/port/name/user/password/sslmode | Manual (kubectl) |
-| `sub2api-secrets` | sub2api | JWT secret, TOTP secret, admin password, DB password, Redis password | Manual (kubectl) |
+| `monitoring-secrets` | monitoring | Grafana admin password, R2 access key, R2 secret key, Grafana DB user/password | Manual (kubectl) |
+| `sub2api-secrets` | sub2api | JWT secret, TOTP key, admin password, bundled DB/Redis passwords, external DB/Redis passwords | Manual (kubectl) |
 
 Future improvement: encrypt secrets with SOPS and commit to Git for full GitOps. The `valuesFrom` pattern remains the same.
 

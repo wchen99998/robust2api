@@ -104,7 +104,7 @@ export GITHUB_TOKEN=<your-github-pat>
 
 flux bootstrap github \
   --owner=<github-org-or-user> \
-  --repository=sub2api \
+  --repository=robust2api \
   --branch=main \
   --path=clusters/production \
   --personal
@@ -113,12 +113,12 @@ flux bootstrap github \
 Flux will:
 1. Install its controllers in the `flux-system` namespace
 2. Create a GitRepository source pointing at this repo
-3. Start reconciling Kustomizations found in `clusters/production/`
+3. Start from the checked-in root `clusters/production/kustomization.yaml`
 4. Apply infrastructure -> monitoring -> apps in dependency order
 
 ## 3. Create Secrets
 
-Flux HelmReleases reference secrets via `valuesFrom`. These must be created manually before the first deploy.
+Flux HelmReleases reference secrets via `valuesFrom`. These must be created manually before the first deploy, and the secret keys must match the explicit `valuesKey` mappings in the HelmRelease manifests.
 
 ### Image Pull Secret (for private GHCR)
 
@@ -135,38 +135,47 @@ kubectl create secret docker-registry ghcr-pull \
 ```bash
 kubectl create namespace sub2api --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl create secret generic sub2api-secrets -n sub2api \
-  --from-literal='secrets.jwtSecret=<random-32-char>' \
-  --from-literal='secrets.totpEncryptionKey=<random-32-char>' \
-  --from-literal='secrets.adminPassword=<admin-password>' \
-  --from-literal='postgresql.auth.password=<db-password>' \
-  --from-literal='redis.auth.password=<redis-password>'
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sub2api-secrets
+  namespace: sub2api
+type: Opaque
+stringData:
+  secrets.jwtSecret: "<random-32-char>"
+  secrets.totpEncryptionKey: "<64-hex-char, generate with: openssl rand -hex 32>"
+  secrets.adminPassword: "<admin-password>"
+  postgresql.auth.password: "<db-password-or-empty-if-external>"
+  redis.auth.password: "<redis-password-or-empty-if-external>"
+  externalDatabase.password: ""
+  externalRedis.password: ""
+EOF
 ```
 
-If using external PostgreSQL/Redis instead of bundled:
-
-```bash
-kubectl create secret generic sub2api-secrets -n sub2api \
-  --from-literal='secrets.jwtSecret=<random-32-char>' \
-  --from-literal='secrets.totpEncryptionKey=<random-32-char>' \
-  --from-literal='secrets.adminPassword=<admin-password>' \
-  --from-literal='externalDatabase.password=<db-password>' \
-  --from-literal='externalRedis.password=<redis-password>'
-```
+If using external PostgreSQL and/or Redis instead of the bundled charts, set `postgresql.enabled=false` and/or `redis.enabled=false` in `clusters/production/apps/sub2api.yaml` and move the real passwords into `externalDatabase.password` / `externalRedis.password`. Leave the unused password keys present with empty string values so Flux can still resolve every mapped secret key.
 
 ### Monitoring Secrets (if using monitoring stack)
 
 ```bash
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 
-kubectl create secret generic monitoring-secrets -n monitoring \
-  --from-literal='kube-prometheus-stack.grafana.adminPassword=<grafana-password>' \
-  --from-literal='tempo.tempo.storage.trace.s3.access_key=<r2-access-key>' \
-  --from-literal='tempo.tempo.storage.trace.s3.secret_key=<r2-secret-key>' \
-  --from-literal='loki.loki.storage.s3.accessKeyId=<r2-access-key>' \
-  --from-literal='loki.loki.storage.s3.secretAccessKey=<r2-secret-key>' \
-  --from-literal='grafanaPostgresDatasource.user=<grafana-db-user>' \
-  --from-literal='grafanaPostgresDatasource.password=<grafana-db-password>'
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Secret
+metadata:
+  name: monitoring-secrets
+  namespace: monitoring
+type: Opaque
+stringData:
+  kube-prometheus-stack.grafana.adminPassword: "<grafana-password>"
+  tempo.tempo.storage.trace.s3.access_key: "<r2-access-key>"
+  tempo.tempo.storage.trace.s3.secret_key: "<r2-secret-key>"
+  loki.loki.storage.s3.accessKeyId: "<r2-access-key>"
+  loki.loki.storage.s3.secretAccessKey: "<r2-secret-key>"
+  grafanaPostgresDatasource.user: "<grafana-db-user>"
+  grafanaPostgresDatasource.password: "<grafana-db-password>"
+EOF
 ```
 
 ## 4. Configure Flux Manifests
@@ -175,7 +184,7 @@ Update `CHANGEME` values in the Flux YAML files before deploying:
 
 | File | Values to set |
 |------|--------------|
-| `clusters/production/infrastructure/cluster-issuer.yaml` | `email` (Let's Encrypt notification email) |
+| `clusters/production/infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt notification email) |
 | `clusters/production/infrastructure/external-dns.yaml` | `txtOwnerId`, `domainFilters` |
 | `clusters/production/monitoring/monitoring.yaml` | `grafanaIngress.host`, R2 endpoints, bucket names, DB host |
 | `clusters/production/apps/sub2api.yaml` | Image tags, ingress hosts, `gatewayUrl`, `grafanaUrl` |
