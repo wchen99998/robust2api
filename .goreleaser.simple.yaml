@@ -92,8 +92,6 @@ dockers:
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/gateway:{{ .Version }}"
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/gateway:latest"
     dockerfile: Dockerfile.goreleaser.gateway
-    extra_files:
-      - backend/resources
     build_flag_templates:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.revision={{ .Commit }}"
@@ -107,8 +105,6 @@ dockers:
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/control:{{ .Version }}"
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/control:latest"
     dockerfile: Dockerfile.goreleaser.control
-    extra_files:
-      - backend/resources
     build_flag_templates:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.revision={{ .Commit }}"

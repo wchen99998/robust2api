@@ -102,8 +102,6 @@ dockers:
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/gateway:{{ .Version }}-amd64"
     dockerfile: Dockerfile.goreleaser.gateway
-    extra_files:
-      - backend/resources
     build_flag_templates:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.revision={{ .Commit }}"
@@ -116,8 +114,6 @@ dockers:
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/gateway:{{ .Version }}-arm64"
     dockerfile: Dockerfile.goreleaser.gateway
-    extra_files:
-      - backend/resources
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.version={{ .Version }}"
@@ -131,8 +127,6 @@ dockers:
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/control:{{ .Version }}-amd64"
     dockerfile: Dockerfile.goreleaser.control
-    extra_files:
-      - backend/resources
     build_flag_templates:
       - "--label=org.opencontainers.image.version={{ .Version }}"
       - "--label=org.opencontainers.image.revision={{ .Commit }}"
@@ -145,8 +139,6 @@ dockers:
     image_templates:
       - "ghcr.io/{{ .Env.GITHUB_REPO_OWNER_LOWER }}/{{ .Env.GITHUB_REPO_NAME }}/control:{{ .Version }}-arm64"
     dockerfile: Dockerfile.goreleaser.control
-    extra_files:
-      - backend/resources
     build_flag_templates:
       - "--platform=linux/arm64"
       - "--label=org.opencontainers.image.version={{ .Version }}"

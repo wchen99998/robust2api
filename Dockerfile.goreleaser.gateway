@@ -23,7 +23,6 @@ RUN addgroup -g 1000 sub2api && \
 WORKDIR /app
 
 COPY sub2api-gateway /app/sub2api-gateway
-COPY resources /app/resources
 
 RUN chown -R sub2api:sub2api /app
 
