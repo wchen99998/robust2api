@@ -2,17 +2,48 @@ package main
 
 import (
 	"context"
+	_ "embed"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
 	"github.com/Wei-Shaw/sub2api/internal/bootstrap"
 )
 
+//go:embed VERSION
+var embeddedVersion string
+
+var (
+	Version   = ""
+	Commit    = "unknown"
+	Date      = "unknown"
+	BuildType = "source"
+)
+
+func init() {
+	if strings.TrimSpace(Version) != "" {
+		return
+	}
+	Version = strings.TrimSpace(embeddedVersion)
+	if Version == "" {
+		Version = "0.0.0-dev"
+	}
+}
+
 func main() {
 	log.Println("[bootstrap] starting sub2api-bootstrap")
+
+	showVersion := flag.Bool("version", false, "Show version information")
+	flag.Parse()
+
+	if *showVersion {
+		log.Printf("Sub2API Bootstrap %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		return
+	}
 
 	env := bootstrap.LoadBootstrapEnv()
 
