@@ -52,8 +52,11 @@ spec:
       valuesKey: grafanaPostgresDatasource.password
       targetPath: grafanaPostgresDatasource.password
   values:
+    public:
+      baseDomain: wuhao99.com
+
     grafanaIngress:
-      host: grafana.wuhao99.com
+      enabled: true
 
     tempo:
       tempo:

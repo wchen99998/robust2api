@@ -1,5 +1,6 @@
 {{- $ing := .Values.ingress -}}
 {{- if and $ing.enabled ($ing.control.enabled) }}
+{{- $controlHost := required "ingress.control.host or public.baseDomain must be set when ingress.enabled and ingress.control.enabled are true" (include "sub2api.controlHost" . | trim) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,7 +10,7 @@ metadata:
     app.kubernetes.io/component: control
   annotations:
     external-dns.alpha.kubernetes.io/hostname: >-
-      {{ $ing.control.host }}{{ range $ing.control.extraHosts }},{{ .host }}{{ end }}
+      {{ $controlHost }}{{ range $ing.control.extraHosts }},{{ .host }}{{ end }}
     external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ $ing.cloudflareProxied | quote }}
     nginx.ingress.kubernetes.io/proxy-body-size: {{ $ing.maxBodySize | quote }}
     {{- with $ing.annotations }}
@@ -22,14 +23,14 @@ spec:
   {{- if $ing.control.tls.enabled }}
   tls:
     - hosts:
-        - {{ $ing.control.host | quote }}
+        - {{ $controlHost | quote }}
         {{- range $ing.control.extraHosts }}
         - {{ .host | quote }}
         {{- end }}
       secretName: {{ default (printf "%s-control-tls" (include "sub2api.fullname" .)) $ing.control.tls.secretName }}
   {{- end }}
   rules:
-    - host: {{ $ing.control.host | quote }}
+    - host: {{ $controlHost | quote }}
       http:
         paths:
           - path: /

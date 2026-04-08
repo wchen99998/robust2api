@@ -1,6 +1,11 @@
 ## Namespace for monitoring stack
 namespace: monitoring
 
+## Shared public endpoint convention
+public:
+  ## Base domain used to derive public service hosts as <service>-<namespace>.<baseDomain>
+  baseDomain: "sub2api.local"
+
 ## kube-prometheus-stack (Prometheus + Grafana + Alertmanager)
 kube-prometheus-stack:
   enabled: true
@@ -36,12 +41,15 @@ kube-prometheus-stack:
     enabled: true
 
 ## Grafana Ingress (external access)
-## Set host to enable: --set grafanaIngress.host=grafana.<domain_suffix>
 grafanaIngress:
-  host: ""                    # Empty = ingress disabled
+  enabled: false              # When true, expose Grafana via ingress; explicit host overrides remain backward-compatible
+  host: ""                    # Optional override; empty = derive grafana-<namespace>.<public.baseDomain>
   className: nginx
   clusterIssuer: letsencrypt-prod
   cloudflareProxied: "true"
+  tls:
+    enabled: true
+    secretName: ""
 
 ## Grafana PostgreSQL datasource for business analytics dashboards
 grafanaPostgresDatasource:

@@ -1,5 +1,6 @@
 {{- $ing := .Values.ingress -}}
 {{- if and $ing.enabled ($ing.gateway.enabled) }}
+{{- $gatewayHost := required "ingress.gateway.host or public.baseDomain must be set when ingress.enabled and ingress.gateway.enabled are true" (include "sub2api.gatewayHost" . | trim) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -9,7 +10,7 @@ metadata:
     app.kubernetes.io/component: gateway
   annotations:
     external-dns.alpha.kubernetes.io/hostname: >-
-      {{ $ing.gateway.host }}{{ range $ing.gateway.extraHosts }},{{ .host }}{{ end }}
+      {{ $gatewayHost }}{{ range $ing.gateway.extraHosts }},{{ .host }}{{ end }}
     external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ $ing.cloudflareProxied | quote }}
     nginx.ingress.kubernetes.io/proxy-body-size: {{ $ing.maxBodySize | quote }}
     {{- with $ing.annotations }}
@@ -22,14 +23,14 @@ spec:
   {{- if $ing.gateway.tls.enabled }}
   tls:
     - hosts:
-        - {{ $ing.gateway.host | quote }}
+        - {{ $gatewayHost | quote }}
         {{- range $ing.gateway.extraHosts }}
         - {{ .host | quote }}
         {{- end }}
       secretName: {{ default (printf "%s-gateway-tls" (include "sub2api.fullname" .)) $ing.gateway.tls.secretName }}
   {{- end }}
   rules:
-    - host: {{ $ing.gateway.host | quote }}
+    - host: {{ $gatewayHost | quote }}
       http:
         paths:
           - path: /

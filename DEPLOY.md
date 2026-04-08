@@ -167,9 +167,26 @@ Edit `clusters/production/` files with your production values before bootstrappi
 |------|-------------|
 | `infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt) |
 | `infrastructure/external-dns.yaml` | `domainFilters`, `txtOwnerId`; uncomment `extraArgs: [--cloudflare-proxied]` if using CF proxy |
-| `monitoring/monitoring.yaml` | `grafanaIngress.host`, R2 endpoints/buckets, `grafanaPostgresDatasource` host/port/database |
+| `monitoring/monitoring.yaml` | `public.baseDomain`, `grafanaIngress.enabled`, R2 endpoints/buckets, `grafanaPostgresDatasource` host/port/database |
 | `monitoring.yaml` | Set `spec.suspend: false` to enable monitoring |
-| `apps/sub2api.yaml` | Image tags, ingress hosts, `gatewayUrl`, `grafanaUrl`, resource limits, `observability` settings |
+| `apps/sub2api.yaml` | Image tags, `public.baseDomain`, public URL scheme/host overrides, ingress TLS/override settings, resource limits, `observability` settings |
+
+By default, public ingress hosts follow the shared `service-namespace.domain`
+convention. For example:
+
+- `gateway-sub2api.<baseDomain>` for the API gateway
+- `app-sub2api.<baseDomain>` for the control/frontend app
+- `grafana-monitoring.<baseDomain>` for Grafana
+
+Set explicit `host` or URL override fields only when you intentionally want a
+shared or vanity endpoint instead of the convention-derived default.
+
+Public URL schemes are configured separately from ingress TLS so deployments
+that terminate HTTPS at Cloudflare, a load balancer, or another proxy can still
+publish `https://` URLs correctly. If Grafana uses an explicit
+`monitoring.grafanaIngress.host`, mirror that hostname in
+`apps/sub2api.yaml` under `public.grafana.host` unless you set a full
+`config.grafanaUrl` override there instead.
 
 ## 4. Bootstrap Flux
 
