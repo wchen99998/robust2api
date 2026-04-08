@@ -100,6 +100,7 @@ export interface PublicSettings {
   site_logo: string
   site_subtitle: string
   api_base_url: string
+  grafana_url: string
   contact_info: string
   doc_url: string
   home_content: string

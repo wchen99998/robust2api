@@ -19,6 +19,17 @@ output "password" {
   sensitive   = true
 }
 
+output "grafana_reader_user" {
+  description = "Read-only Grafana database user"
+  value       = digitalocean_database_user.grafana_reader.name
+}
+
+output "grafana_reader_password" {
+  description = "Read-only Grafana database password"
+  value       = digitalocean_database_user.grafana_reader.password
+  sensitive   = true
+}
+
 output "database" {
   description = "Database name"
   value       = digitalocean_database_db.app.name

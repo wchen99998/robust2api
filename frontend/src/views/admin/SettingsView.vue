@@ -1353,6 +1353,22 @@
               </p>
             </div>
 
+            <!-- Grafana URL -->
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                {{ t('admin.settings.site.grafanaUrl') }}
+              </label>
+              <input
+                v-model="form.grafana_url"
+                type="url"
+                class="input font-mono text-sm"
+                :placeholder="t('admin.settings.site.grafanaUrlPlaceholder')"
+              />
+              <p class="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                {{ t('admin.settings.site.grafanaUrlHint') }}
+              </p>
+            </div>
+
             <!-- Custom Endpoints -->
             <div>
               <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -2086,6 +2102,7 @@ const form = reactive<SettingsForm>({
   site_logo: '',
   site_subtitle: 'Subscription to API Conversion Platform',
   api_base_url: '',
+  grafana_url: '',
   contact_info: '',
   doc_url: '',
   home_content: '',
@@ -2371,6 +2388,7 @@ async function saveSettings() {
     // Optional URL fields: auto-clear invalid values so they don't cause backend 400 errors
     if (!isValidHttpUrl(form.frontend_url)) form.frontend_url = ''
     if (!isValidHttpUrl(form.doc_url)) form.doc_url = ''
+    if (!isValidHttpUrl(form.grafana_url)) form.grafana_url = ''
     // Purchase URL: required when enabled; auto-clear when disabled to avoid backend rejection
     if (form.purchase_subscription_enabled) {
       if (!form.purchase_subscription_url) {
@@ -2404,6 +2422,7 @@ async function saveSettings() {
       site_logo: form.site_logo,
       site_subtitle: form.site_subtitle,
       api_base_url: form.api_base_url,
+      grafana_url: form.grafana_url,
       contact_info: form.contact_info,
       doc_url: form.doc_url,
       home_content: form.home_content,

@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -90,6 +89,47 @@ var gatewayForwardingSF singleflight.Group
 const gatewayForwardingCacheTTL = 60 * time.Second
 const gatewayForwardingErrorTTL = 5 * time.Second
 const gatewayForwardingDBTimeout = 5 * time.Second
+const gatewayHotPathSettingsDBTimeout = 5 * time.Second
+
+var gatewayHotPathSettingKeys = []string{
+	SettingKeyBackendModeEnabled,
+	SettingKeyEnableFingerprintUnification,
+	SettingKeyEnableMetadataPassthrough,
+	SettingKeyMinClaudeCodeVersion,
+	SettingKeyMaxClaudeCodeVersion,
+	SettingKeyEnableIdentityPatch,
+	SettingKeyIdentityPatchPrompt,
+	SettingKeyEnableModelFallback,
+	SettingKeyFallbackModelAnthropic,
+	SettingKeyFallbackModelOpenAI,
+	SettingKeyFallbackModelGemini,
+	SettingKeyFallbackModelAntigravity,
+	SettingKeyOverloadCooldownSettings,
+	SettingKeyStreamTimeoutSettings,
+	SettingKeyAllowUngroupedKeyScheduling,
+	SettingKeyRectifierSettings,
+	SettingKeyBetaPolicySettings,
+}
+
+type gatewayHotPathSettingsSnapshot struct {
+	backendModeEnabled       bool
+	fingerprintUnification   bool
+	metadataPassthrough      bool
+	minClaudeCodeVersion     string
+	maxClaudeCodeVersion     string
+	identityPatchEnabled     bool
+	identityPatchPrompt      string
+	modelFallbackEnabled     bool
+	fallbackModelAnthropic   string
+	fallbackModelOpenAI      string
+	fallbackModelGemini      string
+	fallbackModelAntigravity string
+	overloadCooldownSettings OverloadCooldownSettings
+	streamTimeoutSettings    StreamTimeoutSettings
+	allowUngroupedScheduling bool
+	rectifierSettings        RectifierSettings
+	betaPolicySettings       BetaPolicySettings
+}
 
 // DefaultSubscriptionGroupReader validates group references used by default subscriptions.
 type DefaultSubscriptionGroupReader interface {
@@ -101,6 +141,9 @@ type SettingService struct {
 	settingRepo           SettingRepository
 	defaultSubGroupReader DefaultSubscriptionGroupReader
 	cfg                   *config.Config
+	invalidationBus       RuntimeCacheInvalidationBus
+	hotPathCache          atomic.Value // *gatewayHotPathSettingsSnapshot
+	hotPathSF             singleflight.Group
 	onUpdate              func() // Callback when settings are updated (for cache invalidation)
 	version               string // Application version
 }
@@ -116,6 +159,10 @@ func NewSettingService(settingRepo SettingRepository, cfg *config.Config) *Setti
 // SetDefaultSubscriptionGroupReader injects an optional group reader for default subscription validation.
 func (s *SettingService) SetDefaultSubscriptionGroupReader(reader DefaultSubscriptionGroupReader) {
 	s.defaultSubGroupReader = reader
+}
+
+func (s *SettingService) SetInvalidationBus(bus RuntimeCacheInvalidationBus) {
+	s.invalidationBus = bus
 }
 
 // GetAllSettings 获取所有系统设置
@@ -159,6 +206,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		SettingKeyHideCcsImportButton,
 		SettingKeyPurchaseSubscriptionEnabled,
 		SettingKeyPurchaseSubscriptionURL,
+		SettingKeyGrafanaURL,
 		SettingKeyCustomMenuItems,
 		SettingKeyCustomEndpoints,
 		SettingKeyLinuxDoConnectEnabled,
@@ -168,6 +216,10 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	settings, err := s.settingRepo.GetMultiple(ctx, keys)
 	if err != nil {
 		return nil, fmt.Errorf("get public settings: %w", err)
+	}
+	grafanaURL := strings.TrimSpace(s.cfg.GrafanaURL)
+	if raw, ok := settings[SettingKeyGrafanaURL]; ok && strings.TrimSpace(raw) != "" {
+		grafanaURL = strings.TrimSpace(raw)
 	}
 
 	linuxDoEnabled := false
@@ -204,6 +256,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		HideCcsImportButton:              settings[SettingKeyHideCcsImportButton] == "true",
 		PurchaseSubscriptionEnabled:      settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:          strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
+		GrafanaURL:                       grafanaURL,
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                  settings[SettingKeyCustomEndpoints],
 		LinuxDoOAuthEnabled:              linuxDoEnabled,
@@ -211,196 +264,245 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	}, nil
 }
 
-// SetOnUpdateCallback sets a callback function to be called when settings are updated
-// This is used for cache invalidation (e.g., HTML cache in frontend server)
+// SetOnUpdateCallback sets a callback function to be called when settings are updated.
 func (s *SettingService) SetOnUpdateCallback(callback func()) {
 	s.onUpdate = callback
 }
 
-// SetVersion sets the application version for injection into public settings
+// SetVersion sets the application version exposed in public settings.
 func (s *SettingService) SetVersion(version string) {
 	s.version = version
 }
 
-// GetPublicSettingsForInjection returns public settings in a format suitable for HTML injection
-// This implements the web.PublicSettingsProvider interface
-func (s *SettingService) GetPublicSettingsForInjection(ctx context.Context) (any, error) {
-	settings, err := s.GetPublicSettings(ctx)
-	if err != nil {
-		return nil, err
-	}
-
-	// Return a struct that matches the frontend's expected format
-	return &struct {
-		RegistrationEnabled              bool            `json:"registration_enabled"`
-		EmailVerifyEnabled               bool            `json:"email_verify_enabled"`
-		RegistrationEmailSuffixWhitelist []string        `json:"registration_email_suffix_whitelist"`
-		PromoCodeEnabled                 bool            `json:"promo_code_enabled"`
-		PasswordResetEnabled             bool            `json:"password_reset_enabled"`
-		InvitationCodeEnabled            bool            `json:"invitation_code_enabled"`
-		TotpEnabled                      bool            `json:"totp_enabled"`
-		TurnstileEnabled                 bool            `json:"turnstile_enabled"`
-		TurnstileSiteKey                 string          `json:"turnstile_site_key,omitempty"`
-		SiteName                         string          `json:"site_name"`
-		SiteLogo                         string          `json:"site_logo,omitempty"`
-		SiteSubtitle                     string          `json:"site_subtitle,omitempty"`
-		APIBaseURL                       string          `json:"api_base_url,omitempty"`
-		ContactInfo                      string          `json:"contact_info,omitempty"`
-		DocURL                           string          `json:"doc_url,omitempty"`
-		HomeContent                      string          `json:"home_content,omitempty"`
-		HideCcsImportButton              bool            `json:"hide_ccs_import_button"`
-		PurchaseSubscriptionEnabled      bool            `json:"purchase_subscription_enabled"`
-		PurchaseSubscriptionURL          string          `json:"purchase_subscription_url,omitempty"`
-		CustomMenuItems                  json.RawMessage `json:"custom_menu_items"`
-		CustomEndpoints                  json.RawMessage `json:"custom_endpoints"`
-		LinuxDoOAuthEnabled              bool            `json:"linuxdo_oauth_enabled"`
-		BackendModeEnabled               bool            `json:"backend_mode_enabled"`
-		Version                          string          `json:"version,omitempty"`
-	}{
-		RegistrationEnabled:              settings.RegistrationEnabled,
-		EmailVerifyEnabled:               settings.EmailVerifyEnabled,
-		RegistrationEmailSuffixWhitelist: settings.RegistrationEmailSuffixWhitelist,
-		PromoCodeEnabled:                 settings.PromoCodeEnabled,
-		PasswordResetEnabled:             settings.PasswordResetEnabled,
-		InvitationCodeEnabled:            settings.InvitationCodeEnabled,
-		TotpEnabled:                      settings.TotpEnabled,
-		TurnstileEnabled:                 settings.TurnstileEnabled,
-		TurnstileSiteKey:                 settings.TurnstileSiteKey,
-		SiteName:                         settings.SiteName,
-		SiteLogo:                         settings.SiteLogo,
-		SiteSubtitle:                     settings.SiteSubtitle,
-		APIBaseURL:                       settings.APIBaseURL,
-		ContactInfo:                      settings.ContactInfo,
-		DocURL:                           settings.DocURL,
-		HomeContent:                      settings.HomeContent,
-		HideCcsImportButton:              settings.HideCcsImportButton,
-		PurchaseSubscriptionEnabled:      settings.PurchaseSubscriptionEnabled,
-		PurchaseSubscriptionURL:          settings.PurchaseSubscriptionURL,
-		CustomMenuItems:                  filterUserVisibleMenuItems(settings.CustomMenuItems),
-		CustomEndpoints:                  safeRawJSONArray(settings.CustomEndpoints),
-		LinuxDoOAuthEnabled:              settings.LinuxDoOAuthEnabled,
-		BackendModeEnabled:               settings.BackendModeEnabled,
-		Version:                          s.version,
-	}, nil
+func (s *SettingService) currentGatewayHotPathSnapshot() (*gatewayHotPathSettingsSnapshot, bool) {
+	cached, ok := s.hotPathCache.Load().(*gatewayHotPathSettingsSnapshot)
+	return cached, ok && cached != nil
 }
 
-// filterUserVisibleMenuItems filters out admin-only menu items from a raw JSON
-// array string, returning only items with visibility != "admin".
-func filterUserVisibleMenuItems(raw string) json.RawMessage {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "[]" {
-		return json.RawMessage("[]")
+func cloneRectifierSettings(settings RectifierSettings) RectifierSettings {
+	cloned := settings
+	if settings.APIKeySignaturePatterns != nil {
+		cloned.APIKeySignaturePatterns = append([]string(nil), settings.APIKeySignaturePatterns...)
 	}
-	var items []struct {
-		Visibility string `json:"visibility"`
-	}
-	if err := json.Unmarshal([]byte(raw), &items); err != nil {
-		return json.RawMessage("[]")
-	}
-
-	// Parse full items to preserve all fields
-	var fullItems []json.RawMessage
-	if err := json.Unmarshal([]byte(raw), &fullItems); err != nil {
-		return json.RawMessage("[]")
-	}
-
-	var filtered []json.RawMessage
-	for i, item := range items {
-		if item.Visibility != "admin" {
-			filtered = append(filtered, fullItems[i])
-		}
-	}
-	if len(filtered) == 0 {
-		return json.RawMessage("[]")
-	}
-	result, err := json.Marshal(filtered)
-	if err != nil {
-		return json.RawMessage("[]")
-	}
-	return result
+	return cloned
 }
 
-// safeRawJSONArray returns raw as json.RawMessage if it's valid JSON, otherwise "[]".
-func safeRawJSONArray(raw string) json.RawMessage {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return json.RawMessage("[]")
+func cloneBetaPolicySettings(settings BetaPolicySettings) BetaPolicySettings {
+	cloned := BetaPolicySettings{}
+	if settings.Rules != nil {
+		cloned.Rules = append([]BetaPolicyRule(nil), settings.Rules...)
 	}
-	if json.Valid([]byte(raw)) {
-		return json.RawMessage(raw)
-	}
-	return json.RawMessage("[]")
+	return cloned
 }
 
-// GetFrameSrcOrigins returns deduplicated http(s) origins from purchase_subscription_url
-// and all custom_menu_items URLs. Used by the router layer for CSP frame-src injection.
-func (s *SettingService) GetFrameSrcOrigins(ctx context.Context) ([]string, error) {
-	settings, err := s.GetPublicSettings(ctx)
-	if err != nil {
-		return nil, err
+func newDefaultGatewayHotPathSnapshot() *gatewayHotPathSettingsSnapshot {
+	return &gatewayHotPathSettingsSnapshot{
+		identityPatchEnabled:     true,
+		fingerprintUnification:   true,
+		fallbackModelAnthropic:   "claude-3-5-sonnet-20241022",
+		fallbackModelOpenAI:      "gpt-4o",
+		fallbackModelGemini:      "gemini-2.5-pro",
+		fallbackModelAntigravity: "gemini-2.5-pro",
+		overloadCooldownSettings: *DefaultOverloadCooldownSettings(),
+		streamTimeoutSettings:    *DefaultStreamTimeoutSettings(),
+		rectifierSettings:        *DefaultRectifierSettings(),
+		betaPolicySettings:       *DefaultBetaPolicySettings(),
+	}
+}
+
+func (s *SettingService) storeGatewayHotPathSnapshot(snapshot *gatewayHotPathSettingsSnapshot) {
+	if snapshot == nil {
+		s.hotPathCache.Store((*gatewayHotPathSettingsSnapshot)(nil))
+		return
 	}
 
-	seen := make(map[string]struct{})
-	var origins []string
+	copied := *snapshot
+	copied.rectifierSettings = cloneRectifierSettings(snapshot.rectifierSettings)
+	copied.betaPolicySettings = cloneBetaPolicySettings(snapshot.betaPolicySettings)
+	s.hotPathCache.Store(&copied)
 
-	addOrigin := func(rawURL string) {
-		if origin := extractOriginFromURL(rawURL); origin != "" {
-			if _, ok := seen[origin]; !ok {
-				seen[origin] = struct{}{}
-				origins = append(origins, origin)
+	versionBoundsSF.Forget("version_bounds")
+	versionBoundsCache.Store(&cachedVersionBounds{
+		min:       copied.minClaudeCodeVersion,
+		max:       copied.maxClaudeCodeVersion,
+		expiresAt: time.Now().Add(versionBoundsCacheTTL).UnixNano(),
+	})
+	backendModeSF.Forget("backend_mode")
+	backendModeCache.Store(&cachedBackendMode{
+		value:     copied.backendModeEnabled,
+		expiresAt: time.Now().Add(backendModeCacheTTL).UnixNano(),
+	})
+	gatewayForwardingSF.Forget("gateway_forwarding")
+	gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
+		fingerprintUnification: copied.fingerprintUnification,
+		metadataPassthrough:    copied.metadataPassthrough,
+		expiresAt:              time.Now().Add(gatewayForwardingCacheTTL).UnixNano(),
+	})
+}
+
+func (s *SettingService) buildGatewayHotPathSnapshot(values map[string]string) *gatewayHotPathSettingsSnapshot {
+	snapshot := newDefaultGatewayHotPathSnapshot()
+
+	if raw, ok := values[SettingKeyBackendModeEnabled]; ok {
+		snapshot.backendModeEnabled = raw == "true"
+	}
+	if raw, ok := values[SettingKeyEnableFingerprintUnification]; ok && raw != "" {
+		snapshot.fingerprintUnification = raw == "true"
+	}
+	snapshot.metadataPassthrough = values[SettingKeyEnableMetadataPassthrough] == "true"
+	snapshot.minClaudeCodeVersion = values[SettingKeyMinClaudeCodeVersion]
+	snapshot.maxClaudeCodeVersion = values[SettingKeyMaxClaudeCodeVersion]
+	if raw, ok := values[SettingKeyEnableIdentityPatch]; ok && raw != "" {
+		snapshot.identityPatchEnabled = raw == "true"
+	}
+	snapshot.identityPatchPrompt = values[SettingKeyIdentityPatchPrompt]
+	snapshot.modelFallbackEnabled = values[SettingKeyEnableModelFallback] == "true"
+	if raw := values[SettingKeyFallbackModelAnthropic]; raw != "" {
+		snapshot.fallbackModelAnthropic = raw
+	}
+	if raw := values[SettingKeyFallbackModelOpenAI]; raw != "" {
+		snapshot.fallbackModelOpenAI = raw
+	}
+	if raw := values[SettingKeyFallbackModelGemini]; raw != "" {
+		snapshot.fallbackModelGemini = raw
+	}
+	if raw := values[SettingKeyFallbackModelAntigravity]; raw != "" {
+		snapshot.fallbackModelAntigravity = raw
+	}
+	snapshot.allowUngroupedScheduling = values[SettingKeyAllowUngroupedKeyScheduling] == "true"
+
+	if raw := values[SettingKeyOverloadCooldownSettings]; raw != "" {
+		var settings OverloadCooldownSettings
+		if err := json.Unmarshal([]byte(raw), &settings); err == nil {
+			if settings.CooldownMinutes < 1 {
+				settings.CooldownMinutes = 1
 			}
+			if settings.CooldownMinutes > 120 {
+				settings.CooldownMinutes = 120
+			}
+			snapshot.overloadCooldownSettings = settings
+		}
+	}
+	if raw := values[SettingKeyStreamTimeoutSettings]; raw != "" {
+		var settings StreamTimeoutSettings
+		if err := json.Unmarshal([]byte(raw), &settings); err == nil {
+			if settings.TempUnschedMinutes < 1 {
+				settings.TempUnschedMinutes = 1
+			}
+			if settings.TempUnschedMinutes > 60 {
+				settings.TempUnschedMinutes = 60
+			}
+			if settings.ThresholdCount < 1 {
+				settings.ThresholdCount = 1
+			}
+			if settings.ThresholdCount > 10 {
+				settings.ThresholdCount = 10
+			}
+			if settings.ThresholdWindowMinutes < 1 {
+				settings.ThresholdWindowMinutes = 1
+			}
+			if settings.ThresholdWindowMinutes > 60 {
+				settings.ThresholdWindowMinutes = 60
+			}
+			switch settings.Action {
+			case StreamTimeoutActionTempUnsched, StreamTimeoutActionError, StreamTimeoutActionNone:
+			default:
+				settings.Action = StreamTimeoutActionTempUnsched
+			}
+			snapshot.streamTimeoutSettings = settings
+		}
+	}
+	if raw := values[SettingKeyRectifierSettings]; raw != "" {
+		var settings RectifierSettings
+		if err := json.Unmarshal([]byte(raw), &settings); err == nil {
+			snapshot.rectifierSettings = cloneRectifierSettings(settings)
+		}
+	}
+	if raw := values[SettingKeyBetaPolicySettings]; raw != "" {
+		var settings BetaPolicySettings
+		if err := json.Unmarshal([]byte(raw), &settings); err == nil {
+			snapshot.betaPolicySettings = cloneBetaPolicySettings(settings)
 		}
 	}
 
-	// purchase subscription URL
-	if settings.PurchaseSubscriptionEnabled {
-		addOrigin(settings.PurchaseSubscriptionURL)
-	}
-
-	// all custom menu items (including admin-only, since CSP must allow all iframes)
-	for _, item := range parseCustomMenuItemURLs(settings.CustomMenuItems) {
-		addOrigin(item)
-	}
-
-	return origins, nil
+	return snapshot
 }
 
-// extractOriginFromURL returns the scheme+host origin from rawURL.
-// Only http and https schemes are accepted.
-func extractOriginFromURL(rawURL string) string {
-	rawURL = strings.TrimSpace(rawURL)
-	if rawURL == "" {
-		return ""
+func (s *SettingService) storeGatewayHotPathSnapshotFromSystemSettings(settings *SystemSettings) {
+	if settings == nil {
+		return
 	}
-	u, err := url.Parse(rawURL)
-	if err != nil || u.Host == "" {
-		return ""
+	snapshot := newDefaultGatewayHotPathSnapshot()
+	if current, ok := s.currentGatewayHotPathSnapshot(); ok {
+		*snapshot = *current
+		snapshot.rectifierSettings = cloneRectifierSettings(current.rectifierSettings)
+		snapshot.betaPolicySettings = cloneBetaPolicySettings(current.betaPolicySettings)
 	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return ""
+	snapshot.backendModeEnabled = settings.BackendModeEnabled
+	snapshot.fingerprintUnification = settings.EnableFingerprintUnification
+	snapshot.metadataPassthrough = settings.EnableMetadataPassthrough
+	snapshot.minClaudeCodeVersion = settings.MinClaudeCodeVersion
+	snapshot.maxClaudeCodeVersion = settings.MaxClaudeCodeVersion
+	snapshot.identityPatchEnabled = settings.EnableIdentityPatch
+	snapshot.identityPatchPrompt = settings.IdentityPatchPrompt
+	snapshot.modelFallbackEnabled = settings.EnableModelFallback
+	if settings.FallbackModelAnthropic != "" {
+		snapshot.fallbackModelAnthropic = settings.FallbackModelAnthropic
 	}
-	return u.Scheme + "://" + u.Host
+	if settings.FallbackModelOpenAI != "" {
+		snapshot.fallbackModelOpenAI = settings.FallbackModelOpenAI
+	}
+	if settings.FallbackModelGemini != "" {
+		snapshot.fallbackModelGemini = settings.FallbackModelGemini
+	}
+	if settings.FallbackModelAntigravity != "" {
+		snapshot.fallbackModelAntigravity = settings.FallbackModelAntigravity
+	}
+	snapshot.allowUngroupedScheduling = settings.AllowUngroupedKeyScheduling
+	s.storeGatewayHotPathSnapshot(snapshot)
 }
 
-// parseCustomMenuItemURLs extracts URLs from a raw JSON array of custom menu items.
-func parseCustomMenuItemURLs(raw string) []string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" || raw == "[]" {
+func (s *SettingService) updateGatewayHotPathSnapshot(apply func(snapshot *gatewayHotPathSettingsSnapshot)) {
+	if apply == nil {
+		return
+	}
+	current, ok := s.currentGatewayHotPathSnapshot()
+	if !ok {
+		return
+	}
+	next := *current
+	next.rectifierSettings = cloneRectifierSettings(current.rectifierSettings)
+	next.betaPolicySettings = cloneBetaPolicySettings(current.betaPolicySettings)
+	apply(&next)
+	s.storeGatewayHotPathSnapshot(&next)
+}
+
+func (s *SettingService) RefreshGatewayHotPathCache(ctx context.Context) error {
+	if s == nil || s.settingRepo == nil {
 		return nil
 	}
-	var items []struct {
-		URL string `json:"url"`
+
+	s.hotPathSF.Forget("gateway_hot_path_settings")
+
+	dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), gatewayHotPathSettingsDBTimeout)
+	defer cancel()
+
+	values, err := s.settingRepo.GetMultiple(dbCtx, gatewayHotPathSettingKeys)
+	if err != nil {
+		return err
 	}
-	if err := json.Unmarshal([]byte(raw), &items); err != nil {
-		return nil
+
+	s.storeGatewayHotPathSnapshot(s.buildGatewayHotPathSnapshot(values))
+	return nil
+}
+
+func (s *SettingService) notifySettingsChanged() {
+	if s.onUpdate != nil {
+		s.onUpdate()
 	}
-	urls := make([]string, 0, len(items))
-	for _, item := range items {
-		if item.URL != "" {
-			urls = append(urls, item.URL)
-		}
+	if s.invalidationBus != nil {
+		publishInvalidation("settings", s.invalidationBus.PublishSettings)
 	}
-	return urls
 }
 
 // UpdateSettings 更新系统设置
@@ -470,6 +572,7 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	updates[SettingKeyHideCcsImportButton] = strconv.FormatBool(settings.HideCcsImportButton)
 	updates[SettingKeyPurchaseSubscriptionEnabled] = strconv.FormatBool(settings.PurchaseSubscriptionEnabled)
 	updates[SettingKeyPurchaseSubscriptionURL] = strings.TrimSpace(settings.PurchaseSubscriptionURL)
+	updates[SettingKeyGrafanaURL] = strings.TrimSpace(settings.GrafanaURL)
 	updates[SettingKeyCustomMenuItems] = settings.CustomMenuItems
 	updates[SettingKeyCustomEndpoints] = settings.CustomEndpoints
 
@@ -509,27 +612,8 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 
 	err = s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil {
-		// 先使 inflight singleflight 失效，再刷新缓存，缩小旧值覆盖新值的竞态窗口
-		versionBoundsSF.Forget("version_bounds")
-		versionBoundsCache.Store(&cachedVersionBounds{
-			min:       settings.MinClaudeCodeVersion,
-			max:       settings.MaxClaudeCodeVersion,
-			expiresAt: time.Now().Add(versionBoundsCacheTTL).UnixNano(),
-		})
-		backendModeSF.Forget("backend_mode")
-		backendModeCache.Store(&cachedBackendMode{
-			value:     settings.BackendModeEnabled,
-			expiresAt: time.Now().Add(backendModeCacheTTL).UnixNano(),
-		})
-		gatewayForwardingSF.Forget("gateway_forwarding")
-		gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
-			fingerprintUnification: settings.EnableFingerprintUnification,
-			metadataPassthrough:    settings.EnableMetadataPassthrough,
-			expiresAt:              time.Now().Add(gatewayForwardingCacheTTL).UnixNano(),
-		})
-		if s.onUpdate != nil {
-			s.onUpdate() // Invalidate cache after settings update
-		}
+		s.storeGatewayHotPathSnapshotFromSystemSettings(settings)
+		s.notifySettingsChanged()
 	}
 	return err
 }
@@ -586,6 +670,9 @@ func (s *SettingService) IsRegistrationEnabled(ctx context.Context) bool {
 // IsBackendModeEnabled checks if backend mode is enabled
 // Uses in-process atomic.Value cache with 60s TTL, zero-lock hot path
 func (s *SettingService) IsBackendModeEnabled(ctx context.Context) bool {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		return snapshot.backendModeEnabled
+	}
 	if cached, ok := backendModeCache.Load().(*cachedBackendMode); ok && cached != nil {
 		if time.Now().UnixNano() < cached.expiresAt {
 			return cached.value
@@ -633,6 +720,9 @@ func (s *SettingService) IsBackendModeEnabled(ctx context.Context) bool {
 // Uses in-process atomic.Value cache with 60s TTL, zero-lock hot path.
 // Returns (fingerprintUnification, metadataPassthrough).
 func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fingerprintUnification, metadataPassthrough bool) {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		return snapshot.fingerprintUnification, snapshot.metadataPassthrough
+	}
 	if cached, ok := gatewayForwardingCache.Load().(*cachedGatewayForwardingSettings); ok && cached != nil {
 		if time.Now().UnixNano() < cached.expiresAt {
 			return cached.fingerprintUnification, cached.metadataPassthrough
@@ -809,6 +899,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeySiteLogo:                         "",
 		SettingKeyPurchaseSubscriptionEnabled:      "false",
 		SettingKeyPurchaseSubscriptionURL:          "",
+		SettingKeyGrafanaURL:                       "",
 		SettingKeyCustomMenuItems:                  "[]",
 		SettingKeyCustomEndpoints:                  "[]",
 		SettingKeyDefaultConcurrency:               strconv.Itoa(s.cfg.Default.UserConcurrency),
@@ -841,6 +932,10 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 // parseSettings 解析设置到结构体
 func (s *SettingService) parseSettings(settings map[string]string) *SystemSettings {
 	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
+	grafanaURL := strings.TrimSpace(s.cfg.GrafanaURL)
+	if raw, ok := settings[SettingKeyGrafanaURL]; ok && strings.TrimSpace(raw) != "" {
+		grafanaURL = strings.TrimSpace(raw)
+	}
 	result := &SystemSettings{
 		RegistrationEnabled:              settings[SettingKeyRegistrationEnabled] == "true",
 		EmailVerifyEnabled:               emailVerifyEnabled,
@@ -869,6 +964,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		HideCcsImportButton:              settings[SettingKeyHideCcsImportButton] == "true",
 		PurchaseSubscriptionEnabled:      settings[SettingKeyPurchaseSubscriptionEnabled] == "true",
 		PurchaseSubscriptionURL:          strings.TrimSpace(settings[SettingKeyPurchaseSubscriptionURL]),
+		GrafanaURL:                       grafanaURL,
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                  settings[SettingKeyCustomEndpoints],
 		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
@@ -1017,6 +1113,9 @@ func (s *SettingService) GetTurnstileSecretKey(ctx context.Context) string {
 
 // IsIdentityPatchEnabled 检查是否启用身份补丁（Claude -> Gemini systemInstruction 注入）
 func (s *SettingService) IsIdentityPatchEnabled(ctx context.Context) bool {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		return snapshot.identityPatchEnabled
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyEnableIdentityPatch)
 	if err != nil {
 		// 默认开启，保持兼容
@@ -1027,6 +1126,9 @@ func (s *SettingService) IsIdentityPatchEnabled(ctx context.Context) bool {
 
 // GetIdentityPatchPrompt 获取自定义身份补丁提示词（为空表示使用内置默认模板）
 func (s *SettingService) GetIdentityPatchPrompt(ctx context.Context) string {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		return snapshot.identityPatchPrompt
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyIdentityPatchPrompt)
 	if err != nil {
 		return ""
@@ -1096,6 +1198,9 @@ func (s *SettingService) DeleteAdminAPIKey(ctx context.Context) error {
 
 // IsModelFallbackEnabled 检查是否启用模型兜底机制
 func (s *SettingService) IsModelFallbackEnabled(ctx context.Context) bool {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		return snapshot.modelFallbackEnabled
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyEnableModelFallback)
 	if err != nil {
 		return false // Default: disabled
@@ -1105,6 +1210,20 @@ func (s *SettingService) IsModelFallbackEnabled(ctx context.Context) bool {
 
 // GetFallbackModel 获取指定平台的兜底模型
 func (s *SettingService) GetFallbackModel(ctx context.Context, platform string) string {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		switch platform {
+		case PlatformAnthropic:
+			return snapshot.fallbackModelAnthropic
+		case PlatformOpenAI:
+			return snapshot.fallbackModelOpenAI
+		case PlatformGemini:
+			return snapshot.fallbackModelGemini
+		case PlatformAntigravity:
+			return snapshot.fallbackModelAntigravity
+		default:
+			return ""
+		}
+	}
 	var key string
 	var defaultModel string
 
@@ -1227,6 +1346,10 @@ func (s *SettingService) GetLinuxDoConnectOAuthConfig(ctx context.Context) (conf
 
 // GetOverloadCooldownSettings 获取529过载冷却配置
 func (s *SettingService) GetOverloadCooldownSettings(ctx context.Context) (*OverloadCooldownSettings, error) {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		settings := snapshot.overloadCooldownSettings
+		return &settings, nil
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyOverloadCooldownSettings)
 	if err != nil {
 		if errors.Is(err, ErrSettingNotFound) {
@@ -1273,11 +1396,22 @@ func (s *SettingService) SetOverloadCooldownSettings(ctx context.Context, settin
 		return fmt.Errorf("marshal overload cooldown settings: %w", err)
 	}
 
-	return s.settingRepo.Set(ctx, SettingKeyOverloadCooldownSettings, string(data))
+	if err := s.settingRepo.Set(ctx, SettingKeyOverloadCooldownSettings, string(data)); err != nil {
+		return err
+	}
+	s.updateGatewayHotPathSnapshot(func(snapshot *gatewayHotPathSettingsSnapshot) {
+		snapshot.overloadCooldownSettings = *settings
+	})
+	s.notifySettingsChanged()
+	return nil
 }
 
 // GetStreamTimeoutSettings 获取流超时处理配置
 func (s *SettingService) GetStreamTimeoutSettings(ctx context.Context) (*StreamTimeoutSettings, error) {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		settings := snapshot.streamTimeoutSettings
+		return &settings, nil
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyStreamTimeoutSettings)
 	if err != nil {
 		if errors.Is(err, ErrSettingNotFound) {
@@ -1327,6 +1461,9 @@ func (s *SettingService) GetStreamTimeoutSettings(ctx context.Context) (*StreamT
 
 // IsUngroupedKeySchedulingAllowed 查询是否允许未分组 Key 调度
 func (s *SettingService) IsUngroupedKeySchedulingAllowed(ctx context.Context) bool {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		return snapshot.allowUngroupedScheduling
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyAllowUngroupedKeyScheduling)
 	if err != nil {
 		return false // fail-closed: 查询失败时默认不允许
@@ -1339,6 +1476,9 @@ func (s *SettingService) IsUngroupedKeySchedulingAllowed(ctx context.Context) bo
 // singleflight 防止缓存过期时 thundering herd
 // 返回空字符串表示不做对应方向的版本检查
 func (s *SettingService) GetClaudeCodeVersionBounds(ctx context.Context) (min, max string) {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		return snapshot.minClaudeCodeVersion, snapshot.maxClaudeCodeVersion
+	}
 	if cached, ok := versionBoundsCache.Load().(*cachedVersionBounds); ok {
 		if time.Now().UnixNano() < cached.expiresAt {
 			return cached.min, cached.max
@@ -1393,6 +1533,10 @@ func (s *SettingService) GetClaudeCodeVersionBounds(ctx context.Context) (min, m
 
 // GetRectifierSettings 获取请求整流器配置
 func (s *SettingService) GetRectifierSettings(ctx context.Context) (*RectifierSettings, error) {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		settings := cloneRectifierSettings(snapshot.rectifierSettings)
+		return &settings, nil
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyRectifierSettings)
 	if err != nil {
 		if errors.Is(err, ErrSettingNotFound) {
@@ -1423,7 +1567,14 @@ func (s *SettingService) SetRectifierSettings(ctx context.Context, settings *Rec
 		return fmt.Errorf("marshal rectifier settings: %w", err)
 	}
 
-	return s.settingRepo.Set(ctx, SettingKeyRectifierSettings, string(data))
+	if err := s.settingRepo.Set(ctx, SettingKeyRectifierSettings, string(data)); err != nil {
+		return err
+	}
+	s.updateGatewayHotPathSnapshot(func(snapshot *gatewayHotPathSettingsSnapshot) {
+		snapshot.rectifierSettings = cloneRectifierSettings(*settings)
+	})
+	s.notifySettingsChanged()
+	return nil
 }
 
 // IsSignatureRectifierEnabled 判断签名整流是否启用（总开关 && 签名子开关）
@@ -1446,6 +1597,10 @@ func (s *SettingService) IsBudgetRectifierEnabled(ctx context.Context) bool {
 
 // GetBetaPolicySettings 获取 Beta 策略配置
 func (s *SettingService) GetBetaPolicySettings(ctx context.Context) (*BetaPolicySettings, error) {
+	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
+		settings := cloneBetaPolicySettings(snapshot.betaPolicySettings)
+		return &settings, nil
+	}
 	value, err := s.settingRepo.GetValue(ctx, SettingKeyBetaPolicySettings)
 	if err != nil {
 		if errors.Is(err, ErrSettingNotFound) {
@@ -1495,7 +1650,14 @@ func (s *SettingService) SetBetaPolicySettings(ctx context.Context, settings *Be
 		return fmt.Errorf("marshal beta policy settings: %w", err)
 	}
 
-	return s.settingRepo.Set(ctx, SettingKeyBetaPolicySettings, string(data))
+	if err := s.settingRepo.Set(ctx, SettingKeyBetaPolicySettings, string(data)); err != nil {
+		return err
+	}
+	s.updateGatewayHotPathSnapshot(func(snapshot *gatewayHotPathSettingsSnapshot) {
+		snapshot.betaPolicySettings = cloneBetaPolicySettings(*settings)
+	})
+	s.notifySettingsChanged()
+	return nil
 }
 
 // SetStreamTimeoutSettings 设置流超时处理配置
@@ -1527,5 +1689,12 @@ func (s *SettingService) SetStreamTimeoutSettings(ctx context.Context, settings 
 		return fmt.Errorf("marshal stream timeout settings: %w", err)
 	}
 
-	return s.settingRepo.Set(ctx, SettingKeyStreamTimeoutSettings, string(data))
+	if err := s.settingRepo.Set(ctx, SettingKeyStreamTimeoutSettings, string(data)); err != nil {
+		return err
+	}
+	s.updateGatewayHotPathSnapshot(func(snapshot *gatewayHotPathSettingsSnapshot) {
+		snapshot.streamTimeoutSettings = *settings
+	})
+	s.notifySettingsChanged()
+	return nil
 }

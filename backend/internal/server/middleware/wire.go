@@ -14,6 +14,17 @@ type AdminAuthMiddleware gin.HandlerFunc
 // APIKeyAuthMiddleware API Key 认证中间件类型
 type APIKeyAuthMiddleware gin.HandlerFunc
 
+// GatewayProviderSet is the middleware provider set for the gateway binary.
+var GatewayProviderSet = wire.NewSet(
+	NewAPIKeyAuthMiddleware,
+)
+
+// ControlProviderSet is the middleware provider set for the control binary.
+var ControlProviderSet = wire.NewSet(
+	NewJWTAuthMiddleware,
+	NewAdminAuthMiddleware,
+)
+
 // ProviderSet 中间件层的依赖注入
 var ProviderSet = wire.NewSet(
 	NewJWTAuthMiddleware,

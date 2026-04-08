@@ -111,5 +111,4 @@ func (c *Checker) RegisterOnMux(mux *http.ServeMux) {
 	mux.HandleFunc("/livez", c.Livez)
 	mux.HandleFunc("/readyz", c.Readyz)
 	mux.HandleFunc("/startupz", c.Startupz)
-	mux.HandleFunc("/health", c.Readyz) // transitional alias
 }

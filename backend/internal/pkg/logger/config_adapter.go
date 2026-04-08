@@ -12,15 +12,6 @@ func OptionsFromConfig(cfg config.LogConfig) InitOptions {
 		StacktraceLevel: cfg.StacktraceLevel,
 		Output: OutputOptions{
 			ToStdout: cfg.Output.ToStdout,
-			ToFile:   cfg.Output.ToFile,
-			FilePath: cfg.Output.FilePath,
-		},
-		Rotation: RotationOptions{
-			MaxSizeMB:  cfg.Rotation.MaxSizeMB,
-			MaxBackups: cfg.Rotation.MaxBackups,
-			MaxAgeDays: cfg.Rotation.MaxAgeDays,
-			Compress:   cfg.Rotation.Compress,
-			LocalTime:  cfg.Rotation.LocalTime,
 		},
 		Sampling: SamplingOptions{
 			Enabled:    cfg.Sampling.Enabled,

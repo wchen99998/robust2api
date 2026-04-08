@@ -297,7 +297,8 @@ pnpm build
 ```bash
 # 运行服务器
 cd backend
-go run ./cmd/server/
+go run ./cmd/gateway
+go run ./cmd/control
 
 # 生成 Ent 代码
 go generate ./ent
@@ -315,7 +316,9 @@ golangci-lint run ./...
 ```
 sub2api-bmai/
 ├── backend/
-│   ├── cmd/server/          # 主程序入口
+│   ├── cmd/gateway/          # 推理入口
+│   ├── cmd/control/          # 管理/控制入口
+│   ├── cmd/bootstrap/       # 迁移和管理员初始化入口
 │   ├── ent/                 # Ent ORM 生成代码
 │   │   └── schema/          # 数据库 Schema 定义
 │   ├── internal/
@@ -323,8 +326,7 @@ sub2api-bmai/
 │   │   ├── service/         # 业务逻辑
 │   │   ├── repository/      # 数据访问层
 │   │   └── server/          # 服务器配置
-│   ├── migrations/          # 数据库迁移脚本
-│   └── config.yaml          # 配置文件
+│   └── migrations/          # 数据库迁移脚本
 ├── frontend/
 │   ├── src/
 │   │   ├── api/             # API 调用
@@ -337,6 +339,8 @@ sub2api-bmai/
 └── .claude/
     └── CLAUDE.md            # 本文档
 ```
+
+运行时 YAML 配置文件路径为 `/etc/sub2api/config.yaml`。
 
 ## 七、参考资源
 

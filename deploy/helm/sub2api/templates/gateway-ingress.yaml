@@ -1,0 +1,54 @@
+{{- $ing := .Values.ingress -}}
+{{- if and $ing.enabled ($ing.gateway.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "sub2api.fullname" . }}-gateway
+  labels:
+    {{- include "sub2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: gateway
+  annotations:
+    external-dns.alpha.kubernetes.io/hostname: >-
+      {{ $ing.gateway.host }}{{ range $ing.gateway.extraHosts }},{{ .host }}{{ end }}
+    external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ $ing.cloudflareProxied | quote }}
+    nginx.ingress.kubernetes.io/proxy-body-size: {{ $ing.maxBodySize | quote }}
+    {{- with $ing.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  {{- if $ing.className }}
+  ingressClassName: {{ $ing.className | quote }}
+  {{- end }}
+  {{- if $ing.gateway.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $ing.gateway.host | quote }}
+        {{- range $ing.gateway.extraHosts }}
+        - {{ .host | quote }}
+        {{- end }}
+      secretName: {{ default (printf "%s-gateway-tls" (include "sub2api.fullname" .)) $ing.gateway.tls.secretName }}
+  {{- end }}
+  rules:
+    - host: {{ $ing.gateway.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sub2api.fullname" . }}-gateway
+                port:
+                  name: http
+    {{- range $ing.gateway.extraHosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "sub2api.fullname" $ }}-gateway
+                port:
+                  name: http
+    {{- end }}
+{{- end }}

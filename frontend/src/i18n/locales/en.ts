@@ -340,7 +340,6 @@ export default {
     accounts: 'Accounts',
     proxies: 'Proxies',
     redeemCodes: 'Redeem Codes',
-    ops: 'Ops',
     promoCodes: 'Promo Codes',
     settings: 'Settings',
     myAccount: 'My Account',
@@ -995,7 +994,11 @@ export default {
       spendShort: 'Spend',
       requestsShort: 'Req',
       tokensShort: 'Tok',
-      failedToLoad: 'Failed to load dashboard statistics'
+      failedToLoad: 'Failed to load dashboard statistics',
+      openInNewTab: 'Open in new tab',
+      grafanaNotReadyTitle: 'Grafana dashboard is not available',
+      grafanaMissingDescription: 'Grafana URL is not configured yet. Please set it in admin settings.',
+      grafanaInvalidDescription: 'Grafana URL is invalid. Please provide a valid http(s) URL in admin settings.'
     },
 
     // Users
@@ -3994,6 +3997,10 @@ export default {
         apiBaseUrlPlaceholder: 'https://api.example.com',
         apiBaseUrlHint:
           'Used for "Use Key" and "Import to CC Switch" features. Leave empty to use current site URL.',
+        grafanaUrl: 'Grafana URL',
+        grafanaUrlPlaceholder: 'https://grafana.example.com',
+        grafanaUrlHint:
+          'Used by the admin dashboard iframe. Leave empty to show an empty state on /admin/dashboard.',
         customEndpoints: {
           title: 'Custom Endpoints',
           description: 'Add additional API endpoint URLs for users to quickly copy on the API Keys page',
@@ -4323,7 +4330,6 @@ export default {
       custom: 'Custom',
       code: 'Code',
       body: 'Body',
-      skipMonitoring: 'Skip Monitoring',
 
       // Columns
       columns: {
@@ -4368,8 +4374,6 @@ export default {
         passthroughBody: 'Passthrough upstream error message',
         customMessage: 'Custom error message',
         customMessagePlaceholder: 'Error message to return to client...',
-        skipMonitoring: 'Skip monitoring',
-        skipMonitoringHint: 'When enabled, errors matching this rule will not be recorded in ops monitoring',
         enabled: 'Enable this rule'
       },
 

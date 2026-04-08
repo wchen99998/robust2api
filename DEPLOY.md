@@ -61,7 +61,7 @@ cloudflare_api_token = "..."
 cloudflare_zone_id   = "..."
 # DNS convention: <service>-<namespace>.<suffix>
 # e.g. with suffix "do-prod.yourdomain.com", the default Ingress host
-# becomes "api-sub2api.do-prod.yourdomain.com"
+# becomes "gateway-sub2api.do-prod.yourdomain.com" (gateway) and "app-sub2api.do-prod.yourdomain.com" (control)
 domain_suffix        = "do-prod.yourdomain.com"
 cloudflare_proxied   = true
 
@@ -152,12 +152,16 @@ For the default deployment path, keep PostgreSQL and Redis in-cluster and instal
 helm upgrade --install sub2api deploy/helm/sub2api \
   -n sub2api \
   --create-namespace \
-  --set image.api.tag=0.1.8 \
+  --set image.gateway.tag=0.1.8 \
+  --set image.control.tag=0.1.8 \
   --set image.bootstrap.tag=0.1.8 \
   --set replicaCount=1 \
-  --set ingress.host=api-sub2api.do-prod.yourdomain.com \
+  --set ingress.gateway.host=gateway-sub2api.do-prod.yourdomain.com \
+  --set ingress.control.host=app-sub2api.do-prod.yourdomain.com \
   --set ingress.tls.enabled=true \
   --set ingress.annotations.nginx\\.ingress\\.kubernetes\\.io/ssl-redirect=true \
+  --set config.grafanaUrl=https://grafana-monitoring.do-prod.yourdomain.com \
+  --set 'control.frontend.extraFrameSrcOrigins[0]=https://grafana-monitoring.do-prod.yourdomain.com' \
   --set secrets.jwtSecret="$JWT_SECRET" \
   --set secrets.totpEncryptionKey="$TOTP_KEY" \
   --set secrets.adminEmail="admin@sub2api.local" \
@@ -172,7 +176,9 @@ helm upgrade --install sub2api deploy/helm/sub2api \
 This path uses:
 - The chart-managed PostgreSQL subchart for the application database
 - The chart-managed Redis subchart for caching / coordination
-- The default ingress naming pattern `api-sub2api.<domain_suffix>`
+- The default ingress naming pattern is `gateway-sub2api.<domain_suffix>` for the gateway host and `app-sub2api.<domain_suffix>` for the control host
+- A Grafana URL passed into the app chart so `/admin/dashboard` can embed the monitoring dashboard
+- Any iframe origin used by Grafana, purchase/subscription pages, custom menu items, or URL-based home content must be explicitly listed in `control.frontend.extraFrameSrcOrigins`
 - Helm as the source of truth for future app upgrades
 
 Because the bundled PostgreSQL and Redis instances are created by the `sub2api` chart in the `sub2api` namespace, treat them as application components, not Terraform-managed infrastructure.
@@ -180,6 +186,8 @@ Because the bundled PostgreSQL and Redis instances are created by the `sub2api` 
 > **Important:** `TOTP_KEY` must be a 64-character hex key. `openssl rand -hex 32` is correct. Do not use a 32-character random string.
 
 > **Important:** `deploy/helm/sub2api/values-production.yaml` is for external database / external Redis style deployments. Do not include it for the default bundled PostgreSQL + Redis installation above.
+
+> **Important:** `config.grafanaUrl` should point at the externally reachable Grafana base URL for this cluster. If you enable monitoring later, update the existing `sub2api` release with the same setting so the admin dashboard can load Grafana.
 
 > **Cloudflare SSL:** Set your Cloudflare SSL/TLS mode to **"Full (Strict)"** in the dashboard (SSL/TLS -> Overview). This ensures end-to-end encryption: client -> Cloudflare -> HTTPS -> nginx (Let's Encrypt cert) -> app. Using "Flexible" mode will cause a 308 redirect loop because nginx forces HTTPS.
 
@@ -198,7 +206,7 @@ kubectl -n sub2api get ingress     # should show your host + LB IP
 kubectl -n sub2api get certificate # TLS cert should show READY=True
 ```
 
-Your app should be accessible at `https://api-sub2api.do-prod.yourdomain.com`.
+Your app should be accessible at `https://gateway-sub2api.do-prod.yourdomain.com` for the inference gateway and `https://app-sub2api.do-prod.yourdomain.com` for the control/admin UI.
 
 ### Upgrade Sub2API
 
@@ -208,7 +216,10 @@ Use Helm for all app upgrades:
 helm upgrade sub2api deploy/helm/sub2api \
   -n sub2api \
   --reuse-values \
-  --set image.api.tag=<new-version> \
+  --set image.gateway.tag=<new-version> \
+  --set image.control.tag=<new-version> \
+  --set image.frontend.tag=<new-version> \
+  --set image.worker.tag=<new-version> \
   --set image.bootstrap.tag=<new-version>
 ```
 
@@ -229,7 +240,8 @@ Hostnames follow the pattern `<service>-<namespace>.<domain_suffix>`. For exampl
 
 | Service | Namespace | Hostname |
 |---------|-----------|----------|
-| api | sub2api | `api-sub2api.do-prod.yourdomain.com` |
+| gateway | sub2api | `gateway-sub2api.do-prod.yourdomain.com` |
+| control | sub2api | `app-sub2api.do-prod.yourdomain.com` |
 
 ### Cloudflare proxy
 
@@ -246,8 +258,9 @@ To serve the application on additional hostnames (e.g. a vanity domain), use the
 
 ```bash
 helm install ... \
-  --set ingress.host=api-sub2api.do-prod.yourdomain.com \
-  --set 'ingress.extraHosts[0].host=api.mycustomdomain.com'
+  --set ingress.gateway.host=gateway-sub2api.do-prod.yourdomain.com \
+  --set ingress.control.host=app-sub2api.do-prod.yourdomain.com \
+  --set 'ingress.extraHosts[0].host=app.mycustomdomain.com'
 ```
 
 ExternalDNS will create records for all hosts listed in the Ingress. For custom domains outside the `domain_suffix`, ensure their DNS is configured separately to point to the load balancer.
@@ -334,6 +347,8 @@ This creates:
 - The `monitoring` Helm release
 - Grafana ingress at `grafana.<domain_suffix>`
 
+Use that Grafana ingress URL as the app chart's `config.grafanaUrl` value.
+
 ### Create an R2 API token
 
 Create an R2-scoped API token from the [Cloudflare dashboard](https://dash.cloudflare.com) -> R2 -> Manage R2 API Tokens. This gives you S3-compatible credentials (access key ID + secret) that Tempo and Loki use.
@@ -351,6 +366,7 @@ Once the monitoring stack is running, enable OTel in the app with Helm:
 ```bash
 helm upgrade sub2api deploy/helm/sub2api \
   -n sub2api --reuse-values \
+  --set config.grafanaUrl="https://grafana.<domain_suffix>" \
   --set observability.enabled=true \
   --set observability.otel.serviceName=sub2api \
   --set observability.otel.endpoint="monitoring-alloy.monitoring.svc:4317" \

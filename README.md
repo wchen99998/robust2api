@@ -136,26 +136,45 @@ cd sub2api
 # 2. Install pnpm (if not already installed)
 npm install -g pnpm
 
-# 3. Build frontend
+# 3. Build frontend SPA
 cd frontend
 pnpm install
 pnpm run build
-# Output will be in ../backend/internal/web/dist/
+# Output will be placed in ../frontend/dist/ (nginx sidecar serves it in production)
 
-# 4. Build backend with embedded frontend
+# 4. Build backend binaries
 cd ../backend
-go build -tags embed -o sub2api ./cmd/server
+go build -o sub2api-gateway ./cmd/gateway
+go build -o sub2api-control ./cmd/control
+go build -o sub2api-bootstrap ./cmd/bootstrap
 
-# 5. Create configuration file
-cp ../deploy/config.example.yaml ./config.yaml
+# 5. Create the runtime config file
+sudo mkdir -p /etc/sub2api
+sudoedit /etc/sub2api/config.yaml
 
-# 6. Edit configuration
-nano config.yaml
+# 6. Export required secrets and bootstrap env
+export DATABASE_HOST=localhost
+export DATABASE_PORT=5432
+export DATABASE_USER=postgres
+export DATABASE_PASSWORD=your_password
+export DATABASE_DBNAME=sub2api
+export DATABASE_SSLMODE=disable
+export JWT_SECRET="$(openssl rand -hex 32)"
+export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
+export ADMIN_EMAIL=admin@example.com
+export ADMIN_PASSWORD=change-me
+
+# 7. Run bootstrap once (migrations + optional initial admin seed)
+./sub2api-bootstrap
+
+# 8. Start the services
+./sub2api-gateway  # inference proxy
+./sub2api-control  # admin/auth control plane
 ```
 
-> **Note:** The `-tags embed` flag embeds the frontend into the binary. Without this flag, the binary will not serve the frontend UI.
+> **Note:** The gateway binary is the inference proxy; the control binary handles admin/auth traffic and relies on the separate frontend nginx sidecar. Both read `/etc/sub2api/config.yaml` for runtime settings, while the bootstrap binary still honors bootstrap environment variables only.
 
-**Key configuration in `config.yaml`:**
+**Key configuration in `/etc/sub2api/config.yaml`:**
 
 ```yaml
 server:
@@ -175,10 +194,6 @@ redis:
   port: 6379
   password: ""
 
-jwt:
-  secret: "change-this-to-a-secure-random-string"
-  expire_hour: 24
-
 default:
   user_concurrency: 5
   user_balance: 0
@@ -186,13 +201,16 @@ default:
   rate_multiplier: 1.0
 ```
 
+`JWT_SECRET` must be at least 32 bytes. `TOTP_ENCRYPTION_KEY` must be 64 hex characters (`openssl rand -hex 32`).
+If you already have an admin user, you can omit `ADMIN_EMAIL` and `ADMIN_PASSWORD` when running `sub2api-bootstrap`.
+
 ### Sora Status (Temporarily Unavailable)
 
 > ⚠️ Sora-related features are temporarily unavailable due to technical issues in upstream integration and media delivery.
 > Please do not rely on Sora in production at this time.
 > Existing `gateway.sora_*` configuration keys are reserved and may not take effect until these issues are resolved.
 
-Additional security-related options are available in `config.yaml`:
+Additional security-related options are available in `/etc/sub2api/config.yaml`:
 
 - `cors.allowed_origins` for CORS allowlist
 - `security.url_allowlist` for upstream/pricing/CRS host allowlists
@@ -245,17 +263,13 @@ If you disable URL validation or response header filtering, harden your network 
 - Enforce TLS-only outbound traffic
 - Strip sensitive upstream response headers at the proxy
 
-```bash
-# 6. Run the application
-./sub2api
-```
-
 #### Development Mode
 
 ```bash
 # Backend (with hot reload)
 cd backend
-go run ./cmd/server
+go run ./cmd/gateway
+go run ./cmd/control
 
 # Frontend (with hot reload)
 cd frontend
@@ -269,7 +283,20 @@ When editing `backend/ent/schema`, regenerate Ent + Wire:
 ```bash
 cd backend
 go generate ./ent
-go generate ./cmd/server
+go generate ./cmd/gateway
+go generate ./cmd/control
+```
+
+#### Health Checks
+
+```bash
+# Gateway health (inference proxy)
+curl -I http://localhost:8080/livez
+curl -I http://localhost:8080/readyz
+
+# Control health (admin/auth plane)
+curl -I http://localhost:8081/livez
+curl -I http://localhost:8081/readyz
 ```
 
 ---
@@ -321,7 +348,9 @@ In Claude Code, Plan Mode cannot exit automatically. (Normally when using the na
 ```
 sub2api/
 ├── backend/                  # Go backend service
-│   ├── cmd/server/           # Application entry
+│   ├── cmd/gateway/          # Gateway server entry
+│   ├── cmd/control/          # Control/admin server entry
+│   ├── cmd/bootstrap/        # Bootstrap binary for migrations/admin seed
 │   ├── internal/             # Internal modules
 │   │   ├── config/           # Configuration
 │   │   ├── model/            # Data models
@@ -338,7 +367,6 @@ sub2api/
 │       └── components/       # Reusable components
 │
 ├── deploy/                   # Deployment files
-│   ├── config.example.yaml   # Full config file for binary deployment
 │   ├── Caddyfile             # Example Caddy reverse proxy config
 │   └── helm/sub2api/         # Helm chart for Kubernetes deployment
 │
@@ -350,6 +378,8 @@ sub2api/
     │   └── dns/              # Cloudflare DNS
     └── production/           # Production environment root
 ```
+
+Runtime YAML config is loaded from `/etc/sub2api/config.yaml`.
 
 ## Disclaimer
 

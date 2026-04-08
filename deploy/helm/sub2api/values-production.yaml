@@ -11,7 +11,7 @@
 #     --set secrets.adminPassword=<value>
 # =============================================================================
 
-api:
+gateway:
   replicaCount: 2
   autoscaling:
     enabled: true
@@ -28,6 +28,34 @@ api:
     limits:
       cpu: "2"
       memory: 2Gi
+  topologySpreadConstraints:
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+    - maxSkew: 1
+      topologyKey: topology.kubernetes.io/zone
+      whenUnsatisfiable: ScheduleAnyway
+control:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  pdb:
+    enabled: true
+    minAvailable: 1
+  frontend:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "500m"
+        memory: 512Mi
+    extraFrameSrcOrigins: []
 
 worker:
   replicaCount: 1
@@ -40,6 +68,9 @@ worker:
       memory: 1Gi
 
 config:
+  # Set this to your Grafana ingress/base URL when monitoring is enabled so
+  # the admin dashboard can embed Grafana directly.
+  # grafanaUrl: https://grafana.example.com
   database:
     maxOpenConns: 256
     maxIdleConns: 128
@@ -49,9 +80,27 @@ config:
     minIdleConns: 256
 
 ingress:
-  # Set host via --set to follow convention: api-<namespace>.<domain_suffix>
+  enabled: true
+  className: "nginx"
+  cloudflareProxied: "true"
+  maxBodySize: "50m"
+  annotations: {}
   tls:
     enabled: true
+  gateway:
+    enabled: true
+    host: gateway.sub2api.example.com
+    extraHosts: []
+    tls:
+      enabled: true
+      secretName: ""
+  control:
+    enabled: true
+    host: app.sub2api.example.com
+    extraHosts: []
+    tls:
+      enabled: true
+      secretName: ""
 
 # Disable in-cluster databases for production (use managed services)
 postgresql:

@@ -19,8 +19,6 @@ type AdminHandlers struct {
 	Redeem                *admin.RedeemHandler
 	Promo                 *admin.PromoHandler
 	Setting               *admin.SettingHandler
-	Ops                   *admin.OpsHandler
-	System                *admin.SystemHandler
 	Subscription          *admin.SubscriptionHandler
 	Usage                 *admin.UsageHandler
 	UserAttribute         *admin.UserAttributeHandler
@@ -29,6 +27,26 @@ type AdminHandlers struct {
 	APIKey                *admin.AdminAPIKeyHandler
 	ScheduledTest         *admin.ScheduledTestHandler
 	Channel               *admin.ChannelHandler
+}
+
+// GatewayHandlers contains only gateway-facing HTTP handlers.
+type GatewayHandlers struct {
+	Gateway       *GatewayHandler
+	OpenAIGateway *OpenAIGatewayHandler
+}
+
+// ControlHandlers contains control-plane HTTP handlers.
+type ControlHandlers struct {
+	Auth         *AuthHandler
+	User         *UserHandler
+	APIKey       *APIKeyHandler
+	Usage        *UsageHandler
+	Redeem       *RedeemHandler
+	Subscription *SubscriptionHandler
+	Announcement *AnnouncementHandler
+	Admin        *AdminHandlers
+	Setting      *SettingHandler
+	Totp         *TotpHandler
 }
 
 // Handlers contains all HTTP handlers

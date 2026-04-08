@@ -30,6 +30,11 @@ resource "helm_release" "ingress_nginx" {
     name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/do-loadbalancer-tls-passthrough"
     value = "true"
   }
+
+  set {
+    name  = "controller.config.enable-underscores-in-headers"
+    value = "true"
+  }
 }
 
 # --- cert-manager ---

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 
@@ -18,6 +17,17 @@ const (
 	RunModeStandard = "standard"
 	RunModeSimple   = "simple"
 )
+
+type Role string
+
+const (
+	RoleGeneric Role = ""
+	RoleGateway Role = "gateway"
+	RoleControl Role = "control"
+	RoleWorker  Role = "worker"
+)
+
+var configSearchPaths = []string{"/etc/sub2api"}
 
 // 使用量记录队列溢出策略
 const (
@@ -77,6 +87,7 @@ type Config struct {
 	UsageCleanup            UsageCleanupConfig            `mapstructure:"usage_cleanup"`
 	Concurrency             ConcurrencyConfig             `mapstructure:"concurrency"`
 	TokenRefresh            TokenRefreshConfig            `mapstructure:"token_refresh"`
+	GrafanaURL              string                        `mapstructure:"grafana_url"`
 	RunMode                 string                        `mapstructure:"run_mode" yaml:"run_mode"`
 	Timezone                string                        `mapstructure:"timezone"` // e.g. "Asia/Shanghai", "UTC"
 	Gemini                  GeminiConfig                  `mapstructure:"gemini"`
@@ -96,22 +107,11 @@ type LogConfig struct {
 	Caller          bool              `mapstructure:"caller"`
 	StacktraceLevel string            `mapstructure:"stacktrace_level"`
 	Output          LogOutputConfig   `mapstructure:"output"`
-	Rotation        LogRotationConfig `mapstructure:"rotation"`
 	Sampling        LogSamplingConfig `mapstructure:"sampling"`
 }
 
 type LogOutputConfig struct {
-	ToStdout bool   `mapstructure:"to_stdout"`
-	ToFile   bool   `mapstructure:"to_file"`
-	FilePath string `mapstructure:"file_path"`
-}
-
-type LogRotationConfig struct {
-	MaxSizeMB  int  `mapstructure:"max_size_mb"`
-	MaxBackups int  `mapstructure:"max_backups"`
-	MaxAgeDays int  `mapstructure:"max_age_days"`
-	Compress   bool `mapstructure:"compress"`
-	LocalTime  bool `mapstructure:"local_time"`
+	ToStdout bool `mapstructure:"to_stdout"`
 }
 
 type LogSamplingConfig struct {
@@ -885,28 +885,38 @@ func NormalizeRunMode(value string) string {
 	}
 }
 
-// Load reads and validates the application configuration.
+// Load reads and validates the application configuration using generic validation.
 func Load() (*Config, error) {
-	return load()
+	return load(RoleGeneric)
 }
 
-func load() (*Config, error) {
+// LoadGateway reads and validates configuration for the gateway role.
+func LoadGateway() (*Config, error) {
+	return load(RoleGateway)
+}
+
+// LoadControl reads and validates configuration for the control role.
+func LoadControl() (*Config, error) {
+	return load(RoleControl)
+}
+
+// LoadWorker reads and validates configuration for the worker role.
+func LoadWorker() (*Config, error) {
+	return load(RoleWorker)
+}
+
+// LoadForRole reads and validates configuration for a specific runtime role.
+func LoadForRole(role Role) (*Config, error) {
+	return load(role)
+}
+
+func load(role Role) (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 
-	// Add config paths in priority order
-	// 1. DATA_DIR environment variable (highest priority)
-	if dataDir := os.Getenv("DATA_DIR"); dataDir != "" {
-		viper.AddConfigPath(dataDir)
+	for _, configPath := range configSearchPaths {
+		viper.AddConfigPath(configPath)
 	}
-	// 2. Docker data directory
-	viper.AddConfigPath("/app/data")
-	// 3. Current directory
-	viper.AddConfigPath(".")
-	// 4. Config subdirectory
-	viper.AddConfigPath("./config")
-	// 5. System config directory
-	viper.AddConfigPath("/etc/sub2api")
 
 	// 环境变量支持
 	viper.AutomaticEnv()
@@ -956,7 +966,8 @@ func load() (*Config, error) {
 	cfg.Log.ServiceName = strings.TrimSpace(cfg.Log.ServiceName)
 	cfg.Log.Environment = strings.TrimSpace(cfg.Log.Environment)
 	cfg.Log.StacktraceLevel = strings.ToLower(strings.TrimSpace(cfg.Log.StacktraceLevel))
-	cfg.Log.Output.FilePath = strings.TrimSpace(cfg.Log.Output.FilePath)
+	cfg.GrafanaURL = strings.TrimSpace(cfg.GrafanaURL)
+	cfg.Log.Output.ToStdout = true
 
 	// 兼容旧键 gateway.openai_ws.sticky_previous_response_ttl_seconds。
 	// 新键未配置（<=0）时回退旧键；新键优先。
@@ -975,7 +986,7 @@ func load() (*Config, error) {
 	cfg.Totp.EncryptionKey = strings.TrimSpace(cfg.Totp.EncryptionKey)
 	cfg.Totp.EncryptionKeyConfigured = cfg.Totp.EncryptionKey != ""
 
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.ValidateForRole(role); err != nil {
 		return nil, fmt.Errorf("validate config error: %w", err)
 	}
 
@@ -1027,13 +1038,6 @@ func setDefaults() {
 	viper.SetDefault("log.caller", true)
 	viper.SetDefault("log.stacktrace_level", "error")
 	viper.SetDefault("log.output.to_stdout", true)
-	viper.SetDefault("log.output.to_file", true)
-	viper.SetDefault("log.output.file_path", "")
-	viper.SetDefault("log.rotation.max_size_mb", 100)
-	viper.SetDefault("log.rotation.max_backups", 10)
-	viper.SetDefault("log.rotation.max_age_days", 7)
-	viper.SetDefault("log.rotation.compress", true)
-	viper.SetDefault("log.rotation.local_time", true)
 	viper.SetDefault("log.sampling.enabled", false)
 	viper.SetDefault("log.sampling.initial", 100)
 	viper.SetDefault("log.sampling.thereafter", 100)
@@ -1161,6 +1165,7 @@ func setDefaults() {
 
 	// Timezone (default to Asia/Shanghai for Chinese users)
 	viper.SetDefault("timezone", "Asia/Shanghai")
+	viper.SetDefault("grafana_url", "")
 
 	// API Key auth cache
 	viper.SetDefault("api_key_auth_cache.l1_size", 65535)
@@ -1358,25 +1363,37 @@ func setDefaults() {
 }
 
 func (c *Config) Validate() error {
-	jwtSecret := strings.TrimSpace(c.JWT.Secret)
-	if jwtSecret == "" {
-		return fmt.Errorf("jwt.secret is required")
+	return c.ValidateForRole(RoleGeneric)
+}
+
+func (c *Config) ValidateForRole(role Role) error {
+	switch role {
+	case RoleGateway, RoleControl, RoleWorker, RoleGeneric:
+	default:
+		role = RoleGeneric
 	}
-	// NOTE: 按 UTF-8 编码后的字节长度计算。
-	// 选择 bytes 而不是 rune 计数，确保二进制/随机串的长度语义更接近“熵”而非“字符数”。
-	if len([]byte(jwtSecret)) < 32 {
-		return fmt.Errorf("jwt.secret must be at least 32 bytes")
-	}
-	totpKey := strings.TrimSpace(c.Totp.EncryptionKey)
-	if totpKey == "" {
-		return fmt.Errorf("totp.encryption_key is required")
-	}
-	totpKeyBytes, err := hex.DecodeString(totpKey)
-	if err != nil {
-		return fmt.Errorf("totp.encryption_key must be valid hex: %w", err)
-	}
-	if len(totpKeyBytes) != 32 {
-		return fmt.Errorf("totp.encryption_key must be 32 bytes (64 hex chars)")
+
+	if requiresControlPlaneValidation(role) {
+		jwtSecret := strings.TrimSpace(c.JWT.Secret)
+		if jwtSecret == "" {
+			return fmt.Errorf("jwt.secret is required")
+		}
+		// NOTE: 按 UTF-8 编码后的字节长度计算。
+		// 选择 bytes 而不是 rune 计数，确保二进制/随机串的长度语义更接近“熵”而非“字符数”。
+		if len([]byte(jwtSecret)) < 32 {
+			return fmt.Errorf("jwt.secret must be at least 32 bytes")
+		}
+		totpKey := strings.TrimSpace(c.Totp.EncryptionKey)
+		if totpKey == "" {
+			return fmt.Errorf("totp.encryption_key is required")
+		}
+		totpKeyBytes, err := hex.DecodeString(totpKey)
+		if err != nil {
+			return fmt.Errorf("totp.encryption_key must be valid hex: %w", err)
+		}
+		if len(totpKeyBytes) != 32 {
+			return fmt.Errorf("totp.encryption_key must be 32 bytes (64 hex chars)")
+		}
 	}
 	switch c.Log.Level {
 	case "debug", "info", "warn", "error":
@@ -1399,17 +1416,8 @@ func (c *Config) Validate() error {
 	default:
 		return fmt.Errorf("log.stacktrace_level must be one of: none/error/fatal")
 	}
-	if !c.Log.Output.ToStdout && !c.Log.Output.ToFile {
-		return fmt.Errorf("log.output.to_stdout and log.output.to_file cannot both be false")
-	}
-	if c.Log.Rotation.MaxSizeMB <= 0 {
-		return fmt.Errorf("log.rotation.max_size_mb must be positive")
-	}
-	if c.Log.Rotation.MaxBackups < 0 {
-		return fmt.Errorf("log.rotation.max_backups must be non-negative")
-	}
-	if c.Log.Rotation.MaxAgeDays < 0 {
-		return fmt.Errorf("log.rotation.max_age_days must be non-negative")
+	if !c.Log.Output.ToStdout {
+		return fmt.Errorf("log.output.to_stdout must be true")
 	}
 	if c.Log.Sampling.Enabled {
 		if c.Log.Sampling.Initial <= 0 {
@@ -1458,35 +1466,37 @@ func (c *Config) Validate() error {
 		}
 		warnIfInsecureURL("server.frontend_url", c.Server.FrontendURL)
 	}
-	if c.JWT.ExpireHour <= 0 {
-		return fmt.Errorf("jwt.expire_hour must be positive")
+	if requiresControlPlaneValidation(role) {
+		if c.JWT.ExpireHour <= 0 {
+			return fmt.Errorf("jwt.expire_hour must be positive")
+		}
+		if c.JWT.ExpireHour > 168 {
+			return fmt.Errorf("jwt.expire_hour must be <= 168 (7 days)")
+		}
+		if c.JWT.ExpireHour > 24 {
+			slog.Warn("jwt.expire_hour is high; consider shorter expiration for security", "expire_hour", c.JWT.ExpireHour)
+		}
+		// JWT Refresh Token配置验证
+		if c.JWT.AccessTokenExpireMinutes < 0 {
+			return fmt.Errorf("jwt.access_token_expire_minutes must be non-negative")
+		}
+		if c.JWT.AccessTokenExpireMinutes > 720 {
+			slog.Warn("jwt.access_token_expire_minutes is high; consider shorter expiration for security", "access_token_expire_minutes", c.JWT.AccessTokenExpireMinutes)
+		}
+		if c.JWT.RefreshTokenExpireDays <= 0 {
+			return fmt.Errorf("jwt.refresh_token_expire_days must be positive")
+		}
+		if c.JWT.RefreshTokenExpireDays > 90 {
+			slog.Warn("jwt.refresh_token_expire_days is high; consider shorter expiration for security", "refresh_token_expire_days", c.JWT.RefreshTokenExpireDays)
+		}
+		if c.JWT.RefreshWindowMinutes < 0 {
+			return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
+		}
+		if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
+			return fmt.Errorf("security.csp.policy is required when CSP is enabled")
+		}
 	}
-	if c.JWT.ExpireHour > 168 {
-		return fmt.Errorf("jwt.expire_hour must be <= 168 (7 days)")
-	}
-	if c.JWT.ExpireHour > 24 {
-		slog.Warn("jwt.expire_hour is high; consider shorter expiration for security", "expire_hour", c.JWT.ExpireHour)
-	}
-	// JWT Refresh Token配置验证
-	if c.JWT.AccessTokenExpireMinutes < 0 {
-		return fmt.Errorf("jwt.access_token_expire_minutes must be non-negative")
-	}
-	if c.JWT.AccessTokenExpireMinutes > 720 {
-		slog.Warn("jwt.access_token_expire_minutes is high; consider shorter expiration for security", "access_token_expire_minutes", c.JWT.AccessTokenExpireMinutes)
-	}
-	if c.JWT.RefreshTokenExpireDays <= 0 {
-		return fmt.Errorf("jwt.refresh_token_expire_days must be positive")
-	}
-	if c.JWT.RefreshTokenExpireDays > 90 {
-		slog.Warn("jwt.refresh_token_expire_days is high; consider shorter expiration for security", "refresh_token_expire_days", c.JWT.RefreshTokenExpireDays)
-	}
-	if c.JWT.RefreshWindowMinutes < 0 {
-		return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
-	}
-	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
-		return fmt.Errorf("security.csp.policy is required when CSP is enabled")
-	}
-	if c.LinuxDo.Enabled {
+	if requiresControlPlaneValidation(role) && c.LinuxDo.Enabled {
 		if strings.TrimSpace(c.LinuxDo.ClientID) == "" {
 			return fmt.Errorf("linuxdo_connect.client_id is required when linuxdo_connect.enabled=true")
 		}
@@ -2008,6 +2018,10 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+func requiresControlPlaneValidation(role Role) bool {
+	return role != RoleGateway && role != RoleWorker
+}
+
 func normalizeStringSlice(values []string) []string {
 	if len(values) == 0 {
 		return values
@@ -2054,16 +2068,14 @@ func generateJWTSecret(byteLength int) (string, error) {
 }
 
 // GetServerAddress returns the server address (host:port) from config file or environment variable.
-// This is a lightweight function that can be used before full config validation,
-// such as during setup wizard startup.
-// Priority: config.yaml > environment variables > defaults
+// This is a lightweight function that can be used before full config validation.
 func GetServerAddress() string {
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	v.AddConfigPath(".")
-	v.AddConfigPath("./config")
-	v.AddConfigPath("/etc/sub2api")
+	for _, configPath := range configSearchPaths {
+		v.AddConfigPath(configPath)
+	}
 
 	// Support SERVER_HOST and SERVER_PORT environment variables
 	v.AutomaticEnv()

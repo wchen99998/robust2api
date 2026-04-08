@@ -89,6 +89,12 @@ variable "db_size" {
   default     = "db-s-1vcpu-1gb"
 }
 
+variable "managed_grafana_reader_user" {
+  description = "Database username to create for Grafana read-only access when managed DB is enabled"
+  type        = string
+  default     = "grafana_reader"
+}
+
 # --- Observability storage (optional) ---
 
 variable "enable_observability_storage" {
@@ -136,4 +142,41 @@ variable "r2_secret_key" {
   type        = string
   default     = ""
   sensitive   = true
+}
+
+variable "grafana_db_host" {
+  description = "External PostgreSQL host for Grafana datasource (used when enable_managed_database=false)"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_db_port" {
+  description = "External PostgreSQL port for Grafana datasource (used when enable_managed_database=false)"
+  type        = number
+  default     = 5432
+}
+
+variable "grafana_db_name" {
+  description = "External PostgreSQL database name for Grafana datasource (used when enable_managed_database=false)"
+  type        = string
+  default     = "sub2api"
+}
+
+variable "grafana_db_user" {
+  description = "External PostgreSQL read-only username for Grafana datasource (used when enable_managed_database=false)"
+  type        = string
+  default     = ""
+}
+
+variable "grafana_db_password" {
+  description = "External PostgreSQL read-only password for Grafana datasource (used when enable_managed_database=false)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "grafana_db_sslmode" {
+  description = "External PostgreSQL SSL mode for Grafana datasource (used when enable_managed_database=false)"
+  type        = string
+  default     = "require"
 }

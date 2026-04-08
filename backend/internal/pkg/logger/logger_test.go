@@ -4,15 +4,11 @@ import (
 	"encoding/json"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestInit_DualOutput(t *testing.T) {
-	tmpDir := t.TempDir()
-	logPath := filepath.Join(tmpDir, "logs", "sub2api.log")
-
+func TestInit_StdoutOnly(t *testing.T) {
 	origStdout := os.Stdout
 	origStderr := os.Stderr
 	stdoutR, stdoutW, err := os.Pipe()
@@ -41,13 +37,6 @@ func TestInit_DualOutput(t *testing.T) {
 		Environment: "test",
 		Output: OutputOptions{
 			ToStdout: true,
-			ToFile:   true,
-			FilePath: logPath,
-		},
-		Rotation: RotationOptions{
-			MaxSizeMB:  10,
-			MaxBackups: 2,
-			MaxAgeDays: 1,
 		},
 		Sampling: SamplingOptions{Enabled: false},
 	})
@@ -55,8 +44,8 @@ func TestInit_DualOutput(t *testing.T) {
 		t.Fatalf("Init() error: %v", err)
 	}
 
-	L().Info("dual-output-info")
-	L().Warn("dual-output-warn")
+	L().Info("stdout-only-info")
+	L().Warn("stdout-only-warn")
 	Sync()
 
 	_ = stdoutW.Close()
@@ -66,66 +55,44 @@ func TestInit_DualOutput(t *testing.T) {
 	stdoutText := string(stdoutBytes)
 	stderrText := string(stderrBytes)
 
-	if !strings.Contains(stdoutText, "dual-output-info") {
+	if !strings.Contains(stdoutText, "stdout-only-info") {
 		t.Fatalf("stdout missing info log: %s", stdoutText)
 	}
-	if !strings.Contains(stderrText, "dual-output-warn") {
+	if !strings.Contains(stderrText, "stdout-only-warn") {
 		t.Fatalf("stderr missing warn log: %s", stderrText)
-	}
-
-	fileBytes, err := os.ReadFile(logPath)
-	if err != nil {
-		t.Fatalf("read log file: %v", err)
-	}
-	fileText := string(fileBytes)
-	if !strings.Contains(fileText, "dual-output-info") || !strings.Contains(fileText, "dual-output-warn") {
-		t.Fatalf("file missing logs: %s", fileText)
 	}
 }
 
-func TestInit_FileOutputFailureDowngrade(t *testing.T) {
+func TestInit_ForcesStdoutWhenDisabledInConfig(t *testing.T) {
 	origStdout := os.Stdout
-	origStderr := os.Stderr
-	_, stdoutW, err := os.Pipe()
+	stdoutR, stdoutW, err := os.Pipe()
 	if err != nil {
 		t.Fatalf("create stdout pipe: %v", err)
 	}
-	stderrR, stderrW, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("create stderr pipe: %v", err)
-	}
 	os.Stdout = stdoutW
-	os.Stderr = stderrW
 	t.Cleanup(func() {
 		os.Stdout = origStdout
-		os.Stderr = origStderr
+		_ = stdoutR.Close()
 		_ = stdoutW.Close()
-		_ = stderrR.Close()
-		_ = stderrW.Close()
 	})
 
-	err = Init(InitOptions{
+	if err := Init(InitOptions{
 		Level:  "info",
 		Format: "json",
 		Output: OutputOptions{
-			ToStdout: true,
-			ToFile:   true,
-			FilePath: filepath.Join(os.DevNull, "logs", "sub2api.log"),
+			ToStdout: false,
 		},
-		Rotation: RotationOptions{
-			MaxSizeMB:  10,
-			MaxBackups: 1,
-			MaxAgeDays: 1,
-		},
-	})
-	if err != nil {
-		t.Fatalf("Init() should downgrade instead of failing, got: %v", err)
+	}); err != nil {
+		t.Fatalf("Init() error: %v", err)
 	}
 
-	_ = stderrW.Close()
-	stderrBytes, _ := io.ReadAll(stderrR)
-	if !strings.Contains(string(stderrBytes), "日志文件输出初始化失败") {
-		t.Fatalf("stderr should contain fallback warning, got: %s", string(stderrBytes))
+	L().Info("forced-stdout")
+	Sync()
+
+	_ = stdoutW.Close()
+	stdoutBytes, _ := io.ReadAll(stdoutR)
+	if !strings.Contains(string(stdoutBytes), "forced-stdout") {
+		t.Fatalf("logger should force stdout output, got: %s", string(stdoutBytes))
 	}
 }
 
@@ -158,7 +125,6 @@ func TestInit_CallerShouldPointToCallsite(t *testing.T) {
 		Caller:      true,
 		Output: OutputOptions{
 			ToStdout: true,
-			ToFile:   false,
 		},
 		Sampling: SamplingOptions{Enabled: false},
 	}); err != nil {

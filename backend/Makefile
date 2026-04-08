@@ -1,12 +1,15 @@
-.PHONY: build build-api build-worker build-bootstrap generate test test-unit test-integration test-e2e
+.PHONY: build build-gateway build-control build-worker build-bootstrap generate test test-unit test-integration test-e2e
 
-VERSION ?= $(shell tr -d '\r\n' < ./cmd/api/VERSION)
+VERSION ?= $(shell tr -d '\r\n' < ./cmd/gateway/VERSION)
 LDFLAGS ?= -s -w -X main.Version=$(VERSION)
 
-build: build-api build-worker
+build: build-gateway build-control build-worker
 
-build-api:
-	CGO_ENABLED=0 go build -tags embed -ldflags="$(LDFLAGS)" -trimpath -o bin/api ./cmd/api
+build-gateway:
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o bin/gateway ./cmd/gateway
+
+build-control:
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o bin/control ./cmd/control
 
 build-worker:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o bin/worker ./cmd/worker
@@ -16,7 +19,8 @@ build-bootstrap:
 
 generate:
 	go generate ./ent
-	go generate ./cmd/api
+	go generate ./cmd/gateway
+	go generate ./cmd/control
 	go generate ./cmd/worker
 
 test:

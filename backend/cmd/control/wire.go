@@ -1,0 +1,195 @@
+//go:build wireinject
+// +build wireinject
+
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/Wei-Shaw/sub2api/ent"
+	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/health"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	"github.com/Wei-Shaw/sub2api/internal/repository"
+	"github.com/Wei-Shaw/sub2api/internal/server"
+	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
+
+	"github.com/google/wire"
+	"github.com/redis/go-redis/v9"
+)
+
+type ControlApplication struct {
+	Server        *http.Server
+	MetricsServer *appelotel.MetricsServer
+	Health        *health.Checker
+	Cleanup       func()
+}
+
+func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplication, error) {
+	wire.Build(
+		config.ControlProviderSet,
+		appelotel.ProviderSet,
+		repository.ProviderSet,
+		service.APIProviderSet,
+		middleware.ControlProviderSet,
+		handler.ControlProviderSet,
+		server.ControlProviderSet,
+		health.NewChecker,
+		providePrivacyClientFactory,
+		provideServiceBuildInfo,
+		provideControlCleanup,
+		wire.Struct(new(ControlApplication), "Server", "MetricsServer", "Health", "Cleanup"),
+	)
+	return nil, nil
+}
+
+func providePrivacyClientFactory() service.PrivacyClientFactory {
+	return repository.CreatePrivacyReqClient
+}
+
+func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
+	return service.BuildInfo{
+		Version:   buildInfo.Version,
+		BuildType: buildInfo.BuildType,
+	}
+}
+
+func provideControlCleanup(
+	entClient *ent.Client,
+	rdb *redis.Client,
+	otelProvider *appelotel.Provider,
+	metricsServer *appelotel.MetricsServer,
+	emailQueue *service.EmailQueueService,
+	billingCache *service.BillingCacheService,
+	subscriptionService *service.SubscriptionService,
+	pricing *service.PricingService,
+	oauth *service.OAuthService,
+	openaiOAuth *service.OpenAIOAuthService,
+	geminiOAuth *service.GeminiOAuthService,
+	antigravityOAuth *service.AntigravityOAuthService,
+) func() {
+	return func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+
+		type cleanupStep struct {
+			name string
+			fn   func() error
+		}
+
+		parallelSteps := []cleanupStep{
+			{"EmailQueueService", func() error {
+				if emailQueue != nil {
+					emailQueue.Stop()
+				}
+				return nil
+			}},
+			{"BillingCacheService", func() error {
+				if billingCache != nil {
+					billingCache.Stop()
+				}
+				return nil
+			}},
+			{"SubscriptionService", func() error {
+				if subscriptionService != nil {
+					subscriptionService.Stop()
+				}
+				return nil
+			}},
+			{"PricingService", func() error {
+				if pricing != nil {
+					pricing.Stop()
+				}
+				return nil
+			}},
+			{"OAuthService", func() error {
+				if oauth != nil {
+					oauth.Stop()
+				}
+				return nil
+			}},
+			{"OpenAIOAuthService", func() error {
+				if openaiOAuth != nil {
+					openaiOAuth.Stop()
+				}
+				return nil
+			}},
+			{"GeminiOAuthService", func() error {
+				if geminiOAuth != nil {
+					geminiOAuth.Stop()
+				}
+				return nil
+			}},
+			{"AntigravityOAuthService", func() error {
+				if antigravityOAuth != nil {
+					antigravityOAuth.Stop()
+				}
+				return nil
+			}},
+		}
+
+		infraSteps := []cleanupStep{
+			{"Redis", func() error {
+				if rdb == nil {
+					return nil
+				}
+				return rdb.Close()
+			}},
+			{"Ent", func() error {
+				if entClient == nil {
+					return nil
+				}
+				return entClient.Close()
+			}},
+		}
+
+		runParallel := func(steps []cleanupStep) {
+			var wg sync.WaitGroup
+			for i := range steps {
+				step := steps[i]
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					if err := step.fn(); err != nil {
+						log.Printf("[Cleanup] %s failed: %v", step.name, err)
+						return
+					}
+					log.Printf("[Cleanup] %s succeeded", step.name)
+				}()
+			}
+			wg.Wait()
+		}
+
+		runSequential := func(steps []cleanupStep) {
+			for i := range steps {
+				step := steps[i]
+				if err := step.fn(); err != nil {
+					log.Printf("[Cleanup] %s failed: %v", step.name, err)
+					continue
+				}
+				log.Printf("[Cleanup] %s succeeded", step.name)
+			}
+		}
+
+		runParallel(parallelSteps)
+
+		if otelProvider != nil {
+			if err := otelProvider.Shutdown(ctx); err != nil {
+				log.Printf("OTel provider shutdown error: %v", err)
+			}
+		}
+		if metricsServer != nil {
+			if err := metricsServer.Shutdown(ctx); err != nil {
+				log.Printf("Metrics server shutdown error: %v", err)
+			}
+		}
+
+		runSequential(infraSteps)
+	}
+}

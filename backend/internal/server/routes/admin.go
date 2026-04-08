@@ -3,7 +3,9 @@ package routes
 
 import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )
@@ -13,6 +15,7 @@ func RegisterAdminRoutes(
 	v1 *gin.RouterGroup,
 	h *handler.Handlers,
 	adminAuth middleware.AdminAuthMiddleware,
+	buildInfo service.BuildInfo,
 ) {
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
@@ -53,11 +56,8 @@ func RegisterAdminRoutes(
 		// 系统设置
 		registerSettingsRoutes(admin, h)
 
-		// 运维监控（Ops）
-		registerOpsRoutes(admin, h)
-
 		// 系统管理
-		registerSystemRoutes(admin, h)
+		registerSystemRoutes(admin, buildInfo)
 
 		// 订阅管理
 		registerSubscriptionRoutes(admin, h)
@@ -89,39 +89,6 @@ func registerAdminAPIKeyRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	apiKeys := admin.Group("/api-keys")
 	{
 		apiKeys.PUT("/:id", h.Admin.APIKey.UpdateGroup)
-	}
-}
-
-func registerOpsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
-	ops := admin.Group("/ops")
-	{
-		ops.GET("/concurrency", h.Admin.Ops.GetConcurrencyStats)
-		ops.GET("/user-concurrency", h.Admin.Ops.GetUserConcurrencyStats)
-		ops.GET("/account-availability", h.Admin.Ops.GetAccountAvailability)
-
-		// Error logs (legacy)
-		ops.GET("/errors", h.Admin.Ops.GetErrorLogs)
-		ops.GET("/errors/:id", h.Admin.Ops.GetErrorLogByID)
-		ops.GET("/errors/:id/retries", h.Admin.Ops.ListRetryAttempts)
-		ops.POST("/errors/:id/retry", h.Admin.Ops.RetryErrorRequest)
-		ops.PUT("/errors/:id/resolve", h.Admin.Ops.UpdateErrorResolution)
-
-		// Request errors (client-visible failures)
-		ops.GET("/request-errors", h.Admin.Ops.ListRequestErrors)
-		ops.GET("/request-errors/:id", h.Admin.Ops.GetRequestError)
-		ops.GET("/request-errors/:id/upstream-errors", h.Admin.Ops.ListRequestErrorUpstreamErrors)
-		ops.POST("/request-errors/:id/retry-client", h.Admin.Ops.RetryRequestErrorClient)
-		ops.POST("/request-errors/:id/upstream-errors/:idx/retry", h.Admin.Ops.RetryRequestErrorUpstreamEvent)
-		ops.PUT("/request-errors/:id/resolve", h.Admin.Ops.ResolveRequestError)
-
-		// Upstream errors (independent upstream failures)
-		ops.GET("/upstream-errors", h.Admin.Ops.ListUpstreamErrors)
-		ops.GET("/upstream-errors/:id", h.Admin.Ops.GetUpstreamError)
-		ops.POST("/upstream-errors/:id/retry", h.Admin.Ops.RetryUpstreamError)
-		ops.PUT("/upstream-errors/:id/resolve", h.Admin.Ops.ResolveUpstreamError)
-
-		// Request drilldown (success + error)
-		ops.GET("/requests", h.Admin.Ops.ListRequestDetails)
 	}
 }
 
@@ -347,14 +314,12 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	}
 }
 
-func registerSystemRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
+func registerSystemRoutes(admin *gin.RouterGroup, buildInfo service.BuildInfo) {
 	system := admin.Group("/system")
 	{
-		system.GET("/version", h.Admin.System.GetVersion)
-		system.GET("/check-updates", h.Admin.System.CheckUpdates)
-		system.POST("/update", h.Admin.System.PerformUpdate)
-		system.POST("/rollback", h.Admin.System.Rollback)
-		system.POST("/restart", h.Admin.System.RestartService)
+		system.GET("/version", func(c *gin.Context) {
+			response.Success(c, gin.H{"version": buildInfo.Version})
+		})
 	}
 }
 

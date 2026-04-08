@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/google/wire"
@@ -35,11 +36,6 @@ func ProvideAPIPricingService(cfg *config.Config, remoteClient PricingRemoteClie
 		println("[Service] Warning: Pricing service initialization failed:", err.Error())
 	}
 	return svc, nil
-}
-
-// ProvideUpdateService creates UpdateService with BuildInfo
-func ProvideUpdateService(cache UpdateCache, githubClient GitHubReleaseClient, buildInfo BuildInfo) *UpdateService {
-	return NewUpdateService(cache, githubClient, buildInfo.Version, buildInfo.BuildType)
 }
 
 // ProvideEmailQueueService creates EmailQueueService with default worker count
@@ -257,10 +253,6 @@ func ProvideIdempotencyCoordinator(repo IdempotencyRepository, cfg *config.Confi
 	return coordinator
 }
 
-func ProvideSystemOperationLockService(repo IdempotencyRepository, cfg *config.Config) *SystemOperationLockService {
-	return NewSystemOperationLockService(repo, buildIdempotencyConfig(cfg))
-}
-
 func ProvideIdempotencyCleanupService(repo IdempotencyRepository, cfg *config.Config) *IdempotencyCleanupService {
 	svc := NewIdempotencyCleanupService(repo, cfg)
 	svc.Start()
@@ -295,10 +287,75 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthC
 	return apiKeyService
 }
 
+func ProvideBillingService(cfg *config.Config, pricingService *PricingService, invalidationBus RuntimeCacheInvalidationBus) *BillingService {
+	svc := NewBillingService(cfg, pricingService)
+	svc.SetInvalidationBus(invalidationBus)
+	return svc
+}
+
 // ProvideSettingService wires SettingService with group reader for default subscription validation.
-func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, cfg *config.Config) *SettingService {
+func ProvideSettingService(
+	settingRepo SettingRepository,
+	groupRepo GroupRepository,
+	cfg *config.Config,
+	invalidationBus RuntimeCacheInvalidationBus,
+) *SettingService {
 	svc := NewSettingService(settingRepo, cfg)
 	svc.SetDefaultSubscriptionGroupReader(groupRepo)
+	svc.SetInvalidationBus(invalidationBus)
+	return svc
+}
+
+func ProvideChannelService(
+	repo ChannelRepository,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	invalidationBus RuntimeCacheInvalidationBus,
+) *ChannelService {
+	svc := NewChannelService(repo, authCacheInvalidator)
+	svc.SetInvalidationBus(invalidationBus)
+	return svc
+}
+
+func ProvideAdminService(
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	accountRepo AccountRepository,
+	proxyRepo ProxyRepository,
+	apiKeyRepo APIKeyRepository,
+	redeemCodeRepo RedeemCodeRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	billingCacheService *BillingCacheService,
+	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	entClient *dbent.Client,
+	settingService *SettingService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	userSubRepo UserSubscriptionRepository,
+	privacyClientFactory PrivacyClientFactory,
+	invalidationBus RuntimeCacheInvalidationBus,
+) AdminService {
+	svc := NewAdminService(
+		userRepo,
+		groupRepo,
+		accountRepo,
+		proxyRepo,
+		apiKeyRepo,
+		redeemCodeRepo,
+		userGroupRateRepo,
+		billingCacheService,
+		proxyProber,
+		proxyLatencyCache,
+		authCacheInvalidator,
+		entClient,
+		settingService,
+		defaultSubAssigner,
+		userSubRepo,
+		privacyClientFactory,
+	)
+	if impl, ok := svc.(*adminServiceImpl); ok {
+		impl.SetInvalidationBus(invalidationBus)
+	}
 	return svc
 }
 
@@ -373,9 +430,9 @@ var SharedProviderSet = wire.NewSet(
 	NewPromoService,
 	NewUsageService,
 	NewDashboardService,
-	NewBillingService,
+	ProvideBillingService,
 	NewAnnouncementService,
-	NewAdminService,
+	ProvideAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	NewOAuthService,
@@ -396,14 +453,12 @@ var SharedProviderSet = wire.NewSet(
 	NewAccountUsageService,
 	NewAccountTestService,
 	ProvideSettingService,
-	NewOpsService,
 	NewEmailService,
 	NewTurnstileService,
 	NewSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	NewIdentityService,
 	NewCRSSyncService,
-	ProvideUpdateService,
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,
 	NewUsageCache,
@@ -412,10 +467,9 @@ var SharedProviderSet = wire.NewSet(
 	NewTLSFingerprintProfileService,
 	NewDigestSessionStore,
 	ProvideIdempotencyCoordinator,
-	ProvideSystemOperationLockService,
 	ProvideScheduledTestService,
 	NewGroupCapacityService,
-	NewChannelService,
+	ProvideChannelService,
 	NewModelPricingResolver,
 )
 

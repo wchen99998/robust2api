@@ -10,6 +10,7 @@ data:
   SERVER_MODE: {{ .Values.config.serverMode | quote }}
   RUN_MODE: {{ .Values.config.runMode | quote }}
   TZ: {{ .Values.config.timezone | quote }}
+  GRAFANA_URL: {{ .Values.config.grafanaUrl | quote }}
   # Database (non-sensitive)
   DATABASE_HOST: {{ include "sub2api.databaseHost" . | quote }}
   DATABASE_PORT: {{ include "sub2api.databasePort" . | quote }}
@@ -35,9 +36,6 @@ data:
   SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS: {{ .Values.config.security.urlAllowlistUpstreamHosts | quote }}
   {{- end }}
   WORKER_HEALTH_PORT: {{ .Values.worker.healthPort | quote }}
-  {{- if .Values.config.updateProxyURL }}
-  UPDATE_PROXY_URL: {{ .Values.config.updateProxyURL | quote }}
-  {{- end }}
   {{- range $key, $value := .Values.extraEnv }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}

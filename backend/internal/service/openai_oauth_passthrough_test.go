@@ -152,7 +152,6 @@ func captureStructuredLog(t *testing.T) (*inMemoryLogSink, func()) {
 		Environment: "test",
 		Output: logger.OutputOptions{
 			ToStdout: true,
-			ToFile:   false,
 		},
 		Sampling: logger.SamplingOptions{Enabled: false},
 	})

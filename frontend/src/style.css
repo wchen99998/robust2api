@@ -808,9 +808,14 @@
     overflow-x: auto;
   }
 
-  /* 表头固定时添加底部阴影，增强视觉层次 */
+  /* Sticky table headers should use a crisp divider instead of a soft shadow. */
   .table-wrapper thead.sticky {
-    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+    box-shadow: none;
+    border-bottom: 1px solid rgb(0 0 0 / 0.06);
+  }
+
+  .dark .table-wrapper thead.sticky {
+    border-bottom-color: rgb(255 255 255 / 0.08);
   }
 }
 

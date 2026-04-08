@@ -1,35 +1,17 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { mount } from '@vue/test-utils'
 
-import type { DashboardStats } from '@/types'
-import DashboardView from '../DashboardView.vue'
-
-const { getSnapshotV2, getUserUsageTrend, getUserSpendingRanking } = vi.hoisted(() => ({
-  getSnapshotV2: vi.fn(),
-  getUserUsageTrend: vi.fn(),
-  getUserSpendingRanking: vi.fn()
-}))
-
-vi.mock('@/api/admin', () => ({
-  adminAPI: {
-    dashboard: {
-      getSnapshotV2,
-      getUserUsageTrend,
-      getUserSpendingRanking
-    }
-  }
-}))
+const useAppStore = vi.hoisted(() => {
+  vi.stubGlobal('localStorage', {
+    getItem: vi.fn(() => null),
+    setItem: vi.fn(),
+    removeItem: vi.fn(),
+  })
+  return vi.fn()
+})
 
 vi.mock('@/stores/app', () => ({
-  useAppStore: () => ({
-    showError: vi.fn()
-  })
-}))
-
-vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: vi.fn()
-  })
+  useAppStore
 }))
 
 vi.mock('vue-i18n', async () => {
@@ -42,102 +24,95 @@ vi.mock('vue-i18n', async () => {
   }
 })
 
-const formatLocalDate = (date: Date): string => {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-const createDashboardStats = (): DashboardStats => ({
-  total_users: 0,
-  today_new_users: 0,
-  active_users: 0,
-  hourly_active_users: 0,
-  stats_updated_at: '',
-  stats_stale: false,
-  total_api_keys: 0,
-  active_api_keys: 0,
-  total_accounts: 0,
-  normal_accounts: 0,
-  error_accounts: 0,
-  ratelimit_accounts: 0,
-  overload_accounts: 0,
-  total_requests: 0,
-  total_input_tokens: 0,
-  total_output_tokens: 0,
-  total_cache_creation_tokens: 0,
-  total_cache_read_tokens: 0,
-  total_tokens: 0,
-  total_cost: 0,
-  total_actual_cost: 0,
-  today_requests: 0,
-  today_input_tokens: 0,
-  today_output_tokens: 0,
-  today_cache_creation_tokens: 0,
-  today_cache_read_tokens: 0,
-  today_tokens: 0,
-  today_cost: 0,
-  today_actual_cost: 0,
-  average_duration_ms: 0,
-  uptime: 0,
-  rpm: 0,
-  tpm: 0
-})
+import DashboardView from '../DashboardView.vue'
 
 describe('admin DashboardView', () => {
-  beforeEach(() => {
-    getSnapshotV2.mockReset()
-    getUserUsageTrend.mockReset()
-    getUserSpendingRanking.mockReset()
+  it('embeds the provisioned Grafana dashboard when grafana_url is configured', () => {
+    useAppStore.mockReturnValue({
+      cachedPublicSettings: { grafana_url: 'https://grafana.example.com' },
+      grafanaUrl: ''
+    })
 
-    getSnapshotV2.mockResolvedValue({
-      stats: createDashboardStats(),
-      trend: [],
-      models: []
-    })
-    getUserUsageTrend.mockResolvedValue({
-      trend: [],
-      start_date: '',
-      end_date: '',
-      granularity: 'hour'
-    })
-    getUserSpendingRanking.mockResolvedValue({
-      ranking: [],
-      total_actual_cost: 0,
-      total_requests: 0,
-      total_tokens: 0,
-      start_date: '',
-      end_date: ''
-    })
-  })
-
-  it('uses last 24 hours as default dashboard range', async () => {
-    mount(DashboardView, {
+    const wrapper = mount(DashboardView, {
       global: {
         stubs: {
           AppLayout: { template: '<div><slot /></div>' },
-          LoadingSpinner: true,
-          Icon: true,
-          DateRangePicker: true,
-          Select: true,
-          ModelDistributionChart: true,
-          TokenUsageTrend: true,
-          Line: true
+          EmptyState: { template: '<div><slot name="icon" /></div>' },
+          Icon: true
         }
       }
     })
 
-    await flushPromises()
+    const iframe = wrapper.get('iframe')
+    const dashboardUrl = 'https://grafana.example.com/d/sub2api-admin-overview/sub2api-admin-overview'
+    expect(iframe.attributes('src')).toBe(dashboardUrl)
+    expect(wrapper.get('a').attributes('href')).toBe(dashboardUrl)
+  })
 
-    const now = new Date()
-    const yesterday = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+  it('normalizes grafana_url when an existing /d route is provided', () => {
+    useAppStore.mockReturnValue({
+      cachedPublicSettings: { grafana_url: 'https://grafana.example.com/grafana/d/legacy/old' },
+      grafanaUrl: ''
+    })
 
-    expect(getSnapshotV2).toHaveBeenCalledTimes(1)
-    expect(getSnapshotV2).toHaveBeenCalledWith(expect.objectContaining({
-      start_date: formatLocalDate(yesterday),
-      end_date: formatLocalDate(now),
-      granularity: 'hour'
-    }))
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          EmptyState: { template: '<div><slot name="icon" /></div>' },
+          Icon: true
+        }
+      }
+    })
+
+    expect(wrapper.get('iframe').attributes('src')).toBe(
+      'https://grafana.example.com/grafana/d/sub2api-admin-overview/sub2api-admin-overview'
+    )
+  })
+
+  it('shows the empty state when grafana_url is missing', () => {
+    useAppStore.mockReturnValue({
+      cachedPublicSettings: { grafana_url: '' },
+      grafanaUrl: ''
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          EmptyState: {
+            props: ['title', 'description'],
+            template: '<div class="empty-state">{{ title }}|{{ description }}</div>'
+          },
+          Icon: true
+        }
+      }
+    })
+
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.find('.empty-state').text()).toContain('admin.dashboard.grafanaMissingDescription')
+  })
+
+  it('shows invalid empty state when grafana_url is malformed', () => {
+    useAppStore.mockReturnValue({
+      cachedPublicSettings: { grafana_url: 'javascript:alert(1)' },
+      grafanaUrl: ''
+    })
+
+    const wrapper = mount(DashboardView, {
+      global: {
+        stubs: {
+          AppLayout: { template: '<div><slot /></div>' },
+          EmptyState: {
+            props: ['title', 'description'],
+            template: '<div class="empty-state">{{ title }}|{{ description }}</div>'
+          },
+          Icon: true
+        }
+      }
+    })
+
+    expect(wrapper.find('iframe').exists()).toBe(false)
+    expect(wrapper.find('.empty-state').text()).toContain('admin.dashboard.grafanaInvalidDescription')
   })
 })

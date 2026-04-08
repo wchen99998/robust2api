@@ -172,20 +172,6 @@ func (_c *ErrorPassthroughRuleCreate) SetNillableCustomMessage(v *string) *Error
 	return _c
 }
 
-// SetSkipMonitoring sets the "skip_monitoring" field.
-func (_c *ErrorPassthroughRuleCreate) SetSkipMonitoring(v bool) *ErrorPassthroughRuleCreate {
-	_c.mutation.SetSkipMonitoring(v)
-	return _c
-}
-
-// SetNillableSkipMonitoring sets the "skip_monitoring" field if the given value is not nil.
-func (_c *ErrorPassthroughRuleCreate) SetNillableSkipMonitoring(v *bool) *ErrorPassthroughRuleCreate {
-	if v != nil {
-		_c.SetSkipMonitoring(*v)
-	}
-	return _c
-}
-
 // SetDescription sets the "description" field.
 func (_c *ErrorPassthroughRuleCreate) SetDescription(v string) *ErrorPassthroughRuleCreate {
 	_c.mutation.SetDescription(v)
@@ -263,10 +249,6 @@ func (_c *ErrorPassthroughRuleCreate) defaults() {
 		v := errorpassthroughrule.DefaultPassthroughBody
 		_c.mutation.SetPassthroughBody(v)
 	}
-	if _, ok := _c.mutation.SkipMonitoring(); !ok {
-		v := errorpassthroughrule.DefaultSkipMonitoring
-		_c.mutation.SetSkipMonitoring(v)
-	}
 }
 
 // check runs all checks and user-defined validators on the builder.
@@ -304,9 +286,6 @@ func (_c *ErrorPassthroughRuleCreate) check() error {
 	}
 	if _, ok := _c.mutation.PassthroughBody(); !ok {
 		return &ValidationError{Name: "passthrough_body", err: errors.New(`ent: missing required field "ErrorPassthroughRule.passthrough_body"`)}
-	}
-	if _, ok := _c.mutation.SkipMonitoring(); !ok {
-		return &ValidationError{Name: "skip_monitoring", err: errors.New(`ent: missing required field "ErrorPassthroughRule.skip_monitoring"`)}
 	}
 	return nil
 }
@@ -386,10 +365,6 @@ func (_c *ErrorPassthroughRuleCreate) createSpec() (*ErrorPassthroughRule, *sqlg
 	if value, ok := _c.mutation.CustomMessage(); ok {
 		_spec.SetField(errorpassthroughrule.FieldCustomMessage, field.TypeString, value)
 		_node.CustomMessage = &value
-	}
-	if value, ok := _c.mutation.SkipMonitoring(); ok {
-		_spec.SetField(errorpassthroughrule.FieldSkipMonitoring, field.TypeBool, value)
-		_node.SkipMonitoring = value
 	}
 	if value, ok := _c.mutation.Description(); ok {
 		_spec.SetField(errorpassthroughrule.FieldDescription, field.TypeString, value)
@@ -630,18 +605,6 @@ func (u *ErrorPassthroughRuleUpsert) UpdateCustomMessage() *ErrorPassthroughRule
 // ClearCustomMessage clears the value of the "custom_message" field.
 func (u *ErrorPassthroughRuleUpsert) ClearCustomMessage() *ErrorPassthroughRuleUpsert {
 	u.SetNull(errorpassthroughrule.FieldCustomMessage)
-	return u
-}
-
-// SetSkipMonitoring sets the "skip_monitoring" field.
-func (u *ErrorPassthroughRuleUpsert) SetSkipMonitoring(v bool) *ErrorPassthroughRuleUpsert {
-	u.Set(errorpassthroughrule.FieldSkipMonitoring, v)
-	return u
-}
-
-// UpdateSkipMonitoring sets the "skip_monitoring" field to the value that was provided on create.
-func (u *ErrorPassthroughRuleUpsert) UpdateSkipMonitoring() *ErrorPassthroughRuleUpsert {
-	u.SetExcluded(errorpassthroughrule.FieldSkipMonitoring)
 	return u
 }
 
@@ -922,20 +885,6 @@ func (u *ErrorPassthroughRuleUpsertOne) UpdateCustomMessage() *ErrorPassthroughR
 func (u *ErrorPassthroughRuleUpsertOne) ClearCustomMessage() *ErrorPassthroughRuleUpsertOne {
 	return u.Update(func(s *ErrorPassthroughRuleUpsert) {
 		s.ClearCustomMessage()
-	})
-}
-
-// SetSkipMonitoring sets the "skip_monitoring" field.
-func (u *ErrorPassthroughRuleUpsertOne) SetSkipMonitoring(v bool) *ErrorPassthroughRuleUpsertOne {
-	return u.Update(func(s *ErrorPassthroughRuleUpsert) {
-		s.SetSkipMonitoring(v)
-	})
-}
-
-// UpdateSkipMonitoring sets the "skip_monitoring" field to the value that was provided on create.
-func (u *ErrorPassthroughRuleUpsertOne) UpdateSkipMonitoring() *ErrorPassthroughRuleUpsertOne {
-	return u.Update(func(s *ErrorPassthroughRuleUpsert) {
-		s.UpdateSkipMonitoring()
 	})
 }
 
@@ -1385,20 +1334,6 @@ func (u *ErrorPassthroughRuleUpsertBulk) UpdateCustomMessage() *ErrorPassthrough
 func (u *ErrorPassthroughRuleUpsertBulk) ClearCustomMessage() *ErrorPassthroughRuleUpsertBulk {
 	return u.Update(func(s *ErrorPassthroughRuleUpsert) {
 		s.ClearCustomMessage()
-	})
-}
-
-// SetSkipMonitoring sets the "skip_monitoring" field.
-func (u *ErrorPassthroughRuleUpsertBulk) SetSkipMonitoring(v bool) *ErrorPassthroughRuleUpsertBulk {
-	return u.Update(func(s *ErrorPassthroughRuleUpsert) {
-		s.SetSkipMonitoring(v)
-	})
-}
-
-// UpdateSkipMonitoring sets the "skip_monitoring" field to the value that was provided on create.
-func (u *ErrorPassthroughRuleUpsertBulk) UpdateSkipMonitoring() *ErrorPassthroughRuleUpsertBulk {
-	return u.Update(func(s *ErrorPassthroughRuleUpsert) {
-		s.UpdateSkipMonitoring()
 	})
 }
 

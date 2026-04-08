@@ -34,6 +34,7 @@ Deploy Sub2API via Helm:
 helm install sub2api ../../deploy/helm/sub2api \
   -n sub2api \
   -f ../../deploy/helm/sub2api/values-production.yaml \
+  --set config.grafanaUrl=<grafana_url_if_monitoring_enabled> \
   --set secrets.jwtSecret=<value> \
   --set secrets.totpEncryptionKey=<value> \
   --set secrets.adminPassword=<value>

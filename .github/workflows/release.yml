@@ -41,8 +41,10 @@ jobs:
           else
             VERSION=${GITHUB_REF#refs/tags/v}
           fi
-          echo "$VERSION" > backend/cmd/api/VERSION
+          echo "$VERSION" > backend/cmd/gateway/VERSION
+          echo "$VERSION" > backend/cmd/control/VERSION
           echo "$VERSION" > backend/cmd/worker/VERSION
+          echo "$VERSION" > backend/cmd/bootstrap/VERSION
           echo "Updated VERSION files to: $VERSION"
 
       - name: Upload VERSION artifacts
@@ -50,8 +52,10 @@ jobs:
         with:
           name: version-files
           path: |
-            backend/cmd/api/VERSION
+            backend/cmd/gateway/VERSION
+            backend/cmd/control/VERSION
             backend/cmd/worker/VERSION
+            backend/cmd/bootstrap/VERSION
           retention-days: 1
 
   build-frontend:
@@ -84,7 +88,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: frontend-dist
-          path: backend/internal/web/dist/
+          path: frontend/dist/
           retention-days: 1
 
   release:
@@ -107,7 +111,7 @@ jobs:
         uses: actions/download-artifact@v8
         with:
           name: frontend-dist
-          path: backend/internal/web/dist/
+          path: frontend/dist/
 
       - name: Setup Go
         uses: actions/setup-go@v6
@@ -118,12 +122,15 @@ jobs:
 
       - name: Verify Go version
         run: |
-          go version | grep -q 'go1.26.1'
+          go version | grep -q 'go1.26.2'
 
       # QEMU needed for arm64 Docker image layers (apk add, etc.)
       # Go cross-compilation itself doesn't need it
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -176,6 +183,34 @@ jobs:
           GITHUB_REPO_OWNER_LOWER: ${{ steps.lowercase.outputs.owner }}
           GITHUB_REPO_NAME: ${{ github.event.repository.name }}
 
+      - name: Build and push frontend image
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG_NAME=${{ github.event.inputs.tag }}
+          else
+            TAG_NAME=${GITHUB_REF#refs/tags/}
+          fi
+          VERSION=${TAG_NAME#v}
+          IMAGE="ghcr.io/${{ steps.lowercase.outputs.owner }}/${{ github.event.repository.name }}/frontend"
+          TAG_ARGS=(-t "${IMAGE}:${VERSION}" -t "${IMAGE}:latest")
+
+          if [ "${{ env.SIMPLE_RELEASE }}" = "true" ]; then
+            PLATFORMS="linux/amd64"
+          else
+            MAJOR=${VERSION%%.*}
+            REST=${VERSION#*.}
+            MINOR=${REST%%.*}
+            TAG_ARGS+=(-t "${IMAGE}:${MAJOR}.${MINOR}" -t "${IMAGE}:${MAJOR}")
+            PLATFORMS="linux/amd64,linux/arm64"
+          fi
+
+          docker buildx build \
+            --platform "${PLATFORMS}" \
+            "${TAG_ARGS[@]}" \
+            -f Dockerfile.goreleaser.frontend \
+            --push \
+            .
+
       # Send Telegram notification
       - name: Send Telegram Notification
         if: ${{ env.SIMPLE_RELEASE != 'true' }}
@@ -219,7 +254,11 @@ jobs:
 
           MESSAGE+="🐳 *Docker 部署:*"$'\n'
           MESSAGE+="\`\`\`bash"$'\n'
-          MESSAGE+="docker pull ${GHCR_IMAGE}:${TAG_NAME}"$'\n'
+          MESSAGE+="docker pull ${GHCR_IMAGE}/gateway:${TAG_NAME}"$'\n'
+          MESSAGE+="docker pull ${GHCR_IMAGE}/control:${TAG_NAME}"$'\n'
+          MESSAGE+="docker pull ${GHCR_IMAGE}/frontend:${TAG_NAME}"$'\n'
+          MESSAGE+="docker pull ${GHCR_IMAGE}/worker:${TAG_NAME}"$'\n'
+          MESSAGE+="docker pull ${GHCR_IMAGE}/bootstrap:${TAG_NAME}"$'\n'
           MESSAGE+="\`\`\`"$'\n'$'\n'
           MESSAGE+="🔗 *相关链接:*"$'\n'
           MESSAGE+="• [GitHub Release](https://github.com/${REPO}/releases/tag/${TAG_NAME})"$'\n'
@@ -258,17 +297,19 @@ jobs:
             VERSION=${GITHUB_REF#refs/tags/v}
           fi
 
-          CURRENT_VERSION=$(tr -d '\r\n' < backend/cmd/api/VERSION || true)
+          CURRENT_VERSION=$(tr -d '\r\n' < backend/cmd/gateway/VERSION || true)
           if [ "$CURRENT_VERSION" = "$VERSION" ]; then
             echo "VERSION files already match $VERSION"
             exit 0
           fi
 
-          echo "$VERSION" > backend/cmd/api/VERSION
+          echo "$VERSION" > backend/cmd/gateway/VERSION
+          echo "$VERSION" > backend/cmd/control/VERSION
           echo "$VERSION" > backend/cmd/worker/VERSION
+          echo "$VERSION" > backend/cmd/bootstrap/VERSION
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/cmd/api/VERSION backend/cmd/worker/VERSION
+          git add backend/cmd/gateway/VERSION backend/cmd/control/VERSION backend/cmd/worker/VERSION backend/cmd/bootstrap/VERSION
           git commit -m "chore: sync VERSION to ${VERSION} [skip ci]"
           git push origin HEAD:${{ github.event.repository.default_branch }}

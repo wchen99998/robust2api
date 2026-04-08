@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { setActivePinia, createPinia } from 'pinia'
 import { useAppStore } from '@/stores/app'
+import { getVersion } from '@/api/admin/system'
 
 // Mock API 模块
 vi.mock('@/api/admin/system', () => ({
-  checkUpdates: vi.fn(),
+  getVersion: vi.fn(),
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -14,6 +15,7 @@ vi.mock('@/api/auth', () => ({
 describe('useAppStore', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    vi.clearAllMocks()
     vi.useFakeTimers()
     // 清除 window.__APP_CONFIG__
     delete (window as any).__APP_CONFIG__
@@ -243,6 +245,33 @@ describe('useAppStore', () => {
       expect(store.sidebarCollapsed).toBe(false)
       expect(store.loading).toBe(false)
       expect(store.toasts).toHaveLength(0)
+    })
+  })
+
+  // --- 版本信息 ---
+
+  describe('版本信息加载', () => {
+    it('fetchVersion 成功后保存 currentVersion', async () => {
+      vi.mocked(getVersion).mockResolvedValue({ version: '3.2.1' })
+      const store = useAppStore()
+
+      const value = await store.fetchVersion()
+
+      expect(value).toBe('3.2.1')
+      expect(store.currentVersion).toBe('3.2.1')
+      expect(store.versionLoaded).toBe(true)
+      expect(vi.mocked(getVersion)).toHaveBeenCalledTimes(1)
+    })
+
+    it('fetchVersion 命中缓存时不重复请求', async () => {
+      vi.mocked(getVersion).mockResolvedValue({ version: '3.2.1' })
+      const store = useAppStore()
+
+      await store.fetchVersion()
+      const value = await store.fetchVersion()
+
+      expect(value).toBe('3.2.1')
+      expect(vi.mocked(getVersion)).toHaveBeenCalledTimes(1)
     })
   })
 

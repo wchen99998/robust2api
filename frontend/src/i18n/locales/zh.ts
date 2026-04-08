@@ -340,7 +340,6 @@ export default {
     accounts: '账号管理',
     proxies: 'IP管理',
     redeemCodes: '兑换码',
-    ops: '运维监控',
     promoCodes: '优惠码',
     settings: '系统设置',
     myAccount: '我的账户',
@@ -1017,7 +1016,11 @@ export default {
       configureAiAccounts: '配置 AI 平台账号',
       systemSettings: '系统设置',
       configureSystem: '配置系统设置',
-      failedToLoad: '加载仪表盘数据失败'
+      failedToLoad: '加载仪表盘数据失败',
+      openInNewTab: '在新标签页打开',
+      grafanaNotReadyTitle: 'Grafana 仪表盘暂不可用',
+      grafanaMissingDescription: '尚未配置 Grafana 地址，请在系统设置中填写 Grafana URL。',
+      grafanaInvalidDescription: 'Grafana URL 无效，请在系统设置中填写有效的 http(s) 地址。'
     },
 
     // Users Management
@@ -4487,7 +4490,6 @@ export default {
       custom: '自定义',
       code: '状态码',
       body: '消息体',
-      skipMonitoring: '跳过监控',
 
       // Columns
       columns: {
@@ -4532,8 +4534,6 @@ export default {
         passthroughBody: '透传上游错误信息',
         customMessage: '自定义错误信息',
         customMessagePlaceholder: '返回给客户端的错误信息...',
-        skipMonitoring: '跳过运维监控记录',
-        skipMonitoringHint: '开启后，匹配此规则的错误不会被记录到运维监控中',
         enabled: '启用此规则'
       },
 
