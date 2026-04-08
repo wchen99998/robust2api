@@ -13,4 +13,4 @@ spec:
   wait: true
   timeout: 15m
   dependsOn:
-    - name: monitoring
+    - name: cert-manager-issuers

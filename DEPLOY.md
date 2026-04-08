@@ -3,7 +3,7 @@
 Deploy Sub2API on DigitalOcean Kubernetes (DOKS) with a clean ownership split:
 
 - **Terraform** manages cloud resources: DOKS cluster, optional managed PostgreSQL, optional R2 storage buckets, and Cloudflare API token bootstrap secrets.
-- **Flux CD** manages everything inside the cluster: ingress-nginx, cert-manager, ExternalDNS, monitoring stack, and the Sub2API application — all via GitOps.
+- **Flux CD** manages everything inside the cluster: ingress-nginx, cert-manager, ExternalDNS, the Sub2API application, and an optional monitoring stack — all via GitOps.
 
 All in-cluster changes are made by editing YAML files in `clusters/production/`, committing, and pushing. Flux reconciles automatically.
 
@@ -18,7 +18,7 @@ Sub2API pods (namespace: sub2api)
     +-- Redis (in-cluster Bitnami, standalone)
     +-- PostgreSQL (in-cluster Bitnami or external DO Managed)
 
-Monitoring (namespace: monitoring, optional)
+Monitoring (namespace: monitoring, optional and suspended by default)
     +-- Prometheus (metrics)
     +-- Grafana (dashboards)
     +-- Tempo (traces -> R2)
@@ -27,7 +27,8 @@ Monitoring (namespace: monitoring, optional)
 
 Flux CD (namespace: flux-system)
     +-- Watches: clusters/production/ in this Git repo
-    +-- Reconciles: infrastructure -> monitoring -> apps
+    +-- Reconciles: infrastructure -> cert-manager-issuers -> apps
+    +-- Optional: monitoring (enable by unsuspending its Kustomization)
 ```
 
 ## Prerequisites
@@ -51,7 +52,7 @@ Use Terraform for:
 
 Use Flux (GitOps) for:
 - ingress-nginx, cert-manager, ExternalDNS
-- Monitoring stack (Prometheus, Grafana, Tempo, Loki, Alloy)
+- Optional monitoring stack (Prometheus, Grafana, Tempo, Loki, Alloy)
 - Sub2API application (gateway, control, worker)
 - All in-cluster configuration changes
 
@@ -114,7 +115,8 @@ Flux will:
 1. Install its controllers in the `flux-system` namespace
 2. Create a GitRepository source pointing at this repo
 3. Start from the checked-in root `clusters/production/kustomization.yaml`
-4. Apply infrastructure -> monitoring -> apps in dependency order
+4. Apply infrastructure -> cert-manager-issuers -> apps in dependency order
+5. Leave the monitoring Kustomization suspended until you explicitly enable it
 
 ## 3. Create Secrets
 
@@ -157,6 +159,8 @@ If using external PostgreSQL and/or Redis instead of the bundled charts, set `po
 
 ### Monitoring Secrets (if using monitoring stack)
 
+The monitoring Kustomization is suspended by default. Only create this secret and unsuspend [`clusters/production/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring.yaml) if you want the LGTM stack.
+
 ```bash
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
 
@@ -186,8 +190,17 @@ Update `CHANGEME` values in the Flux YAML files before deploying:
 |------|--------------|
 | `clusters/production/infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt notification email) |
 | `clusters/production/infrastructure/external-dns.yaml` | `txtOwnerId`, `domainFilters` |
-| `clusters/production/monitoring/monitoring.yaml` | `grafanaIngress.host`, R2 endpoints, bucket names, DB host |
-| `clusters/production/apps/sub2api.yaml` | Image tags, ingress hosts, `gatewayUrl`, `grafanaUrl` |
+| `clusters/production/monitoring.yaml` | Set `spec.suspend: false` when you are ready to enable monitoring |
+| `clusters/production/monitoring/monitoring.yaml` | `grafanaIngress.host`, R2 endpoints, bucket names, DB host (monitoring only) |
+| `clusters/production/apps/sub2api.yaml` | Image tags, ingress hosts, `gatewayUrl`; set `grafanaUrl` and enable `observability` only when monitoring is enabled |
+
+### Enable Monitoring (optional)
+
+1. Fill in the `CHANGEME` values in [`clusters/production/monitoring/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring/monitoring.yaml).
+2. Create `monitoring-secrets` in the `monitoring` namespace.
+3. Set `spec.suspend: false` in [`clusters/production/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring.yaml).
+4. Update [`clusters/production/apps/sub2api.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/apps/sub2api.yaml) with your Grafana URL and set `observability.enabled=true` and `observability.serviceMonitor.enabled=true` if you want the app to emit OTLP traces and Prometheus ServiceMonitor resources.
+5. Commit and push. Flux will reconcile monitoring independently of the app layer.
 
 ## 5. Initial Deploy
 
@@ -212,10 +225,12 @@ flux get helmreleases -A
 
 # Check pods
 kubectl get pods -n sub2api
-kubectl get pods -n monitoring
 kubectl get pods -n ingress-nginx
 kubectl get pods -n cert-manager
 kubectl get pods -n external-dns
+
+# Monitoring pods (only if enabled)
+kubectl get pods -n monitoring
 
 # Check certificates
 kubectl get certificates -A

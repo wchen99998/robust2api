@@ -71,7 +71,8 @@ control:
         memory: 512Mi
     port: 8081
     # Additional origins allowed in iframe embeds rendered by the control frontend.
-    # Add any origins used by Grafana, purchase/subscription pages, custom menu items,
+    # The Grafana origin from config.grafanaUrl is added automatically.
+    # Add any additional origins used by purchase/subscription pages, custom menu items,
     # or URL-based home content. Cloudflare Turnstile is always allowed automatically.
     extraFrameSrcOrigins: []
 
@@ -160,6 +161,7 @@ config:
   gatewayUrl: ""
   # Public Grafana base URL exposed to the app for the admin dashboard iframe.
   # Example: https://grafana-monitoring.example.com
+  # When set, the origin is added to EXTRA_FRAME_SRC_ORIGINS automatically.
   grafanaUrl: ""
 
   database:

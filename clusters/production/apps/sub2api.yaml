@@ -8,6 +8,7 @@ spec:
   chart:
     spec:
       chart: deploy/helm/sub2api
+      reconcileStrategy: Revision
       sourceRef:
         kind: GitRepository
         name: flux-system
@@ -95,19 +96,19 @@ spec:
       timezone: Asia/Shanghai
       # CHANGEME: Set your public gateway URL
       gatewayUrl: "https://gateway-sub2api.do-prod.yourdomain.com"
-      # CHANGEME: Set your Grafana URL (if monitoring enabled)
-      grafanaUrl: "https://grafana.do-prod.yourdomain.com"
+      # Set when monitoring is enabled; the Grafana origin is auto-added to the iframe allowlist.
+      grafanaUrl: ""
 
-    # --- Observability ---
+    # --- Observability (enable after unsuspending the monitoring layer) ---
     observability:
-      enabled: true
+      enabled: false
       otel:
         serviceName: sub2api
         endpoint: "monitoring-alloy.monitoring.svc:4317"
         traceSampleRate: "0.1"
         metricsPort: 9090
       serviceMonitor:
-        enabled: true
+        enabled: false
         interval: 15s
 
     # --- Database (use external if managed DB enabled) ---

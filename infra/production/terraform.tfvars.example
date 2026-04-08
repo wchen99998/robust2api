@@ -7,39 +7,17 @@ node_size    = "s-2vcpu-4gb"
 min_nodes    = 1
 max_nodes    = 3
 
-# Kubernetes bootstrap
-letsencrypt_email = "admin@yourdomain.com"
-
-# Cloudflare DNS
+# Cloudflare bootstrap secret (used by Flux-managed cert-manager and ExternalDNS)
 cloudflare_api_token = "your_cloudflare_api_token_here"
-cloudflare_zone_id   = "your_zone_id_here"
-domain_suffix        = "do-prod.yourdomain.com"
-cloudflare_proxied   = true
 
 # Managed PostgreSQL (optional, default false)
 enable_managed_database = false
 # db_size               = "db-s-1vcpu-1gb"
 
 # Observability storage (optional, default false)
-# Creates Cloudflare R2 buckets for Tempo (traces) and Loki (logs)
+# Creates Cloudflare R2 buckets for the optional Flux-managed Tempo and Loki releases
 enable_observability_storage = false
 # cloudflare_account_id = "your_cloudflare_account_id"
 
-# Monitoring stack (optional, default false)
-# Requires enable_observability_storage = true for R2 buckets
-# Also requires PostgreSQL datasource credentials for Grafana analytics dashboards.
-enable_monitoring = false
-# grafana_hostname_prefix = "grafana"
-# r2_access_key   = "your_r2_access_key"
-# r2_secret_key   = "your_r2_secret_key"
-
-# External PostgreSQL datasource for Grafana (used when enable_managed_database = false)
-# grafana_db_host     = "your-postgres-host.example.com"
-# grafana_db_port     = 5432
-# grafana_db_name     = "sub2api"
-# grafana_db_user     = "grafana_reader"
-# grafana_db_password = "your_grafana_reader_password"
-# grafana_db_sslmode  = "require"
-
-# Managed PostgreSQL reader username override (used when enable_managed_database = true)
+# Optional managed PostgreSQL reader username used when you later configure Grafana dashboards
 # managed_grafana_reader_user = "grafana_reader"

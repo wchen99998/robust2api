@@ -15,8 +15,8 @@ clusters/production/
 ├── kustomization.yaml              # Root Kustomize entrypoint for Flux bootstrap
 ├── infrastructure.yaml             # Flux Kustomization (no dependencies)
 ├── cert-manager-issuers.yaml       # Flux Kustomization (dependsOn: infrastructure)
-├── monitoring.yaml                 # Flux Kustomization (dependsOn: cert-manager-issuers)
-├── apps.yaml                       # Flux Kustomization (dependsOn: monitoring)
+├── monitoring.yaml                 # Flux Kustomization (optional, suspended by default)
+├── apps.yaml                       # Flux Kustomization (dependsOn: cert-manager-issuers)
 ├── infrastructure/
 │   ├── kustomization.yaml          # Kustomize entrypoint for infrastructure resources
 │   ├── sources/
@@ -39,7 +39,7 @@ clusters/production/
     └── sub2api.yaml                # HelmRelease via GitRepository
 ```
 
-Dependency chain: infrastructure -> cert-manager-issuers -> monitoring -> apps.
+Dependency chain: infrastructure -> cert-manager-issuers -> apps. Monitoring is an optional sibling Kustomization that can be unsuspended after its values and secrets are ready.
 
 ## Sources
 
@@ -54,6 +54,8 @@ Dependency chain: infrastructure -> cert-manager-issuers -> monitoring -> apps.
 ### GitRepository (in-repo charts)
 
 The `flux-system` GitRepository created by `flux bootstrap` points at this repo. The monitoring and sub2api HelmReleases reference it with chart paths `deploy/helm/monitoring` and `deploy/helm/sub2api` respectively.
+
+Both Git-backed HelmReleases should use `reconcileStrategy: Revision` so changes under `deploy/helm/...` produce a new chart artifact even when `Chart.yaml` version is unchanged.
 
 ## HelmRelease Configurations
 
