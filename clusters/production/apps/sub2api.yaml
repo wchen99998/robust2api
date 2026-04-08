@@ -1,0 +1,97 @@
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sub2api
+  namespace: sub2api
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: deploy/helm/sub2api
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 10m
+  valuesFrom:
+    - kind: Secret
+      name: sub2api-secrets
+      optional: false
+  values:
+    # --- Image tags (update these to deploy new versions) ---
+    image:
+      gateway:
+        tag: "0.1.0"
+      control:
+        tag: "0.1.0"
+      frontend:
+        tag: "0.1.0"
+      worker:
+        tag: "0.1.0"
+      bootstrap:
+        tag: "0.1.0"
+
+    imagePullSecrets:
+      - name: ghcr-pull
+
+    # --- Ingress ---
+    ingress:
+      enabled: true
+      className: nginx
+      cloudflareProxied: "true"
+      maxBodySize: "50m"
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+      # CHANGEME: Set your gateway and control hostnames
+      gateway:
+        enabled: true
+        host: gateway-sub2api.do-prod.yourdomain.com
+        tls:
+          enabled: true
+      control:
+        enabled: true
+        host: app-sub2api.do-prod.yourdomain.com
+        tls:
+          enabled: true
+
+    # --- Config ---
+    config:
+      serverPort: "8080"
+      serverMode: release
+      runMode: standard
+      timezone: Asia/Shanghai
+      # CHANGEME: Set your public gateway URL
+      gatewayUrl: "https://gateway-sub2api.do-prod.yourdomain.com"
+      # CHANGEME: Set your Grafana URL (if monitoring enabled)
+      grafanaUrl: "https://grafana.do-prod.yourdomain.com"
+
+    # --- Observability ---
+    observability:
+      enabled: true
+      otel:
+        serviceName: sub2api
+        endpoint: "monitoring-alloy.monitoring.svc:4317"
+        traceSampleRate: "0.1"
+        metricsPort: 9090
+      serviceMonitor:
+        enabled: true
+        interval: 15s
+
+    # --- Database (use external if managed DB enabled) ---
+    # Uncomment and configure for external DB:
+    # postgresql:
+    #   enabled: false
+    # externalDatabase:
+    #   host: your-db-host.db.ondigitalocean.com
+    #   port: 25060
+    #   user: sub2api
+    #   database: sub2api
+    #   sslmode: require
