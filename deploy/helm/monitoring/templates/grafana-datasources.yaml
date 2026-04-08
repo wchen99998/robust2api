@@ -48,7 +48,7 @@ metadata:
     grafana_datasource: "1"
 type: Opaque
 stringData:
-  datasources.yaml: |
+  pg-datasource.yaml: |
     apiVersion: 1
     datasources:
       - name: {{ $pg.name | quote }}

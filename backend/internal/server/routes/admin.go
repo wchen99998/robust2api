@@ -20,7 +20,7 @@ func RegisterAdminRoutes(
 	admin := v1.Group("/admin")
 	admin.Use(gin.HandlerFunc(adminAuth))
 	{
-		// 仪表盘
+		// 仪表盘 (usage analytics used by the Usage page)
 		registerDashboardRoutes(admin, h)
 
 		// 用户管理
@@ -96,18 +96,8 @@ func registerDashboardRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 	dashboard := admin.Group("/dashboard")
 	{
 		dashboard.GET("/snapshot-v2", h.Admin.Dashboard.GetSnapshotV2)
-		dashboard.GET("/stats", h.Admin.Dashboard.GetStats)
-		dashboard.GET("/realtime", h.Admin.Dashboard.GetRealtimeMetrics)
-		dashboard.GET("/trend", h.Admin.Dashboard.GetUsageTrend)
 		dashboard.GET("/models", h.Admin.Dashboard.GetModelStats)
 		dashboard.GET("/groups", h.Admin.Dashboard.GetGroupStats)
-		dashboard.GET("/api-keys-trend", h.Admin.Dashboard.GetAPIKeyUsageTrend)
-		dashboard.GET("/users-trend", h.Admin.Dashboard.GetUserUsageTrend)
-		dashboard.GET("/users-ranking", h.Admin.Dashboard.GetUserSpendingRanking)
-		dashboard.POST("/users-usage", h.Admin.Dashboard.GetBatchUsersUsage)
-		dashboard.POST("/api-keys-usage", h.Admin.Dashboard.GetBatchAPIKeysUsage)
-		dashboard.GET("/user-breakdown", h.Admin.Dashboard.GetUserBreakdown)
-		dashboard.POST("/aggregation/backfill", h.Admin.Dashboard.BackfillAggregation)
 	}
 }
 
@@ -353,6 +343,8 @@ func registerUsageRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 		usage.GET("/cleanup-tasks", h.Admin.Usage.ListCleanupTasks)
 		usage.POST("/cleanup-tasks", h.Admin.Usage.CreateCleanupTask)
 		usage.POST("/cleanup-tasks/:id/cancel", h.Admin.Usage.CancelCleanupTask)
+		usage.GET("/user-breakdown", h.Admin.Usage.GetUserBreakdown)
+		usage.POST("/users-usage", h.Admin.Usage.GetBatchUsersUsage)
 	}
 }
 

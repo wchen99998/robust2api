@@ -110,7 +110,7 @@ import { Doughnut } from 'vue-chartjs'
 import LoadingSpinner from '@/components/common/LoadingSpinner.vue'
 import UserBreakdownSubTable from './UserBreakdownSubTable.vue'
 import type { GroupStat, UserBreakdownItem } from '@/types'
-import { getUserBreakdown } from '@/api/admin/dashboard'
+import { getUserBreakdown } from '@/api/admin/usage'
 
 ChartJS.register(ArcElement, Tooltip, Legend)
 

@@ -55,10 +55,10 @@ func TestRoleRoutersExposeOnlyOwnedRoutes(t *testing.T) {
 	require.Contains(t, gatewayRoutes, "POST /v1/messages")
 	require.Contains(t, gatewayRoutes, "GET /health")
 	require.NotContains(t, gatewayRoutes, "GET /api/v1/auth/me")
-	require.NotContains(t, gatewayRoutes, "GET /api/v1/admin/dashboard/stats")
+	require.NotContains(t, gatewayRoutes, "GET /api/v1/admin/dashboard/models")
 
 	require.Contains(t, controlRoutes, "GET /api/v1/auth/me")
-	require.Contains(t, controlRoutes, "GET /api/v1/admin/dashboard/stats")
+	require.Contains(t, controlRoutes, "GET /api/v1/admin/dashboard/models")
 	require.Contains(t, controlRoutes, "GET /health")
 	require.NotContains(t, controlRoutes, "POST /v1/messages")
 	require.NotContains(t, controlRoutes, "POST /responses")

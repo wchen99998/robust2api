@@ -587,3 +587,115 @@ func (h *UsageHandler) CancelCleanupTask(c *gin.Context) {
 	logger.LegacyPrintf("handler.admin.usage", "[UsageCleanup] 清理任务已取消: task=%d operator=%d", taskID, subject.UserID)
 	response.Success(c, gin.H{"id": taskID, "status": service.UsageCleanupStatusCanceled})
 }
+
+// GetUserBreakdown handles getting per-user usage breakdown within a dimension.
+// GET /api/v1/admin/usage/user-breakdown
+func (h *UsageHandler) GetUserBreakdown(c *gin.Context) {
+	userTZ := c.Query("timezone")
+	now := timezone.NowInUserLocation(userTZ)
+	startTime := now.AddDate(0, 0, -7)
+	endTime := now
+
+	if v := c.Query("start_date"); v != "" {
+		if t, err := timezone.ParseInUserLocation("2006-01-02", v, userTZ); err == nil {
+			startTime = t
+		}
+	}
+	if v := c.Query("end_date"); v != "" {
+		if t, err := timezone.ParseInUserLocation("2006-01-02", v, userTZ); err == nil {
+			endTime = t.AddDate(0, 0, 1)
+		}
+	}
+
+	dim := usagestats.UserBreakdownDimension{}
+	if v := c.Query("group_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			dim.GroupID = id
+		}
+	}
+	dim.Model = c.Query("model")
+	rawModelSource := strings.TrimSpace(c.DefaultQuery("model_source", usagestats.ModelSourceRequested))
+	if !usagestats.IsValidModelSource(rawModelSource) {
+		response.BadRequest(c, "Invalid model_source, use requested/upstream/mapping")
+		return
+	}
+	dim.ModelType = rawModelSource
+	dim.Endpoint = c.Query("endpoint")
+	dim.EndpointType = c.DefaultQuery("endpoint_type", "inbound")
+
+	if v := c.Query("user_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			dim.UserID = id
+		}
+	}
+	if v := c.Query("api_key_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			dim.APIKeyID = id
+		}
+	}
+	if v := c.Query("account_id"); v != "" {
+		if id, err := strconv.ParseInt(v, 10, 64); err == nil {
+			dim.AccountID = id
+		}
+	}
+	if v := c.Query("request_type"); v != "" {
+		if rt, err := strconv.ParseInt(v, 10, 16); err == nil {
+			rtVal := int16(rt)
+			dim.RequestType = &rtVal
+		}
+	}
+	if v := c.Query("stream"); v != "" {
+		if s, err := strconv.ParseBool(v); err == nil {
+			dim.Stream = &s
+		}
+	}
+	if v := c.Query("billing_type"); v != "" {
+		if bt, err := strconv.ParseInt(v, 10, 8); err == nil {
+			btVal := int8(bt)
+			dim.BillingType = &btVal
+		}
+	}
+
+	limit := 50
+	if v := c.Query("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 200 {
+			limit = n
+		}
+	}
+
+	stats, err := h.usageService.GetUserBreakdownStats(c.Request.Context(), startTime, endTime, dim, limit)
+	if err != nil {
+		response.Error(c, 500, "Failed to get user breakdown stats")
+		return
+	}
+
+	response.Success(c, gin.H{
+		"users":      stats,
+		"start_date": startTime.Format("2006-01-02"),
+		"end_date":   endTime.Add(-24 * time.Hour).Format("2006-01-02"),
+	})
+}
+
+// GetBatchUsersUsage handles getting usage stats for multiple users.
+// POST /api/v1/admin/usage/users-usage
+func (h *UsageHandler) GetBatchUsersUsage(c *gin.Context) {
+	var req struct {
+		UserIDs []int64 `json:"user_ids" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	if len(req.UserIDs) == 0 {
+		response.Success(c, gin.H{"stats": map[string]any{}})
+		return
+	}
+
+	stats, err := h.usageService.GetBatchUserUsageStats(c.Request.Context(), req.UserIDs, time.Time{}, time.Time{})
+	if err != nil {
+		response.Error(c, 500, "Failed to get user usage stats")
+		return
+	}
+
+	response.Success(c, gin.H{"stats": stats})
+}

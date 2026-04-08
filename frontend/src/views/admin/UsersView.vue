@@ -607,7 +607,7 @@ import Icon from '@/components/icons/Icon.vue'
 const { t } = useI18n()
 import { adminAPI } from '@/api/admin'
 import type { AdminUser, AdminGroup, UserAttributeDefinition } from '@/types'
-import type { BatchUserUsageStats } from '@/api/admin/dashboard'
+import type { BatchUserUsageStats } from '@/api/admin/usage'
 import type { Column } from '@/components/common/types'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import TablePageLayout from '@/components/layout/TablePageLayout.vue'
@@ -932,7 +932,7 @@ const loadUsersSecondaryData = async (
     tasks.push(
       (async () => {
         try {
-          const usageResponse = await adminAPI.dashboard.getBatchUsersUsage(userIds)
+          const usageResponse = await adminAPI.usage.getBatchUsersUsage(userIds)
           if (signal?.aborted) return
           if (typeof expectedSeq === 'number' && expectedSeq !== secondaryDataSeq) return
           usageStats.value = usageResponse.stats

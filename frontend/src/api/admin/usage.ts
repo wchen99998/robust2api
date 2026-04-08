@@ -4,7 +4,7 @@
  */
 
 import { apiClient } from '../client'
-import type { AdminUsageLog, UsageQueryParams, PaginatedResponse, UsageRequestType } from '@/types'
+import type { AdminUsageLog, UsageQueryParams, PaginatedResponse, UsageRequestType, UserBreakdownItem } from '@/types'
 import type { EndpointStat } from '@/types'
 
 // ==================== Types ====================
@@ -194,6 +194,53 @@ export async function cancelCleanupTask(taskId: number): Promise<{ id: number; s
   return data
 }
 
+export interface UserBreakdownParams {
+  start_date?: string
+  end_date?: string
+  group_id?: number
+  model?: string
+  model_source?: 'requested' | 'upstream' | 'mapping'
+  endpoint?: string
+  endpoint_type?: 'inbound' | 'upstream' | 'path'
+  limit?: number
+  user_id?: number
+  api_key_id?: number
+  account_id?: number
+  request_type?: number
+  stream?: boolean
+  billing_type?: number | null
+}
+
+export interface UserBreakdownResponse {
+  users: UserBreakdownItem[]
+  start_date: string
+  end_date: string
+}
+
+export async function getUserBreakdown(params: UserBreakdownParams): Promise<UserBreakdownResponse> {
+  const { data } = await apiClient.get<UserBreakdownResponse>('/admin/usage/user-breakdown', {
+    params
+  })
+  return data
+}
+
+export interface BatchUserUsageStats {
+  user_id: number
+  today_actual_cost: number
+  total_actual_cost: number
+}
+
+export interface BatchUsersUsageResponse {
+  stats: Record<string, BatchUserUsageStats>
+}
+
+export async function getBatchUsersUsage(userIds: number[]): Promise<BatchUsersUsageResponse> {
+  const { data } = await apiClient.post<BatchUsersUsageResponse>('/admin/usage/users-usage', {
+    user_ids: userIds
+  })
+  return data
+}
+
 export const adminUsageAPI = {
   list,
   getStats,
@@ -201,7 +248,9 @@ export const adminUsageAPI = {
   searchApiKeys,
   listCleanupTasks,
   createCleanupTask,
-  cancelCleanupTask
+  cancelCleanupTask,
+  getUserBreakdown,
+  getBatchUsersUsage
 }
 
 export default adminUsageAPI

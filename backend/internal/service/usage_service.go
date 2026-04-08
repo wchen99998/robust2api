@@ -359,3 +359,22 @@ func (s *UsageService) GetStatsWithFilters(ctx context.Context, filters usagesta
 	}
 	return stats, nil
 }
+
+// GetGroupUsageSummary returns today's and cumulative cost for all groups.
+func (s *UsageService) GetGroupUsageSummary(ctx context.Context, todayStart time.Time) ([]usagestats.GroupUsageSummary, error) {
+	results, err := s.usageRepo.GetAllGroupUsageSummary(ctx, todayStart)
+	if err != nil {
+		return nil, fmt.Errorf("get group usage summary: %w", err)
+	}
+	return results, nil
+}
+
+// GetUserBreakdownStats returns per-user usage breakdown within a dimension.
+func (s *UsageService) GetUserBreakdownStats(ctx context.Context, startTime, endTime time.Time, dim usagestats.UserBreakdownDimension, limit int) ([]usagestats.UserBreakdownItem, error) {
+	return s.usageRepo.GetUserBreakdownStats(ctx, startTime, endTime, dim, limit)
+}
+
+// GetBatchUserUsageStats returns usage stats for multiple users.
+func (s *UsageService) GetBatchUserUsageStats(ctx context.Context, userIDs []int64, startTime, endTime time.Time) (map[int64]*usagestats.BatchUserUsageStats, error) {
+	return s.usageRepo.GetBatchUserUsageStats(ctx, userIDs, startTime, endTime)
+}
