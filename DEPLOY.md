@@ -1,14 +1,14 @@
 # Kubernetes Deployment Guide
 
-Deploy Sub2API on DigitalOcean Kubernetes (DOKS) with a clean ownership split:
+Sub2API runs on DigitalOcean Kubernetes (DOKS) with a clean ownership split:
 
 - **Terraform** manages cloud resources: DOKS cluster, optional managed PostgreSQL, optional R2 storage buckets, and Cloudflare API token bootstrap secrets.
-- **Flux CD** manages everything inside the cluster: ingress-nginx, cert-manager, ExternalDNS, the Sub2API application, and an optional monitoring stack — all via GitOps.
+- **Flux CD** manages everything inside the cluster: ingress-nginx, cert-manager, ExternalDNS, the Sub2API application, and the monitoring stack (LGTM) — all via GitOps.
 
-All in-cluster changes are made by editing YAML files in `clusters/production/`, committing, and pushing. Flux reconciles automatically.
+All in-cluster changes are made by editing YAML files in `clusters/production/`, committing, and pushing. Flux reconciles automatically within 1 minute.
 
 ```
-Cloudflare (DNS managed by ExternalDNS, CDN/WAF if proxied)
+Cloudflare (DNS managed by ExternalDNS, proxied)
     |
 DO Load Balancer (TLS passthrough)
     |
@@ -18,8 +18,8 @@ Sub2API pods (namespace: sub2api)
     +-- Redis (in-cluster Bitnami, standalone)
     +-- PostgreSQL (in-cluster Bitnami or external DO Managed)
 
-Monitoring (namespace: monitoring, optional and suspended by default)
-    +-- Prometheus (metrics)
+Monitoring (namespace: monitoring)
+    +-- Prometheus + Alertmanager (metrics)
     +-- Grafana (dashboards)
     +-- Tempo (traces -> R2)
     +-- Loki (logs -> R2)
@@ -28,7 +28,7 @@ Monitoring (namespace: monitoring, optional and suspended by default)
 Flux CD (namespace: flux-system)
     +-- Watches: clusters/production/ in this Git repo
     +-- Reconciles: infrastructure -> cert-manager-issuers -> apps
-    +-- Optional: monitoring (enable by unsuspending its Kustomization)
+    +-- Also reconciles: monitoring (independent of apps)
 ```
 
 ## Prerequisites
@@ -38,23 +38,34 @@ Flux CD (namespace: flux-system)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/)
 - [Helm](https://helm.sh/docs/intro/install/) >= 3
 - [Flux CLI](https://fluxcd.io/flux/installation/#install-the-flux-cli) (`brew install fluxcd/tap/flux`)
-- A DigitalOcean API token ([create one](https://cloud.digitalocean.com/account/api/tokens))
-- A Cloudflare API token with DNS edit permissions ([create one](https://dash.cloudflare.com/profile/api-tokens))
+- A DigitalOcean API token
+- A Cloudflare API token with DNS edit permissions
 - A GitHub personal access token with `repo` scope (for Flux bootstrap)
 
 ## Deployment Ownership
 
-Use Terraform for:
-- DOKS cluster lifecycle
-- Optional external DO managed PostgreSQL
-- Optional R2 buckets for Tempo and Loki
-- Cloudflare API token secrets (bootstrap for cert-manager and ExternalDNS)
+### Terraform manages (`infra/production/`)
 
-Use Flux (GitOps) for:
-- ingress-nginx, cert-manager, ExternalDNS
-- Optional monitoring stack (Prometheus, Grafana, Tempo, Loki, Alloy)
-- Sub2API application (gateway, control, worker)
-- All in-cluster configuration changes
+| Resource | Purpose |
+|----------|---------|
+| `module.doks` | DOKS cluster + autoscaling node pool |
+| `kubernetes_namespace.cert_manager` | cert-manager namespace |
+| `kubernetes_namespace.external_dns` | external-dns namespace |
+| `kubernetes_secret.cloudflare_cert_manager` | Cloudflare API token for cert-manager DNS-01 |
+| `kubernetes_secret.cloudflare_external_dns` | Cloudflare API token for ExternalDNS |
+| `module.storage[0]` (optional) | R2 buckets for Tempo and Loki |
+| `module.database[0]` (optional) | DO Managed PostgreSQL |
+
+### Flux manages (`clusters/production/`)
+
+| Kustomization | Path | Resources |
+|--------------|------|-----------|
+| `infrastructure` | `clusters/production/infrastructure/` | ingress-nginx, cert-manager, external-dns, namespaces, Helm sources |
+| `cert-manager-issuers` | `clusters/production/infrastructure/issuers/` | ClusterIssuer (depends on cert-manager CRDs) |
+| `apps` | `clusters/production/apps/` | Sub2API HelmRelease (gateway, control, worker, bootstrap) |
+| `monitoring` | `clusters/production/monitoring/` | Monitoring HelmRelease (Prometheus, Grafana, Tempo, Loki, Alloy) |
+
+Dependency chain: `infrastructure` -> `cert-manager-issuers` -> `apps`. Monitoring reconciles independently.
 
 ## 1. Provision Infrastructure
 
@@ -63,64 +74,32 @@ cd infra/production
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-Edit `terraform.tfvars` with your values:
+Edit `terraform.tfvars`:
 
 ```hcl
-# DigitalOcean
-do_token     = "dop_v1_..."
-region       = "sgp1"
-cluster_name = "sub2api"
-k8s_version  = "1.34"
-
-# Cloudflare (for API token secrets only)
+do_token             = "dop_v1_..."
+region               = "sgp1"
+cluster_name         = "sub2api"
+k8s_version          = "1.34"
+node_size            = "s-2vcpu-4gb"
+min_nodes            = 2
+max_nodes            = 3
 cloudflare_api_token = "..."
-
-# Optional: managed PostgreSQL (default false, uses in-cluster Bitnami PG)
-# enable_managed_database = true
 
 # Optional: R2 storage for Tempo/Loki
 # enable_observability_storage = true
 # cloudflare_account_id        = "..."
 ```
 
-Apply:
-
 ```bash
 terraform init
 terraform apply
-```
-
-Configure kubectl:
-
-```bash
 eval "$(terraform output -raw kubeconfig_command)"
 ```
 
-## 2. Bootstrap Flux
+## 2. Create Secrets
 
-One-time setup. This installs Flux controllers and creates a GitRepository pointing at this repo.
-
-```bash
-export GITHUB_TOKEN=<your-github-pat>
-
-flux bootstrap github \
-  --owner=<github-org-or-user> \
-  --repository=robust2api \
-  --branch=main \
-  --path=clusters/production \
-  --personal
-```
-
-Flux will:
-1. Install its controllers in the `flux-system` namespace
-2. Create a GitRepository source pointing at this repo
-3. Start from the checked-in root `clusters/production/kustomization.yaml`
-4. Apply infrastructure -> cert-manager-issuers -> apps in dependency order
-5. Leave the monitoring Kustomization suspended until you explicitly enable it
-
-## 3. Create Secrets
-
-Flux HelmReleases reference secrets via `valuesFrom`. These must be created manually before the first deploy, and the secret keys must match the explicit `valuesKey` mappings in the HelmRelease manifests.
+Flux HelmReleases reference secrets via `valuesFrom`. Create them before bootstrapping Flux.
 
 ### Image Pull Secret (for private GHCR)
 
@@ -148,18 +127,16 @@ stringData:
   secrets.jwtSecret: "<random-32-char>"
   secrets.totpEncryptionKey: "<64-hex-char, generate with: openssl rand -hex 32>"
   secrets.adminPassword: "<admin-password>"
-  postgresql.auth.password: "<db-password-or-empty-if-external>"
-  redis.auth.password: "<redis-password-or-empty-if-external>"
+  postgresql.auth.password: "<db-password>"
+  redis.auth.password: "<redis-password>"
   externalDatabase.password: ""
   externalRedis.password: ""
 EOF
 ```
 
-If using external PostgreSQL and/or Redis instead of the bundled charts, set `postgresql.enabled=false` and/or `redis.enabled=false` in `clusters/production/apps/sub2api.yaml` and move the real passwords into `externalDatabase.password` / `externalRedis.password`. Leave the unused password keys present with empty string values so Flux can still resolve every mapped secret key.
+If using external PostgreSQL/Redis, set `postgresql.enabled=false` / `redis.enabled=false` in `clusters/production/apps/sub2api.yaml` and put the real passwords in `externalDatabase.password` / `externalRedis.password`. Keep unused keys as empty strings.
 
-### Monitoring Secrets (if using monitoring stack)
-
-The monitoring Kustomization is suspended by default. Only create this secret and unsuspend [`clusters/production/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring.yaml) if you want the LGTM stack.
+### Monitoring Secrets
 
 ```bash
 kubectl create namespace monitoring --dry-run=client -o yaml | kubectl apply -f -
@@ -182,72 +159,74 @@ stringData:
 EOF
 ```
 
-## 4. Configure Flux Manifests
+## 3. Configure Flux Manifests
 
-Update `CHANGEME` values in the Flux YAML files before deploying:
+Edit `clusters/production/` files with your production values before bootstrapping:
 
-| File | Values to set |
-|------|--------------|
-| `clusters/production/infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt notification email) |
-| `clusters/production/infrastructure/external-dns.yaml` | `txtOwnerId`, `domainFilters` |
-| `clusters/production/monitoring.yaml` | Set `spec.suspend: false` when you are ready to enable monitoring |
-| `clusters/production/monitoring/monitoring.yaml` | `grafanaIngress.host`, R2 endpoints, bucket names, DB host (monitoring only) |
-| `clusters/production/apps/sub2api.yaml` | Image tags, ingress hosts, `gatewayUrl`; set `grafanaUrl` and enable `observability` only when monitoring is enabled |
+| File | What to set |
+|------|-------------|
+| `infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt) |
+| `infrastructure/external-dns.yaml` | `domainFilters`, `txtOwnerId`; uncomment `extraArgs: [--cloudflare-proxied]` if using CF proxy |
+| `monitoring/monitoring.yaml` | `grafanaIngress.host`, R2 endpoints/buckets, `grafanaPostgresDatasource` host/port/database |
+| `monitoring.yaml` | Set `spec.suspend: false` to enable monitoring |
+| `apps/sub2api.yaml` | Image tags, ingress hosts, `gatewayUrl`, `grafanaUrl`, resource limits, `observability` settings |
 
-### Enable Monitoring (optional)
+## 4. Bootstrap Flux
 
-1. Fill in the `CHANGEME` values in [`clusters/production/monitoring/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring/monitoring.yaml).
-2. Create `monitoring-secrets` in the `monitoring` namespace.
-3. Set `spec.suspend: false` in [`clusters/production/monitoring.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/monitoring.yaml).
-4. Update [`clusters/production/apps/sub2api.yaml`](/Users/chenwuhao/Dev/sub2api/clusters/production/apps/sub2api.yaml) with your Grafana URL and set `observability.enabled=true` and `observability.serviceMonitor.enabled=true` if you want the app to emit OTLP traces and Prometheus ServiceMonitor resources.
-5. Commit and push. Flux will reconcile monitoring independently of the app layer.
-
-## 5. Initial Deploy
-
-Commit the configured manifests and push:
+One-time setup. Installs Flux controllers and connects this repo.
 
 ```bash
-git add clusters/production/
-git commit -m "deploy: configure Flux manifests for production"
-git push
+export GITHUB_TOKEN=<your-github-pat>
+
+flux bootstrap github \
+  --owner=<github-org-or-user> \
+  --repository=robust2api \
+  --branch=main \
+  --path=clusters/production \
+  --personal
 ```
 
-Flux syncs automatically within 1 minute.
+Flux will install its controllers, create a GitRepository source, and start reconciling in dependency order.
 
-## 6. Verify
+## 5. Verify
 
 ```bash
-# Check Kustomization status (dependency chain)
+# Flux status
 flux get kustomizations
-
-# Check all HelmReleases
 flux get helmreleases -A
+flux get sources git
 
-# Check pods
+# All HelmReleases should show Ready: True
+# Example output:
+# NAME          REVISION  READY  MESSAGE
+# cert-manager  v1.17.1   True   Helm upgrade succeeded...
+# external-dns  1.16.1    True   Helm upgrade succeeded...
+# ingress-nginx 4.12.1    True   Helm upgrade succeeded...
+# monitoring    0.1.0+... True   Helm upgrade succeeded...
+# sub2api       0.2.0+... True   Helm upgrade succeeded...
+
+# Pods
 kubectl get pods -n sub2api
+kubectl get pods -n monitoring
 kubectl get pods -n ingress-nginx
 kubectl get pods -n cert-manager
-kubectl get pods -n external-dns
 
-# Monitoring pods (only if enabled)
-kubectl get pods -n monitoring
-
-# Check certificates
+# Certificates
 kubectl get certificates -A
 
-# Check ingress
+# Ingress
 kubectl get ingress -A
 ```
 
-All HelmReleases should show `Ready: True`. If not, see Troubleshooting below.
+## Day-2 Operations
 
-## Deploying a New Version
+### Deploy a New Version
 
-1. Tag and push to trigger image builds:
+1. Tag and push to trigger CI image builds:
 
 ```bash
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 2. Update image tags in `clusters/production/apps/sub2api.yaml`:
@@ -255,149 +234,160 @@ git push origin v0.3.0
 ```yaml
 image:
   gateway:
-    tag: "0.3.0"
+    tag: "0.4.0"
   control:
-    tag: "0.3.0"
+    tag: "0.4.0"
   frontend:
-    tag: "0.3.0"
+    tag: "0.4.0"
   worker:
-    tag: "0.3.0"
+    tag: "0.4.0"
   bootstrap:
-    tag: "0.3.0"
+    tag: "0.4.0"
 ```
 
-3. Commit and push:
+3. Commit and push — Flux deploys automatically:
 
 ```bash
 git add clusters/production/apps/sub2api.yaml
-git commit -m "deploy: v0.3.0"
+git commit -m "deploy: v0.4.0"
 git push
 ```
 
-4. Flux syncs automatically within 1 minute.
-
-## Rolling Back
-
-Revert the image tag commit:
+### Roll Back
 
 ```bash
 git revert HEAD
 git push
 ```
 
-Flux will roll back to the previous version automatically.
+### Upgrade Infrastructure Components
 
-## Upgrading Infrastructure Components
-
-Edit the chart version in the relevant HelmRelease file, commit, and push:
+Edit the chart version in the HelmRelease file:
 
 ```bash
 # Example: upgrade ingress-nginx
 # Edit clusters/production/infrastructure/ingress-nginx.yaml
 # Change: version: "4.12.1" -> version: "4.13.0"
-git add clusters/production/infrastructure/ingress-nginx.yaml
-git commit -m "infra: upgrade ingress-nginx to 4.13.0"
+git commit -am "infra: upgrade ingress-nginx to 4.13.0"
 git push
 ```
 
-## Migrating from Terraform-Managed In-Cluster Resources
-
-If you previously used Terraform to manage ingress-nginx, cert-manager, ExternalDNS, and/or the monitoring stack, remove them from Terraform state after Flux has adopted them:
+### Force Immediate Reconciliation
 
 ```bash
-cd infra/production
-
-# Remove kubernetes module resources
-terraform state rm 'module.kubernetes.helm_release.ingress_nginx'
-terraform state rm 'module.kubernetes.helm_release.cert_manager'
-terraform state rm 'module.kubernetes.helm_release.external_dns'
-terraform state rm 'module.kubernetes.kubernetes_manifest.letsencrypt_issuer'
-terraform state rm 'module.kubernetes.kubernetes_namespace.app'
-terraform state rm 'module.kubernetes.kubernetes_namespace.external_dns'
-terraform state rm 'module.kubernetes.kubernetes_secret.cloudflare_cert_manager'
-terraform state rm 'module.kubernetes.kubernetes_secret.cloudflare_external_dns'
-terraform state rm 'module.kubernetes.data.kubernetes_service.ingress_nginx'
-
-# Remove monitoring module resources (if enabled)
-terraform state rm 'module.monitoring[0].helm_release.monitoring'
-terraform state rm 'module.monitoring[0].null_resource.helm_deps'
-
-# Verify clean state
-terraform plan
+flux reconcile source git flux-system          # Fetch latest git
+flux reconcile kustomization apps              # Reconcile apps layer
+flux reconcile helmrelease sub2api -n sub2api  # Reconcile specific release
+flux reconcile helmrelease monitoring -n monitoring
 ```
 
-## Monitoring & Status
+### Suspend / Resume Reconciliation
 
 ```bash
-# Overall Flux status
-flux get kustomizations
-flux get helmreleases -A
-flux get sources git
-
-# Reconcile immediately (don't wait for interval)
-flux reconcile kustomization apps
-flux reconcile helmrelease sub2api -n sub2api
-
-# View Flux controller logs
-flux logs --level=error
+flux suspend kustomization monitoring    # Pause monitoring
+flux resume kustomization monitoring     # Resume monitoring
 ```
+
+## Monitoring
+
+### Dashboards
+
+Four Sub2API dashboards are provisioned automatically via the monitoring Helm chart:
+
+| Dashboard | Datasource | Description |
+|-----------|-----------|-------------|
+| **Admin Overview** | PostgreSQL | User/key/account counts, request/token/cost stats, trends |
+| **Admin Usage** | PostgreSQL | Hourly requests/tokens, daily cost, model spend, group/user breakdown |
+| **Runtime** | Prometheus | RPS, error rate, p95 latency, p95 TTFT, token throughput, upstream errors, failovers, rate limit rejections, queue depth, active accounts |
+| **Resources** | Prometheus | Goroutines, memory usage (stack/other), GC pause duration |
+
+The Runtime dashboard metrics (`sub2api_*`) only populate when real authenticated API traffic flows through the gateway. Until then, panels show "No data" — this is expected.
+
+### Observability Pipeline
+
+```
+Sub2API pods --OTLP/gRPC--> Alloy (port 4317) ---> Tempo (traces -> R2)
+                                                 |-> Loki (logs -> R2)
+Sub2API pods --/metrics--> Prometheus (scrape via ServiceMonitor)
+```
+
+Configuration in `clusters/production/apps/sub2api.yaml`:
+
+```yaml
+observability:
+  enabled: true
+  otel:
+    serviceName: sub2api
+    endpoint: "monitoring-alloy.monitoring.svc:4317"
+    traceSampleRate: "0.1"
+    metricsPort: 9090
+  serviceMonitor:
+    enabled: true
+    interval: 15s
+```
+
+### Grafana Datasources
+
+Provisioned automatically: Prometheus, Loki, Tempo, Alertmanager, Sub2API PostgreSQL.
 
 ## Troubleshooting
 
-### HelmRelease stuck in "not ready"
+### HelmRelease Not Ready
 
 ```bash
-# Check the HelmRelease status and last error
 kubectl describe helmrelease <name> -n <namespace>
-
-# Check Helm release history
 helm history <name> -n <namespace>
-
-# Force reconciliation
 flux reconcile helmrelease <name> -n <namespace>
 ```
 
-### Source not syncing
+### Source Not Syncing
 
 ```bash
-# Check GitRepository status
 flux get sources git -A
-
-# Force source refresh
 flux reconcile source git flux-system
 ```
 
-### Suspended reconciliation
+### Pods Pending (Insufficient Resources)
+
+The cluster uses `s-2vcpu-4gb` nodes. During rolling updates, both old and new pods must coexist. If pods are Pending:
 
 ```bash
-# Check if reconciliation is suspended
-flux get kustomizations
-flux get helmreleases -A
-
-# Resume if suspended
-flux resume kustomization <name>
-flux resume helmrelease <name> -n <namespace>
+kubectl describe pod <pod> -n <namespace>  # Check Events for scheduling failures
+kubectl get nodes -o wide                  # Check node count
 ```
+
+Options:
+- Increase `max_nodes` in `terraform.tfvars` and `terraform apply`
+- Reduce resource requests in the HelmRelease values
+- The sub2api chart uses `preferredDuringSchedulingIgnoredDuringExecution` anti-affinity, so pods can land on the PostgreSQL node if needed
 
 ### ImagePullBackOff
 
-- Verify `ghcr-pull` secret exists: `kubectl get secret ghcr-pull -n sub2api`
-- Check token permissions: must have `read:packages` scope
-- Verify image tag exists: `docker manifest inspect ghcr.io/wchen99998/robust2api/gateway:<tag>`
+- Verify `ghcr-pull` secret: `kubectl get secret ghcr-pull -n sub2api`
+- Check token has `read:packages` scope
+- Verify image exists: `docker manifest inspect ghcr.io/wchen99998/robust2api/gateway:<tag>`
 
-### Certificate not issuing
+### Certificate Not Issuing
 
 ```bash
 kubectl describe certificate <name> -n <namespace>
-kubectl describe certificaterequest -n <namespace>
 kubectl describe challenge -A
 kubectl logs -n cert-manager deploy/cert-manager
 ```
 
-Common cause: Cloudflare API token missing DNS edit permission, or `cloudflare-api-token` secret not created by Terraform.
+Common cause: Cloudflare API token missing DNS edit permission.
 
-### Pod CrashLoopBackOff
+### Bootstrap Job CrashLoop
 
-- Bootstrap job may CrashLoop briefly while PostgreSQL starts — this is expected
-- Check logs: `kubectl logs <pod> -n sub2api`
-- If database connection fails, verify DB credentials in `sub2api-secrets`
+The bootstrap job runs DB migrations and may CrashLoop briefly while PostgreSQL starts. Check:
+
+```bash
+kubectl logs -n sub2api -l app.kubernetes.io/component=bootstrap --tail=50
+```
+
+### Flux Controller Logs
+
+```bash
+flux logs --level=error
+flux logs --kind=HelmRelease --name=sub2api --namespace=sub2api
+```

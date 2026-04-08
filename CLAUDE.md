@@ -170,7 +170,7 @@ clusters/production/
 ├── kustomization.yaml     # Root Kustomize entrypoint for Flux bootstrap
 ├── infrastructure.yaml    # Kustomization: infra layer
 ├── cert-manager-issuers.yaml  # Kustomization: post-cert-manager issuers
-├── monitoring.yaml        # Kustomization: optional monitoring (suspended by default)
+├── monitoring.yaml        # Kustomization: monitoring (LGTM stack)
 ├── apps.yaml              # Kustomization: apps (depends on cert-manager issuers)
 ├── infrastructure/        # ingress-nginx, cert-manager, external-dns, namespaces
 ├── monitoring/            # monitoring namespace + LGTM stack
