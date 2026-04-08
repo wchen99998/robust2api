@@ -8,15 +8,24 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// RegisterCommonRoutes 注册通用路由（健康检查、状态等）
-func RegisterCommonRoutes(r *gin.Engine, healthChecker *health.Checker) {
-	// Health probe endpoints (Kubernetes liveness/readiness/startup)
+// RegisterHealthRoutes registers shared probe endpoints for a role.
+func RegisterHealthRoutes(r gin.IRoutes, healthChecker *health.Checker) {
 	r.GET("/livez", gin.WrapF(healthChecker.Livez))
 	r.GET("/readyz", gin.WrapF(healthChecker.Readyz))
 	r.GET("/startupz", gin.WrapF(healthChecker.Startupz))
+	r.GET("/health", gin.WrapF(healthChecker.Readyz))
+}
 
-	// Claude Code 遥测日志（忽略，直接返回200）
+// RegisterGatewayCompatRoutes registers gateway-only compatibility endpoints.
+func RegisterGatewayCompatRoutes(r gin.IRoutes) {
+	// Claude Code telemetry is intentionally accepted and ignored.
 	r.POST("/api/event_logging/batch", func(c *gin.Context) {
 		c.Status(http.StatusOK)
 	})
+}
+
+// RegisterCommonRoutes preserves the legacy combined registration behavior.
+func RegisterCommonRoutes(r *gin.Engine, healthChecker *health.Checker) {
+	RegisterHealthRoutes(r, healthChecker)
+	RegisterGatewayCompatRoutes(r)
 }

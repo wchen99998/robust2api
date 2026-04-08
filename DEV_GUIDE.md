@@ -297,7 +297,8 @@ pnpm build
 ```bash
 # 运行服务器
 cd backend
-go run ./cmd/api/
+go run ./cmd/gateway
+go run ./cmd/control
 
 # 生成 Ent 代码
 go generate ./ent
@@ -315,7 +316,8 @@ golangci-lint run ./...
 ```
 sub2api-bmai/
 ├── backend/
-│   ├── cmd/api/             # API 服务入口
+│   ├── cmd/gateway/          # 推理入口
+│   ├── cmd/control/          # 管理/控制入口
 │   ├── cmd/bootstrap/       # 迁移和管理员初始化入口
 │   ├── ent/                 # Ent ORM 生成代码
 │   │   └── schema/          # 数据库 Schema 定义

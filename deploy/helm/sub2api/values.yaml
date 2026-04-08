@@ -1,5 +1,5 @@
-# -- API Configuration
-api:
+# -- Gateway Configuration
+gateway:
   replicaCount: 1
   terminationGracePeriodSeconds: 20
   resources:
@@ -10,9 +10,9 @@ api:
       cpu: "1"
       memory: 1Gi
   autoscaling:
-    enabled: false
+    enabled: true
     minReplicas: 2
-    maxReplicas: 10
+    maxReplicas: 20
     targetCPUUtilization: 70
   pdb:
     enabled: false
@@ -29,6 +29,51 @@ api:
     readiness:
       path: /readyz
       periodSeconds: 10
+
+# -- Control Configuration
+control:
+  replicaCount: 1
+  terminationGracePeriodSeconds: 20
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilization: 50
+  pdb:
+    enabled: false
+    minAvailable: 1
+  topologySpreadConstraints: []
+  probes:
+    startup:
+      path: /startupz
+      failureThreshold: 30
+      periodSeconds: 2
+    liveness:
+      path: /livez
+      periodSeconds: 30
+    readiness:
+      path: /readyz
+      periodSeconds: 10
+  frontend:
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: "500m"
+        memory: 512Mi
+    port: 8081
+    # Additional origins allowed in iframe embeds rendered by the control frontend.
+    # Add any origins used by Grafana, purchase/subscription pages, custom menu items,
+    # or URL-based home content. Cloudflare Turnstile is always allowed automatically.
+    extraFrameSrcOrigins: []
 
 # -- Worker Configuration
 worker:
@@ -55,26 +100,25 @@ worker:
       periodSeconds: 10
 
 image:
-  api:
-    # -- API container image repository
-    repository: ghcr.io/wchen99998/robust2api/api
-    # -- Image tag (defaults to Chart appVersion)
+  gateway:
+    repository: ghcr.io/wchen99998/robust2api/gateway
     tag: ""
-    # -- Image pull policy
+    pullPolicy: IfNotPresent
+  control:
+    repository: ghcr.io/wchen99998/robust2api/control
+    tag: ""
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: ghcr.io/wchen99998/robust2api/frontend
+    tag: ""
     pullPolicy: IfNotPresent
   worker:
-    # -- Worker container image repository
     repository: ghcr.io/wchen99998/robust2api/worker
-    # -- Image tag (defaults to Chart appVersion)
     tag: ""
-    # -- Image pull policy
     pullPolicy: IfNotPresent
   bootstrap:
-    # -- Bootstrap container image repository
     repository: ghcr.io/wchen99998/robust2api/bootstrap
-    # -- Image tag (defaults to Chart appVersion)
     tag: ""
-    # -- Image pull policy
     pullPolicy: IfNotPresent
 
 # -- Image pull secrets for private registries
@@ -93,10 +137,15 @@ serviceAccount:
   # -- ServiceAccount name (auto-generated if empty)
   name: ""
 
-# -- Use an existing Secret instead of creating one
-# The secret must contain: DATABASE_PASSWORD, REDIS_PASSWORD, JWT_SECRET,
-# TOTP_ENCRYPTION_KEY, ADMIN_EMAIL, ADMIN_PASSWORD
+# -- Use an existing shared Secret instead of creating one.
+# The shared secret should contain runtime/shared keys only, such as
+# DATABASE_PASSWORD and REDIS_PASSWORD.
 existingSecret: ""
+
+# -- Optional existing control-plane Secret.
+# When set, control/bootstrap load JWT/TOTP/admin secrets from this secret instead of
+# the chart-managed control secret.
+existingControlSecret: ""
 
 # =============================================================================
 # Application Configuration (non-sensitive, stored in ConfigMap)
@@ -162,31 +211,37 @@ service:
   type: ClusterIP
   port: 80
 
+controlService:
+  type: ClusterIP
+  port: 80
+
 # =============================================================================
 # Ingress
 # =============================================================================
 ingress:
   enabled: true
   className: "nginx"
-  # Convention: <service>-<namespace>.<domain_suffix>
-  # Example: api-sub2api.do-prod.wuhao99.com
-  host: sub2api.local
-  # Cloudflare proxy mode (set to "false" for DNS-only / grey-cloud)
   cloudflareProxied: "true"
-  # Maximum request body size (maps to nginx proxy-body-size annotation).
-  # Pulled out of annotations so it can't be accidentally dropped by overrides.
   maxBodySize: "50m"
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
   tls:
     enabled: false
     secretName: ""
-  # Extra hosts (custom domains pointing to this service).
-  # ExternalDNS only manages domains within its configured zone filter.
-  # Example:
-  #   extraHosts:
-  #     - host: api.mycorp.com
-  extraHosts: []
+  gateway:
+    enabled: true
+    host: gateway.sub2api.local
+    extraHosts: []
+    tls:
+      enabled: false
+      secretName: ""
+  control:
+    enabled: true
+    host: app.sub2api.local
+    extraHosts: []
+    tls:
+      enabled: false
+      secretName: ""
 
 # =============================================================================
 # Scheduling

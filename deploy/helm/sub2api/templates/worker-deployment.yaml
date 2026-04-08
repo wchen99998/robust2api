@@ -14,7 +14,7 @@ spec:
     metadata:
       annotations:
         checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/runtime-secret.yaml") . | sha256sum }}
       labels:
         {{- include "sub2api.labels" . | nindent 8 }}
         app.kubernetes.io/component: worker
@@ -39,7 +39,7 @@ spec:
             - configMapRef:
                 name: {{ include "sub2api.fullname" . }}
             - secretRef:
-                name: {{ include "sub2api.secretName" . }}
+                name: {{ include "sub2api.runtimeSecretName" . }}
           startupProbe:
             httpGet:
               path: {{ default "/startupz" .Values.worker.probes.startup.path }}

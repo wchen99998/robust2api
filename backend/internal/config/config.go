@@ -18,6 +18,15 @@ const (
 	RunModeSimple   = "simple"
 )
 
+type Role string
+
+const (
+	RoleGeneric Role = ""
+	RoleGateway Role = "gateway"
+	RoleControl Role = "control"
+	RoleWorker  Role = "worker"
+)
+
 var configSearchPaths = []string{"/etc/sub2api"}
 
 // 使用量记录队列溢出策略
@@ -876,12 +885,32 @@ func NormalizeRunMode(value string) string {
 	}
 }
 
-// Load reads and validates the application configuration.
+// Load reads and validates the application configuration using generic validation.
 func Load() (*Config, error) {
-	return load()
+	return load(RoleGeneric)
 }
 
-func load() (*Config, error) {
+// LoadGateway reads and validates configuration for the gateway role.
+func LoadGateway() (*Config, error) {
+	return load(RoleGateway)
+}
+
+// LoadControl reads and validates configuration for the control role.
+func LoadControl() (*Config, error) {
+	return load(RoleControl)
+}
+
+// LoadWorker reads and validates configuration for the worker role.
+func LoadWorker() (*Config, error) {
+	return load(RoleWorker)
+}
+
+// LoadForRole reads and validates configuration for a specific runtime role.
+func LoadForRole(role Role) (*Config, error) {
+	return load(role)
+}
+
+func load(role Role) (*Config, error) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("yaml")
 
@@ -957,7 +986,7 @@ func load() (*Config, error) {
 	cfg.Totp.EncryptionKey = strings.TrimSpace(cfg.Totp.EncryptionKey)
 	cfg.Totp.EncryptionKeyConfigured = cfg.Totp.EncryptionKey != ""
 
-	if err := cfg.Validate(); err != nil {
+	if err := cfg.ValidateForRole(role); err != nil {
 		return nil, fmt.Errorf("validate config error: %w", err)
 	}
 
@@ -1334,25 +1363,37 @@ func setDefaults() {
 }
 
 func (c *Config) Validate() error {
-	jwtSecret := strings.TrimSpace(c.JWT.Secret)
-	if jwtSecret == "" {
-		return fmt.Errorf("jwt.secret is required")
+	return c.ValidateForRole(RoleGeneric)
+}
+
+func (c *Config) ValidateForRole(role Role) error {
+	switch role {
+	case RoleGateway, RoleControl, RoleWorker, RoleGeneric:
+	default:
+		role = RoleGeneric
 	}
-	// NOTE: 按 UTF-8 编码后的字节长度计算。
-	// 选择 bytes 而不是 rune 计数，确保二进制/随机串的长度语义更接近“熵”而非“字符数”。
-	if len([]byte(jwtSecret)) < 32 {
-		return fmt.Errorf("jwt.secret must be at least 32 bytes")
-	}
-	totpKey := strings.TrimSpace(c.Totp.EncryptionKey)
-	if totpKey == "" {
-		return fmt.Errorf("totp.encryption_key is required")
-	}
-	totpKeyBytes, err := hex.DecodeString(totpKey)
-	if err != nil {
-		return fmt.Errorf("totp.encryption_key must be valid hex: %w", err)
-	}
-	if len(totpKeyBytes) != 32 {
-		return fmt.Errorf("totp.encryption_key must be 32 bytes (64 hex chars)")
+
+	if requiresControlPlaneValidation(role) {
+		jwtSecret := strings.TrimSpace(c.JWT.Secret)
+		if jwtSecret == "" {
+			return fmt.Errorf("jwt.secret is required")
+		}
+		// NOTE: 按 UTF-8 编码后的字节长度计算。
+		// 选择 bytes 而不是 rune 计数，确保二进制/随机串的长度语义更接近“熵”而非“字符数”。
+		if len([]byte(jwtSecret)) < 32 {
+			return fmt.Errorf("jwt.secret must be at least 32 bytes")
+		}
+		totpKey := strings.TrimSpace(c.Totp.EncryptionKey)
+		if totpKey == "" {
+			return fmt.Errorf("totp.encryption_key is required")
+		}
+		totpKeyBytes, err := hex.DecodeString(totpKey)
+		if err != nil {
+			return fmt.Errorf("totp.encryption_key must be valid hex: %w", err)
+		}
+		if len(totpKeyBytes) != 32 {
+			return fmt.Errorf("totp.encryption_key must be 32 bytes (64 hex chars)")
+		}
 	}
 	switch c.Log.Level {
 	case "debug", "info", "warn", "error":
@@ -1425,35 +1466,37 @@ func (c *Config) Validate() error {
 		}
 		warnIfInsecureURL("server.frontend_url", c.Server.FrontendURL)
 	}
-	if c.JWT.ExpireHour <= 0 {
-		return fmt.Errorf("jwt.expire_hour must be positive")
+	if requiresControlPlaneValidation(role) {
+		if c.JWT.ExpireHour <= 0 {
+			return fmt.Errorf("jwt.expire_hour must be positive")
+		}
+		if c.JWT.ExpireHour > 168 {
+			return fmt.Errorf("jwt.expire_hour must be <= 168 (7 days)")
+		}
+		if c.JWT.ExpireHour > 24 {
+			slog.Warn("jwt.expire_hour is high; consider shorter expiration for security", "expire_hour", c.JWT.ExpireHour)
+		}
+		// JWT Refresh Token配置验证
+		if c.JWT.AccessTokenExpireMinutes < 0 {
+			return fmt.Errorf("jwt.access_token_expire_minutes must be non-negative")
+		}
+		if c.JWT.AccessTokenExpireMinutes > 720 {
+			slog.Warn("jwt.access_token_expire_minutes is high; consider shorter expiration for security", "access_token_expire_minutes", c.JWT.AccessTokenExpireMinutes)
+		}
+		if c.JWT.RefreshTokenExpireDays <= 0 {
+			return fmt.Errorf("jwt.refresh_token_expire_days must be positive")
+		}
+		if c.JWT.RefreshTokenExpireDays > 90 {
+			slog.Warn("jwt.refresh_token_expire_days is high; consider shorter expiration for security", "refresh_token_expire_days", c.JWT.RefreshTokenExpireDays)
+		}
+		if c.JWT.RefreshWindowMinutes < 0 {
+			return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
+		}
+		if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
+			return fmt.Errorf("security.csp.policy is required when CSP is enabled")
+		}
 	}
-	if c.JWT.ExpireHour > 168 {
-		return fmt.Errorf("jwt.expire_hour must be <= 168 (7 days)")
-	}
-	if c.JWT.ExpireHour > 24 {
-		slog.Warn("jwt.expire_hour is high; consider shorter expiration for security", "expire_hour", c.JWT.ExpireHour)
-	}
-	// JWT Refresh Token配置验证
-	if c.JWT.AccessTokenExpireMinutes < 0 {
-		return fmt.Errorf("jwt.access_token_expire_minutes must be non-negative")
-	}
-	if c.JWT.AccessTokenExpireMinutes > 720 {
-		slog.Warn("jwt.access_token_expire_minutes is high; consider shorter expiration for security", "access_token_expire_minutes", c.JWT.AccessTokenExpireMinutes)
-	}
-	if c.JWT.RefreshTokenExpireDays <= 0 {
-		return fmt.Errorf("jwt.refresh_token_expire_days must be positive")
-	}
-	if c.JWT.RefreshTokenExpireDays > 90 {
-		slog.Warn("jwt.refresh_token_expire_days is high; consider shorter expiration for security", "refresh_token_expire_days", c.JWT.RefreshTokenExpireDays)
-	}
-	if c.JWT.RefreshWindowMinutes < 0 {
-		return fmt.Errorf("jwt.refresh_window_minutes must be non-negative")
-	}
-	if c.Security.CSP.Enabled && strings.TrimSpace(c.Security.CSP.Policy) == "" {
-		return fmt.Errorf("security.csp.policy is required when CSP is enabled")
-	}
-	if c.LinuxDo.Enabled {
+	if requiresControlPlaneValidation(role) && c.LinuxDo.Enabled {
 		if strings.TrimSpace(c.LinuxDo.ClientID) == "" {
 			return fmt.Errorf("linuxdo_connect.client_id is required when linuxdo_connect.enabled=true")
 		}
@@ -1973,6 +2016,10 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("concurrency.ping_interval must be between 5-30 seconds")
 	}
 	return nil
+}
+
+func requiresControlPlaneValidation(role Role) bool {
+	return role != RoleGateway && role != RoleWorker
 }
 
 func normalizeStringSlice(values []string) []string {

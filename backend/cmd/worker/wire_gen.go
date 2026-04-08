@@ -28,7 +28,7 @@ import (
 // Injectors from wire.go:
 
 func initializeWorkerApplication() (*WorkerApplication, error) {
-	configConfig, err := config.ProvideConfig()
+	configConfig, err := config.ProvideWorkerConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -98,7 +98,8 @@ func initializeWorkerApplication() (*WorkerApplication, error) {
 	settingRepository := repository.NewSettingRepository(client)
 	geminiQuotaService := service.NewGeminiQuotaService(configConfig, settingRepository)
 	timeoutCounterCache := repository.NewTimeoutCounterCache(redisClient)
-	settingService := service.ProvideSettingService(settingRepository, groupRepository, configConfig)
+	runtimeCacheInvalidationBus := repository.NewRuntimeCacheInvalidationBus(redisClient)
+	settingService := service.ProvideSettingService(settingRepository, groupRepository, configConfig, runtimeCacheInvalidationBus)
 	rateLimitService := service.ProvideRateLimitService(accountRepository, usageLogRepository, configConfig, geminiQuotaService, tempUnschedCache, timeoutCounterCache, settingService, compositeTokenCacheInvalidator)
 	httpUpstream := repository.NewHTTPUpstream(configConfig)
 	internal500CounterCache := repository.NewInternal500CounterCache(redisClient)

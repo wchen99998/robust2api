@@ -61,6 +61,48 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo Bui
 	return NewSettingHandler(settingService, buildInfo.Version)
 }
 
+// ProvideGatewayHandlers creates the GatewayHandlers struct.
+func ProvideGatewayHandlers(
+	gatewayHandler *GatewayHandler,
+	openAIGatewayHandler *OpenAIGatewayHandler,
+	_ *service.GatewayCacheInvalidationSubscribers,
+) *GatewayHandlers {
+	return &GatewayHandlers{
+		Gateway:       gatewayHandler,
+		OpenAIGateway: openAIGatewayHandler,
+	}
+}
+
+// ProvideControlHandlers creates the ControlHandlers struct.
+func ProvideControlHandlers(
+	authHandler *AuthHandler,
+	userHandler *UserHandler,
+	apiKeyHandler *APIKeyHandler,
+	usageHandler *UsageHandler,
+	redeemHandler *RedeemHandler,
+	subscriptionHandler *SubscriptionHandler,
+	announcementHandler *AnnouncementHandler,
+	adminHandlers *AdminHandlers,
+	settingHandler *SettingHandler,
+	totpHandler *TotpHandler,
+	_ *service.ControlCacheInvalidationSubscribers,
+	_ *service.IdempotencyCoordinator,
+	_ *service.IdempotencyCleanupService,
+) *ControlHandlers {
+	return &ControlHandlers{
+		Auth:         authHandler,
+		User:         userHandler,
+		APIKey:       apiKeyHandler,
+		Usage:        usageHandler,
+		Redeem:       redeemHandler,
+		Subscription: subscriptionHandler,
+		Announcement: announcementHandler,
+		Admin:        adminHandlers,
+		Setting:      settingHandler,
+		Totp:         totpHandler,
+	}
+}
+
 // ProvideHandlers creates the Handlers struct
 func ProvideHandlers(
 	authHandler *AuthHandler,
@@ -75,6 +117,8 @@ func ProvideHandlers(
 	openaiGatewayHandler *OpenAIGatewayHandler,
 	settingHandler *SettingHandler,
 	totpHandler *TotpHandler,
+	_ *service.GatewayCacheInvalidationSubscribers,
+	_ *service.ControlCacheInvalidationSubscribers,
 	_ *service.IdempotencyCoordinator,
 	_ *service.IdempotencyCleanupService,
 ) *Handlers {
@@ -94,8 +138,57 @@ func ProvideHandlers(
 	}
 }
 
+// GatewayProviderSet is the Wire provider set for the gateway binary.
+var GatewayProviderSet = wire.NewSet(
+	service.ProvideGatewayCacheInvalidationSubscribers,
+	NewGatewayHandler,
+	NewOpenAIGatewayHandler,
+	ProvideGatewayHandlers,
+)
+
+// ControlProviderSet is the Wire provider set for the control binary.
+var ControlProviderSet = wire.NewSet(
+	service.ProvideControlCacheInvalidationSubscribers,
+	NewAuthHandler,
+	NewUserHandler,
+	NewAPIKeyHandler,
+	NewUsageHandler,
+	NewRedeemHandler,
+	NewSubscriptionHandler,
+	NewAnnouncementHandler,
+	NewTotpHandler,
+	ProvideSettingHandler,
+
+	admin.NewDashboardHandler,
+	admin.NewUserHandler,
+	admin.NewGroupHandler,
+	admin.NewAccountHandler,
+	admin.NewAnnouncementHandler,
+	admin.NewOAuthHandler,
+	admin.NewOpenAIOAuthHandler,
+	admin.NewGeminiOAuthHandler,
+	admin.NewAntigravityOAuthHandler,
+	admin.NewProxyHandler,
+	admin.NewRedeemHandler,
+	admin.NewPromoHandler,
+	admin.NewSettingHandler,
+	admin.NewSubscriptionHandler,
+	admin.NewUsageHandler,
+	admin.NewUserAttributeHandler,
+	admin.NewErrorPassthroughHandler,
+	admin.NewTLSFingerprintProfileHandler,
+	admin.NewAdminAPIKeyHandler,
+	admin.NewScheduledTestHandler,
+	admin.NewChannelHandler,
+
+	ProvideAdminHandlers,
+	ProvideControlHandlers,
+)
+
 // ProviderSet is the Wire provider set for all handlers
 var ProviderSet = wire.NewSet(
+	service.ProvideGatewayCacheInvalidationSubscribers,
+	service.ProvideControlCacheInvalidationSubscribers,
 	// Top-level handlers
 	NewAuthHandler,
 	NewUserHandler,

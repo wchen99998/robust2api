@@ -136,15 +136,16 @@ cd sub2api
 # 2. Install pnpm (if not already installed)
 npm install -g pnpm
 
-# 3. Build frontend
+# 3. Build frontend SPA
 cd frontend
 pnpm install
 pnpm run build
-# Output will be in ../backend/internal/web/dist/
+# Output will be placed in ../frontend/dist/ (nginx sidecar serves it in production)
 
-# 4. Build backend with embedded frontend
+# 4. Build backend binaries
 cd ../backend
-go build -tags embed -o sub2api ./cmd/api
+go build -o sub2api-gateway ./cmd/gateway
+go build -o sub2api-control ./cmd/control
 go build -o sub2api-bootstrap ./cmd/bootstrap
 
 # 5. Create the runtime config file
@@ -166,13 +167,12 @@ export ADMIN_PASSWORD=change-me
 # 7. Run bootstrap once (migrations + optional initial admin seed)
 ./sub2api-bootstrap
 
-# 8. Start the API server
-./sub2api
+# 8. Start the services
+./sub2api-gateway  # inference proxy
+./sub2api-control  # admin/auth control plane
 ```
 
-> **Note:** The `-tags embed` flag embeds the frontend into the binary. Without this flag, the binary will not serve the frontend UI.
->
-> The API server reads YAML from `/etc/sub2api/config.yaml`. The bootstrap binary reads environment variables only.
+> **Note:** The gateway binary is the inference proxy; the control binary handles admin/auth traffic and relies on the separate frontend nginx sidecar. Both read `/etc/sub2api/config.yaml` for runtime settings, while the bootstrap binary still honors bootstrap environment variables only.
 
 **Key configuration in `/etc/sub2api/config.yaml`:**
 
@@ -268,7 +268,8 @@ If you disable URL validation or response header filtering, harden your network 
 ```bash
 # Backend (with hot reload)
 cd backend
-go run ./cmd/api
+go run ./cmd/gateway
+go run ./cmd/control
 
 # Frontend (with hot reload)
 cd frontend
@@ -282,14 +283,20 @@ When editing `backend/ent/schema`, regenerate Ent + Wire:
 ```bash
 cd backend
 go generate ./ent
-go generate ./cmd/api
+go generate ./cmd/gateway
+go generate ./cmd/control
 ```
 
 #### Health Checks
 
 ```bash
+# Gateway health (inference proxy)
 curl -I http://localhost:8080/livez
 curl -I http://localhost:8080/readyz
+
+# Control health (admin/auth plane)
+curl -I http://localhost:8081/livez
+curl -I http://localhost:8081/readyz
 ```
 
 ---
@@ -341,7 +348,8 @@ In Claude Code, Plan Mode cannot exit automatically. (Normally when using the na
 ```
 sub2api/
 ├── backend/                  # Go backend service
-│   ├── cmd/api/              # API server entry
+│   ├── cmd/gateway/          # Gateway server entry
+│   ├── cmd/control/          # Control/admin server entry
 │   ├── cmd/bootstrap/        # Bootstrap binary for migrations/admin seed
 │   ├── internal/             # Internal modules
 │   │   ├── config/           # Configuration

@@ -1,11 +1,7 @@
 package server
 
 import (
-	"context"
-	"log"
 	"net/http"
-	"sync/atomic"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
@@ -13,55 +9,65 @@ import (
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/Wei-Shaw/sub2api/internal/web"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
-const frameSrcRefreshTimeout = 5 * time.Second
-
-// SetupRouter 配置路由器中间件和路由
-func SetupRouter(
+// SetupGatewayRouter configures the gateway-only HTTP surface.
+func SetupGatewayRouter(
 	r *gin.Engine,
-	handlers *handler.Handlers,
-	jwtAuth middleware2.JWTAuthMiddleware,
-	adminAuth middleware2.AdminAuthMiddleware,
+	handlers *handler.GatewayHandlers,
 	apiKeyAuth middleware2.APIKeyAuthMiddleware,
 	apiKeyService *service.APIKeyService,
 	subscriptionService *service.SubscriptionService,
+	settingService *service.SettingService,
+	cfg *config.Config,
+	healthChecker *health.Checker,
+) *gin.Engine {
+	applySharedRouterMiddleware(r, cfg)
+
+	routes.RegisterHealthRoutes(r, healthChecker)
+	routes.RegisterGatewayCompatRoutes(r)
+	routes.RegisterGatewayRoutes(r, toLegacyHandlers(handlers), apiKeyAuth, apiKeyService, subscriptionService, settingService, cfg)
+
+	return r
+}
+
+// SetupControlRouter configures the control-plane HTTP surface.
+func SetupControlRouter(
+	r *gin.Engine,
+	handlers *handler.ControlHandlers,
+	jwtAuth middleware2.JWTAuthMiddleware,
+	adminAuth middleware2.AdminAuthMiddleware,
 	settingService *service.SettingService,
 	buildInfo service.BuildInfo,
 	cfg *config.Config,
 	redisClient *redis.Client,
 	healthChecker *health.Checker,
 ) *gin.Engine {
-	// 缓存 iframe 页面的 origin 列表，用于动态注入 CSP frame-src
-	var cachedFrameOrigins atomic.Pointer[[]string]
-	emptyOrigins := []string{}
-	cachedFrameOrigins.Store(&emptyOrigins)
+	applySharedRouterMiddleware(r, cfg)
+	r.Use(middleware2.CORS(cfg.CORS))
+	r.Use(middleware2.SecurityHeaders(cfg.Security.CSP, nil))
 
-	refreshFrameOrigins := func() {
-		ctx, cancel := context.WithTimeout(context.Background(), frameSrcRefreshTimeout)
-		defer cancel()
-		origins, err := settingService.GetFrameSrcOrigins(ctx)
-		if err != nil {
-			// 获取失败时保留已有缓存，避免 frame-src 被意外清空
-			return
-		}
-		cachedFrameOrigins.Store(&origins)
-	}
-	refreshFrameOrigins() // 启动时初始化
+	routes.RegisterHealthRoutes(r, healthChecker)
 
-	// 应用中间件
-	// OTel middleware MUST run before logging middleware so that trace_id/span_id
-	// are available in structured log output for Loki→Tempo correlation.
+	v1 := r.Group("/api/v1")
+	legacy := toLegacyControlHandlers(handlers)
+	routes.RegisterAuthRoutes(v1, legacy, jwtAuth, redisClient, settingService)
+	routes.RegisterUserRoutes(v1, legacy, jwtAuth, settingService)
+	routes.RegisterAdminRoutes(v1, legacy, adminAuth, buildInfo)
+
+	return r
+}
+
+func applySharedRouterMiddleware(r *gin.Engine, cfg *config.Config) {
 	if cfg.Otel.Enabled {
 		r.Use(otelgin.Middleware("sub2api",
 			otelgin.WithFilter(func(r *http.Request) bool {
 				p := r.URL.Path
-				return p != "/livez" && p != "/readyz" && p != "/startupz"
+				return p != "/livez" && p != "/readyz" && p != "/startupz" && p != "/health"
 			}),
 		))
 	}
@@ -71,63 +77,32 @@ func SetupRouter(
 		r.Use(middleware2.TraceIDHeader())
 		r.Use(middleware2.RequestMetrics())
 	}
-	r.Use(middleware2.CORS(cfg.CORS))
-	r.Use(middleware2.SecurityHeaders(cfg.Security.CSP, func() []string {
-		if p := cachedFrameOrigins.Load(); p != nil {
-			return *p
-		}
-		return nil
-	}))
-
-	// Serve embedded frontend with settings injection if available
-	if web.HasEmbeddedFrontend() {
-		frontendServer, err := web.NewFrontendServer(settingService)
-		if err != nil {
-			log.Printf("Warning: Failed to create frontend server with settings injection: %v, using legacy mode", err)
-			r.Use(web.ServeEmbeddedFrontend())
-			settingService.SetOnUpdateCallback(refreshFrameOrigins)
-		} else {
-			// Register combined callback: invalidate HTML cache + refresh frame origins
-			settingService.SetOnUpdateCallback(func() {
-				frontendServer.InvalidateCache()
-				refreshFrameOrigins()
-			})
-			r.Use(frontendServer.Middleware())
-		}
-	} else {
-		settingService.SetOnUpdateCallback(refreshFrameOrigins)
-	}
-
-	// 注册路由
-	registerRoutes(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, settingService, buildInfo, cfg, redisClient, healthChecker)
-
-	return r
 }
 
-// registerRoutes 注册所有 HTTP 路由
-func registerRoutes(
-	r *gin.Engine,
-	h *handler.Handlers,
-	jwtAuth middleware2.JWTAuthMiddleware,
-	adminAuth middleware2.AdminAuthMiddleware,
-	apiKeyAuth middleware2.APIKeyAuthMiddleware,
-	apiKeyService *service.APIKeyService,
-	subscriptionService *service.SubscriptionService,
-	settingService *service.SettingService,
-	buildInfo service.BuildInfo,
-	cfg *config.Config,
-	redisClient *redis.Client,
-	healthChecker *health.Checker,
-) {
-	// 通用路由（健康检查、状态等）
-	routes.RegisterCommonRoutes(r, healthChecker)
+func toLegacyHandlers(handlers *handler.GatewayHandlers) *handler.Handlers {
+	if handlers == nil {
+		return &handler.Handlers{}
+	}
+	return &handler.Handlers{
+		Gateway:       handlers.Gateway,
+		OpenAIGateway: handlers.OpenAIGateway,
+	}
+}
 
-	// API v1
-	v1 := r.Group("/api/v1")
-
-	// 注册各模块路由
-	routes.RegisterAuthRoutes(v1, h, jwtAuth, redisClient, settingService)
-	routes.RegisterUserRoutes(v1, h, jwtAuth, settingService)
-	routes.RegisterAdminRoutes(v1, h, adminAuth, buildInfo)
-	routes.RegisterGatewayRoutes(r, h, apiKeyAuth, apiKeyService, subscriptionService, settingService, cfg)
+func toLegacyControlHandlers(handlers *handler.ControlHandlers) *handler.Handlers {
+	if handlers == nil {
+		return &handler.Handlers{}
+	}
+	return &handler.Handlers{
+		Auth:         handlers.Auth,
+		User:         handlers.User,
+		APIKey:       handlers.APIKey,
+		Usage:        handlers.Usage,
+		Redeem:       handlers.Redeem,
+		Subscription: handlers.Subscription,
+		Announcement: handlers.Announcement,
+		Admin:        handlers.Admin,
+		Setting:      handlers.Setting,
+		Totp:         handlers.Totp,
+	}
 }

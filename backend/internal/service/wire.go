@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/google/wire"
@@ -286,10 +287,75 @@ func ProvideAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthC
 	return apiKeyService
 }
 
+func ProvideBillingService(cfg *config.Config, pricingService *PricingService, invalidationBus RuntimeCacheInvalidationBus) *BillingService {
+	svc := NewBillingService(cfg, pricingService)
+	svc.SetInvalidationBus(invalidationBus)
+	return svc
+}
+
 // ProvideSettingService wires SettingService with group reader for default subscription validation.
-func ProvideSettingService(settingRepo SettingRepository, groupRepo GroupRepository, cfg *config.Config) *SettingService {
+func ProvideSettingService(
+	settingRepo SettingRepository,
+	groupRepo GroupRepository,
+	cfg *config.Config,
+	invalidationBus RuntimeCacheInvalidationBus,
+) *SettingService {
 	svc := NewSettingService(settingRepo, cfg)
 	svc.SetDefaultSubscriptionGroupReader(groupRepo)
+	svc.SetInvalidationBus(invalidationBus)
+	return svc
+}
+
+func ProvideChannelService(
+	repo ChannelRepository,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	invalidationBus RuntimeCacheInvalidationBus,
+) *ChannelService {
+	svc := NewChannelService(repo, authCacheInvalidator)
+	svc.SetInvalidationBus(invalidationBus)
+	return svc
+}
+
+func ProvideAdminService(
+	userRepo UserRepository,
+	groupRepo GroupRepository,
+	accountRepo AccountRepository,
+	proxyRepo ProxyRepository,
+	apiKeyRepo APIKeyRepository,
+	redeemCodeRepo RedeemCodeRepository,
+	userGroupRateRepo UserGroupRateRepository,
+	billingCacheService *BillingCacheService,
+	proxyProber ProxyExitInfoProber,
+	proxyLatencyCache ProxyLatencyCache,
+	authCacheInvalidator APIKeyAuthCacheInvalidator,
+	entClient *dbent.Client,
+	settingService *SettingService,
+	defaultSubAssigner DefaultSubscriptionAssigner,
+	userSubRepo UserSubscriptionRepository,
+	privacyClientFactory PrivacyClientFactory,
+	invalidationBus RuntimeCacheInvalidationBus,
+) AdminService {
+	svc := NewAdminService(
+		userRepo,
+		groupRepo,
+		accountRepo,
+		proxyRepo,
+		apiKeyRepo,
+		redeemCodeRepo,
+		userGroupRateRepo,
+		billingCacheService,
+		proxyProber,
+		proxyLatencyCache,
+		authCacheInvalidator,
+		entClient,
+		settingService,
+		defaultSubAssigner,
+		userSubRepo,
+		privacyClientFactory,
+	)
+	if impl, ok := svc.(*adminServiceImpl); ok {
+		impl.SetInvalidationBus(invalidationBus)
+	}
 	return svc
 }
 
@@ -364,9 +430,9 @@ var SharedProviderSet = wire.NewSet(
 	NewPromoService,
 	NewUsageService,
 	NewDashboardService,
-	NewBillingService,
+	ProvideBillingService,
 	NewAnnouncementService,
-	NewAdminService,
+	ProvideAdminService,
 	NewGatewayService,
 	NewOpenAIGatewayService,
 	NewOAuthService,
@@ -403,7 +469,7 @@ var SharedProviderSet = wire.NewSet(
 	ProvideIdempotencyCoordinator,
 	ProvideScheduledTestService,
 	NewGroupCapacityService,
-	NewChannelService,
+	ProvideChannelService,
 	NewModelPricingResolver,
 )
 

@@ -24,39 +24,27 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// APIApplication is the top-level struct for the API binary.
-type APIApplication struct {
+type ControlApplication struct {
 	Server        *http.Server
 	MetricsServer *appelotel.MetricsServer
 	Health        *health.Checker
 	Cleanup       func()
 }
 
-func initializeAPIApplication(buildInfo handler.BuildInfo) (*APIApplication, error) {
+func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplication, error) {
 	wire.Build(
-		// Infrastructure
-		config.ProviderSet,
+		config.ControlProviderSet,
 		appelotel.ProviderSet,
 		repository.ProviderSet,
-
-		// Business logic — API role
 		service.APIProviderSet,
-
-		// HTTP layer
-		middleware.ProviderSet,
-		handler.ProviderSet,
-		server.ProviderSet,
-
-		// Health probes
+		middleware.ControlProviderSet,
+		handler.ControlProviderSet,
+		server.ControlProviderSet,
 		health.NewChecker,
-
-		// Local helpers
 		providePrivacyClientFactory,
 		provideServiceBuildInfo,
-		provideAPICleanup,
-
-		// Wire struct binding
-		wire.Struct(new(APIApplication), "Server", "MetricsServer", "Health", "Cleanup"),
+		provideControlCleanup,
+		wire.Struct(new(ControlApplication), "Server", "MetricsServer", "Health", "Cleanup"),
 	)
 	return nil, nil
 }
@@ -72,22 +60,19 @@ func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
 	}
 }
 
-func provideAPICleanup(
+func provideControlCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
 	otelProvider *appelotel.Provider,
 	metricsServer *appelotel.MetricsServer,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
-	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
 	pricing *service.PricingService,
-	deferred *service.DeferredService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
-	openAIGateway *service.OpenAIGatewayService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -100,16 +85,14 @@ func provideAPICleanup(
 
 		parallelSteps := []cleanupStep{
 			{"EmailQueueService", func() error {
-				emailQueue.Stop()
+				if emailQueue != nil {
+					emailQueue.Stop()
+				}
 				return nil
 			}},
 			{"BillingCacheService", func() error {
-				billingCache.Stop()
-				return nil
-			}},
-			{"UsageRecordWorkerPool", func() error {
-				if usageRecordWorkerPool != nil {
-					usageRecordWorkerPool.Stop()
+				if billingCache != nil {
+					billingCache.Stop()
 				}
 				return nil
 			}},
@@ -119,33 +102,33 @@ func provideAPICleanup(
 				}
 				return nil
 			}},
-			{"DeferredService", func() error {
-				deferred.Stop()
-				return nil
-			}},
 			{"PricingService", func() error {
-				pricing.Stop()
+				if pricing != nil {
+					pricing.Stop()
+				}
 				return nil
 			}},
 			{"OAuthService", func() error {
-				oauth.Stop()
+				if oauth != nil {
+					oauth.Stop()
+				}
 				return nil
 			}},
 			{"OpenAIOAuthService", func() error {
-				openaiOAuth.Stop()
+				if openaiOAuth != nil {
+					openaiOAuth.Stop()
+				}
 				return nil
 			}},
 			{"GeminiOAuthService", func() error {
-				geminiOAuth.Stop()
+				if geminiOAuth != nil {
+					geminiOAuth.Stop()
+				}
 				return nil
 			}},
 			{"AntigravityOAuthService", func() error {
-				antigravityOAuth.Stop()
-				return nil
-			}},
-			{"OpenAIWSPool", func() error {
-				if openAIGateway != nil {
-					openAIGateway.CloseOpenAIWSPool()
+				if antigravityOAuth != nil {
+					antigravityOAuth.Stop()
 				}
 				return nil
 			}},
@@ -196,7 +179,6 @@ func provideAPICleanup(
 
 		runParallel(parallelSteps)
 
-		// Shutdown OTel after services stop (flushes remaining spans/metrics)
 		if otelProvider != nil {
 			if err := otelProvider.Shutdown(ctx); err != nil {
 				log.Printf("OTel provider shutdown error: %v", err)
@@ -209,12 +191,5 @@ func provideAPICleanup(
 		}
 
 		runSequential(infraSteps)
-
-		select {
-		case <-ctx.Done():
-			log.Printf("[Cleanup] Warning: cleanup timed out after 10 seconds")
-		default:
-			log.Printf("[Cleanup] All cleanup steps completed")
-		}
 	}
 }

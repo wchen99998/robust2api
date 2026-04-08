@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "sub2api.fullname" . }}-api
+  name: {{ include "sub2api.fullname" . }}-gateway
   labels:
     {{- include "sub2api.labels" . | nindent 4 }}
-    app.kubernetes.io/component: api
+    app.kubernetes.io/component: gateway
 spec:
-  {{- if not .Values.api.autoscaling.enabled }}
-  replicas: {{ .Values.api.replicaCount }}
+  {{- if not .Values.gateway.autoscaling.enabled }}
+  replicas: {{ .Values.gateway.replicaCount }}
   {{- end }}
   selector:
     matchLabels:
-      {{- include "sub2api.api.selectorLabels" . | nindent 6 }}
+      {{- include "sub2api.gateway.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
         checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
-        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/runtime-secret.yaml") . | sha256sum }}
       labels:
         {{- include "sub2api.labels" . | nindent 8 }}
-        app.kubernetes.io/component: api
+        app.kubernetes.io/component: gateway
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -28,11 +28,11 @@ spec:
       serviceAccountName: {{ include "sub2api.serviceAccountName" . }}
       securityContext:
         fsGroup: 1000
-      terminationGracePeriodSeconds: {{ default 20 .Values.api.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ default 20 .Values.gateway.terminationGracePeriodSeconds }}
       containers:
-        - name: api
-          image: "{{ .Values.image.api.repository }}:{{ .Values.image.api.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.api.pullPolicy }}
+        - name: gateway
+          image: "{{ .Values.image.gateway.repository }}:{{ .Values.image.gateway.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.gateway.pullPolicy }}
           ports:
             - name: http
               containerPort: 8080
@@ -46,27 +46,27 @@ spec:
             - configMapRef:
                 name: {{ include "sub2api.fullname" . }}
             - secretRef:
-                name: {{ include "sub2api.secretName" . }}
+                name: {{ include "sub2api.runtimeSecretName" . }}
           startupProbe:
             httpGet:
-              path: {{ default "/startupz" .Values.api.probes.startup.path }}
+              path: {{ default "/startupz" .Values.gateway.probes.startup.path }}
               port: http
-            failureThreshold: {{ default 30 .Values.api.probes.startup.failureThreshold }}
-            periodSeconds: {{ default 2 .Values.api.probes.startup.periodSeconds }}
+            failureThreshold: {{ default 30 .Values.gateway.probes.startup.failureThreshold }}
+            periodSeconds: {{ default 2 .Values.gateway.probes.startup.periodSeconds }}
           livenessProbe:
             httpGet:
-              path: {{ default "/livez" .Values.api.probes.liveness.path }}
+              path: {{ default "/livez" .Values.gateway.probes.liveness.path }}
               port: http
-            periodSeconds: {{ default 30 .Values.api.probes.liveness.periodSeconds }}
+            periodSeconds: {{ default 30 .Values.gateway.probes.liveness.periodSeconds }}
             timeoutSeconds: 10
           readinessProbe:
             httpGet:
-              path: {{ default "/readyz" .Values.api.probes.readiness.path }}
+              path: {{ default "/readyz" .Values.gateway.probes.readiness.path }}
               port: http
-            periodSeconds: {{ default 10 .Values.api.probes.readiness.periodSeconds }}
+            periodSeconds: {{ default 10 .Values.gateway.probes.readiness.periodSeconds }}
             timeoutSeconds: 5
           resources:
-            {{- toYaml .Values.api.resources | nindent 12 }}
+            {{- toYaml .Values.gateway.resources | nindent 12 }}
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
@@ -82,7 +82,7 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      {{- with .Values.api.topologySpreadConstraints }}
+      {{- with .Values.gateway.topologySpreadConstraints }}
       topologySpreadConstraints:
         {{- range . }}
         - maxSkew: {{ .maxSkew }}
@@ -94,7 +94,7 @@ spec:
           {{- else }}
           labelSelector:
             matchLabels:
-              {{- include "sub2api.api.selectorLabels" $ | nindent 14 }}
+              {{- include "sub2api.gateway.selectorLabels" $ | nindent 14 }}
           {{- end }}
         {{- end }}
       {{- end }}

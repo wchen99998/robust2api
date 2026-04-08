@@ -1,0 +1,27 @@
+ARG NODE_IMAGE=node:22-alpine
+FROM ${NODE_IMAGE} AS build
+
+WORKDIR /app/frontend
+
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+COPY frontend/package.json frontend/pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile
+
+COPY frontend/ ./
+RUN pnpm run build
+
+FROM nginx:alpine
+
+WORKDIR /app
+
+ENV CONTROL_UPSTREAM=http://127.0.0.1:8080
+ENV GATEWAY_UPSTREAM=http://127.0.0.1:8080
+ENV EXTRA_FRAME_SRC_ORIGINS=""
+
+COPY --from=build /app/frontend/dist /usr/share/nginx/html
+COPY deploy/helm/sub2api/nginx/control-nginx.conf /etc/nginx/templates/default.conf.template
+
+EXPOSE 8081
+
+CMD ["nginx", "-g", "daemon off;"]

@@ -32,8 +32,8 @@ import (
 
 // Injectors from wire.go:
 
-func initializeAPIApplication(buildInfo handler.BuildInfo) (*APIApplication, error) {
-	configConfig, err := config.ProvideConfig()
+func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplication, error) {
+	configConfig, err := config.ProvideControlConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -51,7 +51,8 @@ func initializeAPIApplication(buildInfo handler.BuildInfo) (*APIApplication, err
 	refreshTokenCache := repository.NewRefreshTokenCache(redisClient)
 	settingRepository := repository.NewSettingRepository(client)
 	groupRepository := repository.NewGroupRepository(client, db)
-	settingService := service.ProvideSettingService(settingRepository, groupRepository, configConfig)
+	runtimeCacheInvalidationBus := repository.NewRuntimeCacheInvalidationBus(redisClient)
+	settingService := service.ProvideSettingService(settingRepository, groupRepository, configConfig, runtimeCacheInvalidationBus)
 	emailCache := repository.NewEmailCache(redisClient)
 	emailService := service.NewEmailService(settingRepository, emailCache)
 	turnstileVerifier := repository.NewTurnstileVerifier()
@@ -105,7 +106,7 @@ func initializeAPIApplication(buildInfo handler.BuildInfo) (*APIApplication, err
 	proxyExitInfoProber := repository.NewProxyExitInfoProber(configConfig)
 	proxyLatencyCache := repository.NewProxyLatencyCache(redisClient)
 	privacyClientFactory := providePrivacyClientFactory()
-	adminService := service.NewAdminService(userRepository, groupRepository, accountRepository, proxyRepository, apiKeyRepository, redeemCodeRepository, userGroupRateRepository, billingCacheService, proxyExitInfoProber, proxyLatencyCache, apiKeyAuthCacheInvalidator, client, settingService, subscriptionService, userSubscriptionRepository, privacyClientFactory)
+	adminService := service.ProvideAdminService(userRepository, groupRepository, accountRepository, proxyRepository, apiKeyRepository, redeemCodeRepository, userGroupRateRepository, billingCacheService, proxyExitInfoProber, proxyLatencyCache, apiKeyAuthCacheInvalidator, client, settingService, subscriptionService, userSubscriptionRepository, privacyClientFactory, runtimeCacheInvalidationBus)
 	concurrencyCache := repository.ProvideConcurrencyCache(redisClient, configConfig)
 	concurrencyService := service.ProvideAPIConcurrencyService(concurrencyCache, configConfig)
 	adminUserHandler := admin.NewUserHandler(adminService, concurrencyService)
@@ -176,62 +177,46 @@ func initializeAPIApplication(buildInfo handler.BuildInfo) (*APIApplication, err
 	scheduledTestService := service.ProvideScheduledTestService(scheduledTestPlanRepository, scheduledTestResultRepository)
 	scheduledTestHandler := admin.NewScheduledTestHandler(scheduledTestService)
 	channelRepository := repository.NewChannelRepository(db)
-	channelService := service.NewChannelService(channelRepository, apiKeyAuthCacheInvalidator)
+	channelService := service.ProvideChannelService(channelRepository, apiKeyAuthCacheInvalidator, runtimeCacheInvalidationBus)
 	pricingRemoteClient := repository.ProvidePricingRemoteClient(configConfig)
 	pricingService, err := service.ProvideAPIPricingService(configConfig, pricingRemoteClient)
 	if err != nil {
 		return nil, err
 	}
-	billingService := service.NewBillingService(configConfig, pricingService)
+	billingService := service.ProvideBillingService(configConfig, pricingService, runtimeCacheInvalidationBus)
 	channelHandler := admin.NewChannelHandler(channelService, billingService)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler)
-	usageBillingRepository := repository.NewUsageBillingRepository(client, db)
-	identityService := service.NewIdentityService(identityCache)
-	deferredService := service.ProvideAPIDeferredService(accountRepository, timingWheelService)
-	claudeTokenProvider := service.ProvideClaudeTokenProvider(accountRepository, geminiTokenCache, oAuthService, oAuthRefreshAPI)
-	digestSessionStore := service.NewDigestSessionStore()
-	modelPricingResolver := service.NewModelPricingResolver(channelService, billingService)
-	gatewayService := service.NewGatewayService(accountRepository, groupRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, identityService, httpUpstream, deferredService, claudeTokenProvider, sessionLimitCache, rpmCache, digestSessionStore, settingService, tlsFingerprintProfileService, channelService, modelPricingResolver)
-	geminiMessagesCompatService := service.NewGeminiMessagesCompatService(accountRepository, groupRepository, gatewayCache, schedulerSnapshotService, geminiTokenProvider, rateLimitService, httpUpstream, antigravityGatewayService, configConfig)
-	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
-	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
-	userMessageQueueService := service.ProvideAPIUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
-	gatewayHandler := handler.NewGatewayHandler(gatewayService, geminiMessagesCompatService, antigravityGatewayService, userService, concurrencyService, billingCacheService, usageService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, userMessageQueueService, configConfig, settingService)
-	openAITokenProvider := service.ProvideOpenAITokenProvider(accountRepository, geminiTokenCache, openAIOAuthService, oAuthRefreshAPI)
-	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, usageLogRepository, usageBillingRepository, userRepository, userSubscriptionRepository, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider, modelPricingResolver, channelService)
-	openAIGatewayHandler := handler.NewOpenAIGatewayHandler(openAIGatewayService, concurrencyService, billingCacheService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, configConfig)
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo)
 	totpHandler := handler.NewTotpHandler(totpService)
+	controlCacheInvalidationSubscribers := service.ProvideControlCacheInvalidationSubscribers(runtimeCacheInvalidationBus, settingService, channelService, pricingService)
 	idempotencyRepository := repository.NewIdempotencyRepository(client, db)
 	idempotencyCoordinator := service.ProvideIdempotencyCoordinator(idempotencyRepository, configConfig)
 	idempotencyCleanupService := service.ProvideAPIIdempotencyCleanupService(idempotencyRepository, configConfig)
-	handlers := handler.ProvideHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, gatewayHandler, openAIGatewayHandler, handlerSettingHandler, totpHandler, idempotencyCoordinator, idempotencyCleanupService)
+	controlHandlers := handler.ProvideControlHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, handlerSettingHandler, totpHandler, controlCacheInvalidationSubscribers, idempotencyCoordinator, idempotencyCleanupService)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
-	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
 	serviceBuildInfo := provideServiceBuildInfo(buildInfo)
 	checker := health.NewChecker(db, redisClient)
-	engine := server.ProvideRouter(configConfig, handlers, jwtAuthMiddleware, adminAuthMiddleware, apiKeyAuthMiddleware, apiKeyService, subscriptionService, settingService, serviceBuildInfo, redisClient, checker)
+	engine := server.ProvideControlRouter(configConfig, controlHandlers, jwtAuthMiddleware, adminAuthMiddleware, settingService, serviceBuildInfo, redisClient, checker)
 	httpServer := server.ProvideHTTPServer(configConfig, engine)
 	provider, err := otel.ProvideOtel(configConfig)
 	if err != nil {
 		return nil, err
 	}
 	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
-	v := provideAPICleanup(client, redisClient, provider, metricsServer, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, pricingService, deferredService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
-	apiApplication := &APIApplication{
+	v := provideControlCleanup(client, redisClient, provider, metricsServer, emailQueueService, billingCacheService, subscriptionService, pricingService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
+	controlApplication := &ControlApplication{
 		Server:        httpServer,
 		MetricsServer: metricsServer,
 		Health:        checker,
 		Cleanup:       v,
 	}
-	return apiApplication, nil
+	return controlApplication, nil
 }
 
 // wire.go:
 
-// APIApplication is the top-level struct for the API binary.
-type APIApplication struct {
+type ControlApplication struct {
 	Server        *http.Server
 	MetricsServer *otel.MetricsServer
 	Health        *health.Checker
@@ -249,22 +234,19 @@ func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
 	}
 }
 
-func provideAPICleanup(
+func provideControlCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
 	otelProvider *otel.Provider,
 	metricsServer *otel.MetricsServer,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
-	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
 	pricing *service.PricingService,
-	deferred *service.DeferredService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
 	geminiOAuth *service.GeminiOAuthService,
 	antigravityOAuth *service.AntigravityOAuthService,
-	openAIGateway *service.OpenAIGatewayService,
 ) func() {
 	return func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -277,16 +259,14 @@ func provideAPICleanup(
 
 		parallelSteps := []cleanupStep{
 			{"EmailQueueService", func() error {
-				emailQueue.Stop()
+				if emailQueue != nil {
+					emailQueue.Stop()
+				}
 				return nil
 			}},
 			{"BillingCacheService", func() error {
-				billingCache.Stop()
-				return nil
-			}},
-			{"UsageRecordWorkerPool", func() error {
-				if usageRecordWorkerPool != nil {
-					usageRecordWorkerPool.Stop()
+				if billingCache != nil {
+					billingCache.Stop()
 				}
 				return nil
 			}},
@@ -296,33 +276,33 @@ func provideAPICleanup(
 				}
 				return nil
 			}},
-			{"DeferredService", func() error {
-				deferred.Stop()
-				return nil
-			}},
 			{"PricingService", func() error {
-				pricing.Stop()
+				if pricing != nil {
+					pricing.Stop()
+				}
 				return nil
 			}},
 			{"OAuthService", func() error {
-				oauth.Stop()
+				if oauth != nil {
+					oauth.Stop()
+				}
 				return nil
 			}},
 			{"OpenAIOAuthService", func() error {
-				openaiOAuth.Stop()
+				if openaiOAuth != nil {
+					openaiOAuth.Stop()
+				}
 				return nil
 			}},
 			{"GeminiOAuthService", func() error {
-				geminiOAuth.Stop()
+				if geminiOAuth != nil {
+					geminiOAuth.Stop()
+				}
 				return nil
 			}},
 			{"AntigravityOAuthService", func() error {
-				antigravityOAuth.Stop()
-				return nil
-			}},
-			{"OpenAIWSPool", func() error {
-				if openAIGateway != nil {
-					openAIGateway.CloseOpenAIWSPool()
+				if antigravityOAuth != nil {
+					antigravityOAuth.Stop()
 				}
 				return nil
 			}},
@@ -385,12 +365,5 @@ func provideAPICleanup(
 		}
 
 		runSequential(infraSteps)
-
-		select {
-		case <-ctx.Done():
-			log.Printf("[Cleanup] Warning: cleanup timed out after 10 seconds")
-		default:
-			log.Printf("[Cleanup] All cleanup steps completed")
-		}
 	}
 }

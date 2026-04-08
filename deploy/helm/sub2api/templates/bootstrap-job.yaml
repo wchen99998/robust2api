@@ -31,7 +31,11 @@ spec:
             - configMapRef:
                 name: {{ include "sub2api.fullname" . }}
             - secretRef:
-                name: {{ include "sub2api.secretName" . }}
+                name: {{ include "sub2api.runtimeSecretName" . }}
+            {{- if ne (include "sub2api.controlSecretName" .) (include "sub2api.runtimeSecretName" .) }}
+            - secretRef:
+                name: {{ include "sub2api.controlSecretName" . }}
+            {{- end }}
           resources:
             requests:
               cpu: 100m

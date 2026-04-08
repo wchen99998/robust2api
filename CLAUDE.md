@@ -13,9 +13,10 @@ Sub2API is an AI API Gateway Platform for subscription quota distribution. It co
 ### Backend (run from `backend/`)
 
 ```bash
-go run ./cmd/api/                       # Run API server
+go run ./cmd/gateway/                    # Run gateway/inference server
+go run ./cmd/control/                    # Run control/admin server
 go run ./cmd/worker/                    # Run background worker
-make build                              # Build binaries to bin/api and bin/worker
+make build                              # Build binaries to bin/gateway, bin/control, bin/worker
 make generate                           # Regenerate Ent ORM + Wire DI code
 go test -tags=unit ./...                # Unit tests
 go test -tags=integration ./...         # Integration tests (needs DB/Redis)
@@ -58,15 +59,16 @@ PostgreSQL
 
 ### Dependency Injection
 
-Uses **Google Wire** for compile-time DI. The wire graph is in `backend/cmd/api/wire.go` (API server) and `backend/cmd/worker/wire.go` (background worker). After changing provider sets, run `make generate` from `backend/`.
+Uses **Google Wire** for compile-time DI. The wire graphs live in `backend/cmd/gateway/wire.go`, `backend/cmd/control/wire.go`, and `backend/cmd/worker/wire.go`. After changing provider sets, run `make generate` from `backend/`.
 
-### Entry Point
+### Entry Points
 
-`backend/cmd/api/main.go` — initializes config (Viper), DB (Ent), Redis, wires services, starts Gin HTTP server with graceful shutdown. `backend/cmd/worker/main.go` — runs background workers (usage recording, billing).
+`backend/cmd/gateway/main.go` and `backend/cmd/control/main.go` — initialize config (Viper), DB (Ent), Redis, wire services, and start Gin HTTP servers for their respective roles. `backend/cmd/worker/main.go` — runs background workers (usage recording, billing).
 
 ### Key Backend Packages
 
-- `cmd/api/` — API server entry, Wire DI setup, version embedding
+- `cmd/gateway/` — gateway entry, Wire DI setup, version embedding
+- `cmd/control/` — control entry, Wire DI setup, version embedding
 - `cmd/worker/` — background worker entry, Wire DI setup
 - `ent/schema/` — database schema definitions (source of truth for DB models)
 - `internal/handler/` — HTTP handlers, grouped by domain; DTOs in `handler/dto/`
@@ -77,7 +79,6 @@ Uses **Google Wire** for compile-time DI. The wire graph is in `backend/cmd/api/
 - `internal/config/` — Viper-based config loading from YAML + env vars (no prefix; dots become underscores, e.g. `otel.enabled` → `OTEL_ENABLED`)
 - `internal/pkg/` — shared utilities (logger, HTTP client, OAuth, provider-specific API adapters)
 - `internal/model/` — custom types (error passthrough rules, TLS fingerprint profiles)
-- `internal/web/` — frontend asset embedding via `//go:embed` (build tag `embed`)
 
 ### Frontend (`frontend/src/`)
 

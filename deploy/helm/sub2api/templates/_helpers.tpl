@@ -137,13 +137,24 @@ Redis port.
 {{- end }}
 
 {{/*
-Secret name: existing or chart-managed.
+Runtime secret name: existing secret or chart-managed runtime secret for gateway/worker.
 */}}
-{{- define "sub2api.secretName" -}}
+{{- define "sub2api.runtimeSecretName" -}}
 {{- if .Values.existingSecret }}
 {{- .Values.existingSecret }}
 {{- else }}
-{{- include "sub2api.fullname" . }}
+{{- printf "%s-runtime" (include "sub2api.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+Control-plane secret name: existing control secret or chart-managed control secret.
+*/}}
+{{- define "sub2api.controlSecretName" -}}
+{{- if .Values.existingControlSecret }}
+{{- .Values.existingControlSecret }}
+{{- else }}
+{{- printf "%s-control" (include "sub2api.fullname" .) }}
 {{- end }}
 {{- end }}
 
@@ -156,11 +167,19 @@ on each upgrade instead of trying to patch an immutable Job spec.
 {{- end }}
 
 {{/*
-API component labels.
+Gateway component labels.
 */}}
-{{- define "sub2api.api.selectorLabels" -}}
+{{- define "sub2api.gateway.selectorLabels" -}}
 {{ include "sub2api.selectorLabels" . }}
-app.kubernetes.io/component: api
+app.kubernetes.io/component: gateway
+{{- end }}
+
+{{/*
+Control component labels.
+*/}}
+{{- define "sub2api.control.selectorLabels" -}}
+{{ include "sub2api.selectorLabels" . }}
+app.kubernetes.io/component: control
 {{- end }}
 
 {{/*

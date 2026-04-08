@@ -142,6 +142,7 @@ const (
 type ChannelService struct {
 	repo                 ChannelRepository
 	authCacheInvalidator APIKeyAuthCacheInvalidator
+	invalidationBus      RuntimeCacheInvalidationBus
 
 	cache   atomic.Value // *channelCache
 	cacheSF singleflight.Group
@@ -154,6 +155,10 @@ func NewChannelService(repo ChannelRepository, authCacheInvalidator APIKeyAuthCa
 		authCacheInvalidator: authCacheInvalidator,
 	}
 	return s
+}
+
+func (s *ChannelService) SetInvalidationBus(bus RuntimeCacheInvalidationBus) {
+	s.invalidationBus = bus
 }
 
 // loadCache 加载或返回缓存的渠道数据
@@ -305,8 +310,6 @@ func (s *ChannelService) buildCache(ctx context.Context) (*channelCache, error) 
 	return cache, nil
 }
 
-// invalidateCache 使缓存失效，让下次读取时自然重建
-
 // isPlatformPricingMatch 判断定价条目的平台是否匹配分组平台。
 // 各平台（antigravity / anthropic / gemini / openai）严格独立，不跨平台匹配。
 func isPlatformPricingMatch(groupPlatform, pricingPlatform string) bool {
@@ -318,13 +321,22 @@ func isPlatformPricingMatch(groupPlatform, pricingPlatform string) bool {
 func matchingPlatforms(groupPlatform string) []string {
 	return []string{groupPlatform}
 }
-func (s *ChannelService) invalidateCache() {
+func (s *ChannelService) RefreshCache(ctx context.Context) error {
 	s.cache.Store((*channelCache)(nil))
 	s.cacheSF.Forget("channel_cache")
+	_, err := s.buildCache(ctx)
+	return err
+}
 
-	// 主动重建缓存，确保 CRUD 后立即生效
-	if _, err := s.buildCache(context.Background()); err != nil {
+func (s *ChannelService) invalidateCache() {
+	if err := s.RefreshCache(context.Background()); err != nil {
 		slog.Warn("failed to rebuild channel cache after invalidation", "error", err)
+	}
+}
+
+func (s *ChannelService) notifyChannelsChanged() {
+	if s.invalidationBus != nil {
+		publishInvalidation("channels", s.invalidationBus.PublishChannels)
 	}
 }
 
@@ -589,6 +601,7 @@ func (s *ChannelService) Create(ctx context.Context, input *CreateChannelInput) 
 	}
 
 	s.invalidateCache()
+	s.notifyChannelsChanged()
 	return s.repo.GetByID(ctx, channel.ID)
 }
 
@@ -693,6 +706,7 @@ func (s *ChannelService) Update(ctx context.Context, id int64, input *UpdateChan
 			}
 		}
 	}
+	s.notifyChannelsChanged()
 
 	return s.repo.GetByID(ctx, id)
 }
@@ -716,6 +730,7 @@ func (s *ChannelService) Delete(ctx context.Context, id int64) error {
 			s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, gid)
 		}
 	}
+	s.notifyChannelsChanged()
 
 	return nil
 }

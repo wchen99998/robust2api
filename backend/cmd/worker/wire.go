@@ -29,7 +29,7 @@ type WorkerApplication struct {
 func initializeWorkerApplication() (*WorkerApplication, error) {
 	wire.Build(
 		// Infrastructure
-		config.ProviderSet,
+		config.WorkerProviderSet,
 		appelotel.ProviderSet,
 		repository.ProviderSet,
 

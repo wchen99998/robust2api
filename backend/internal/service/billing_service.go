@@ -112,9 +112,10 @@ type CostBreakdown struct {
 
 // BillingService 计费服务
 type BillingService struct {
-	cfg            *config.Config
-	pricingService *PricingService
-	fallbackPrices map[string]*ModelPricing // 硬编码回退价格
+	cfg             *config.Config
+	pricingService  *PricingService
+	fallbackPrices  map[string]*ModelPricing // 硬编码回退价格
+	invalidationBus RuntimeCacheInvalidationBus
 }
 
 // NewBillingService 创建计费服务实例
@@ -129,6 +130,10 @@ func NewBillingService(cfg *config.Config, pricingService *PricingService) *Bill
 	s.initFallbackPricing()
 
 	return s
+}
+
+func (s *BillingService) SetInvalidationBus(bus RuntimeCacheInvalidationBus) {
+	s.invalidationBus = bus
 }
 
 // initFallbackPricing 初始化硬编码回退价格（当动态价格不可用时使用）
@@ -796,7 +801,13 @@ func (s *BillingService) GetPricingServiceStatus() map[string]any {
 // ForceUpdatePricing 强制更新价格数据
 func (s *BillingService) ForceUpdatePricing() error {
 	if s.pricingService != nil {
-		return s.pricingService.ForceUpdate()
+		if err := s.pricingService.ForceUpdate(); err != nil {
+			return err
+		}
+		if s.invalidationBus != nil {
+			publishInvalidation("pricing", s.invalidationBus.PublishPricing)
+		}
+		return nil
 	}
 	return fmt.Errorf("pricing service not initialized")
 }

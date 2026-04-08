@@ -6,12 +6,22 @@ Release: {{ .Release.Name }}
 Namespace: {{ .Release.Namespace }}
 
 {{- if .Values.ingress.enabled }}
-
 Access via Ingress:
-{{- if .Values.ingress.tls.enabled }}
-  URL: https://{{ .Values.ingress.host }}
-{{- else }}
-  URL: http://{{ .Values.ingress.host }}
+{{- if .Values.ingress.gateway.enabled }}
+  Gateway:
+  {{- if .Values.ingress.gateway.tls.enabled }}
+    URL: https://{{ .Values.ingress.gateway.host }}
+  {{- else }}
+    URL: http://{{ .Values.ingress.gateway.host }}
+  {{- end }}
+{{- end }}
+{{- if .Values.ingress.control.enabled }}
+  Control:
+  {{- if .Values.ingress.control.tls.enabled }}
+    URL: https://{{ .Values.ingress.control.host }}
+  {{- else }}
+    URL: http://{{ .Values.ingress.control.host }}
+  {{- end }}
 {{- end }}
 
   NOTE: You need an ingress controller installed in your cluster.
@@ -24,7 +34,7 @@ Access via Ingress:
 
 Access via port-forward:
 
-  kubectl port-forward svc/{{ include "sub2api.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  kubectl port-forward svc/{{ include "sub2api.fullname" . }}-gateway 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
 
   Then open: http://localhost:8080
 

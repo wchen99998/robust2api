@@ -57,7 +57,7 @@ func main() {
 }
 
 func runWorker() {
-	cfg, err := config.Load()
+	cfg, err := config.LoadWorker()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}

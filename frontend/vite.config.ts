@@ -37,7 +37,9 @@ function injectPublicSettings(backendUrl: string): Plugin {
 export default defineConfig(({ mode }) => {
   // 加载环境变量
   const env = loadEnv(mode, process.cwd(), '')
-  const backendUrl = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080'
+  const legacyTarget = env.VITE_DEV_PROXY_TARGET || 'http://localhost:8080'
+  const controlUrl = env.VITE_DEV_CONTROL_TARGET || legacyTarget
+  const gatewayUrl = env.VITE_DEV_GATEWAY_TARGET || legacyTarget
   const devPort = Number(env.VITE_DEV_PORT || 3000)
 
   return {
@@ -47,7 +49,7 @@ export default defineConfig(({ mode }) => {
         typescript: true,
         vueTsc: true
       }),
-      injectPublicSettings(backendUrl)
+      injectPublicSettings(controlUrl)
     ],
   resolve: {
     alias: {
@@ -61,8 +63,8 @@ export default defineConfig(({ mode }) => {
     // JIT 编译器生成 AST 对象而非 JS 代码，无需 unsafe-eval
     __INTLIFY_JIT_COMPILATION__: true
   },
-  build: {
-    outDir: '../backend/internal/web/dist',
+    build: {
+      outDir: 'dist',
     emptyOutDir: true,
     rollupOptions: {
       output: {
@@ -112,11 +114,27 @@ export default defineConfig(({ mode }) => {
       port: devPort,
       proxy: {
         '/api': {
-          target: backendUrl,
+          target: controlUrl,
           changeOrigin: true
         },
         '/v1': {
-          target: backendUrl,
+          target: gatewayUrl,
+          changeOrigin: true
+        },
+        '/v1beta': {
+          target: gatewayUrl,
+          changeOrigin: true
+        },
+        '/responses': {
+          target: gatewayUrl,
+          changeOrigin: true
+        },
+        '/chat': {
+          target: gatewayUrl,
+          changeOrigin: true
+        },
+        '/antigravity': {
+          target: gatewayUrl,
           changeOrigin: true
         }
       }

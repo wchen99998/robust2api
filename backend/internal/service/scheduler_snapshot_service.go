@@ -96,6 +96,13 @@ func (s *SchedulerSnapshotService) Stop() {
 	s.wg.Wait()
 }
 
+func (s *SchedulerSnapshotService) TriggerFullRebuildNow(reason string) error {
+	if reason == "" {
+		reason = "manual"
+	}
+	return s.triggerFullRebuild(reason)
+}
+
 func (s *SchedulerSnapshotService) ListSchedulableAccounts(ctx context.Context, groupID *int64, platform string, hasForcePlatform bool) ([]Account, bool, error) {
 	useMixed := (platform == PlatformAnthropic || platform == PlatformGemini) && !hasForcePlatform
 	mode := s.resolveMode(platform, hasForcePlatform)

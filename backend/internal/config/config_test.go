@@ -886,6 +886,56 @@ func TestLoadRequiresTotpEncryptionKey(t *testing.T) {
 	}
 }
 
+func TestLoadGatewayAllowsMissingControlPlaneSecrets(t *testing.T) {
+	viper.Reset()
+	t.Setenv("JWT_SECRET", "")
+	t.Setenv("TOTP_ENCRYPTION_KEY", "")
+
+	cfg, err := LoadGateway()
+	if err != nil {
+		t.Fatalf("LoadGateway() error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("LoadGateway() returned nil config")
+	}
+}
+
+func TestLoadWorkerAllowsMissingControlPlaneSecrets(t *testing.T) {
+	viper.Reset()
+	t.Setenv("JWT_SECRET", "")
+	t.Setenv("TOTP_ENCRYPTION_KEY", "")
+
+	cfg, err := LoadWorker()
+	if err != nil {
+		t.Fatalf("LoadWorker() error: %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("LoadWorker() returned nil config")
+	}
+}
+
+func TestValidateForRoleGatewaySkipsControlPlaneFields(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	cfg.JWT.Secret = ""
+	cfg.Totp.EncryptionKey = ""
+	cfg.Security.CSP.Enabled = true
+	cfg.Security.CSP.Policy = ""
+	cfg.LinuxDo.Enabled = true
+	cfg.LinuxDo.ClientID = ""
+
+	if err := cfg.ValidateForRole(RoleGateway); err != nil {
+		t.Fatalf("ValidateForRole(RoleGateway) error: %v", err)
+	}
+	if err := cfg.ValidateForRole(RoleControl); err == nil {
+		t.Fatal("ValidateForRole(RoleControl) should require control-plane fields")
+	}
+}
+
 func TestValidateConfigErrors(t *testing.T) {
 	buildValid := func(t *testing.T) *Config {
 		t.Helper()

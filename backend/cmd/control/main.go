@@ -24,12 +24,11 @@ import (
 //go:embed VERSION
 var embeddedVersion string
 
-// Build-time variables (can be set by ldflags)
 var (
 	Version   = ""
 	Commit    = "unknown"
 	Date      = "unknown"
-	BuildType = "source" // "source" for manual builds, "release" for CI builds (set by ldflags)
+	BuildType = "source"
 )
 
 func init() {
@@ -50,15 +49,15 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API API %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		log.Printf("Sub2API Control %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
 
-	runAPIServer()
+	runControlServer()
 }
 
-func runAPIServer() {
-	cfg, err := config.Load()
+func runControlServer() {
+	cfg, err := config.LoadControl()
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
@@ -74,19 +73,17 @@ func runAPIServer() {
 		BuildType: BuildType,
 	}
 
-	app, err := initializeAPIApplication(buildInfo)
+	app, err := initializeControlApplication(buildInfo)
 	if err != nil {
-		log.Fatalf("Failed to initialize API application: %v", err)
+		log.Fatalf("Failed to initialize control application: %v", err)
 	}
 	defer app.Cleanup()
 
-	// Mark as ready after successful initialization
 	app.Health.SetReady()
 
-	// Start HTTP server
 	go func() {
 		if err := app.Server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("Failed to start server: %v", err)
+			log.Fatalf("Failed to start control server: %v", err)
 		}
 	}()
 
@@ -98,14 +95,13 @@ func runAPIServer() {
 		}()
 	}
 
-	log.Printf("API server started on %s", app.Server.Addr)
+	log.Printf("Control server started on %s", app.Server.Addr)
 
-	// Wait for interrupt signal
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 
-	log.Println("Shutting down API server...")
+	log.Println("Shutting down control server...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -120,5 +116,5 @@ func runAPIServer() {
 		}
 	}
 
-	log.Println("API server exited")
+	log.Println("Control server exited")
 }

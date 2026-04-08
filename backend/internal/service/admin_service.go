@@ -437,6 +437,7 @@ type adminServiceImpl struct {
 	defaultSubAssigner   DefaultSubscriptionAssigner
 	userSubRepo          UserSubscriptionRepository
 	privacyClientFactory PrivacyClientFactory
+	invalidationBus      RuntimeCacheInvalidationBus
 }
 
 type userGroupRateBatchReader interface {
@@ -479,6 +480,16 @@ func NewAdminService(
 		defaultSubAssigner:   defaultSubAssigner,
 		userSubRepo:          userSubRepo,
 		privacyClientFactory: privacyClientFactory,
+	}
+}
+
+func (s *adminServiceImpl) SetInvalidationBus(bus RuntimeCacheInvalidationBus) {
+	s.invalidationBus = bus
+}
+
+func (s *adminServiceImpl) notifyAccountsChanged() {
+	if s.invalidationBus != nil {
+		publishInvalidation("accounts", s.invalidationBus.PublishAccounts)
 	}
 }
 
@@ -942,6 +953,7 @@ func (s *adminServiceImpl) CreateGroup(ctx context.Context, input *CreateGroupIn
 		group.AccountCount = int64(len(accountIDsToCopy))
 	}
 
+	s.notifyAccountsChanged()
 	return group, nil
 }
 
@@ -1211,6 +1223,7 @@ func (s *adminServiceImpl) UpdateGroup(ctx context.Context, id int64, input *Upd
 	if s.authCacheInvalidator != nil {
 		s.authCacheInvalidator.InvalidateAuthCacheByGroupID(ctx, id)
 	}
+	s.notifyAccountsChanged()
 	return group, nil
 }
 
@@ -1248,6 +1261,7 @@ func (s *adminServiceImpl) DeleteGroup(ctx context.Context, id int64) error {
 		}
 	}
 
+	s.notifyAccountsChanged()
 	return nil
 }
 
@@ -1587,6 +1601,7 @@ func (s *adminServiceImpl) CreateAccount(ctx context.Context, input *CreateAccou
 		}
 	}
 
+	s.notifyAccountsChanged()
 	return account, nil
 }
 
@@ -1713,6 +1728,7 @@ func (s *adminServiceImpl) UpdateAccount(ctx context.Context, id int64, input *U
 	if err != nil {
 		return nil, err
 	}
+	s.notifyAccountsChanged()
 	return updated, nil
 }
 
@@ -1831,6 +1847,7 @@ func (s *adminServiceImpl) BulkUpdateAccounts(ctx context.Context, input *BulkUp
 		result.Results = append(result.Results, entry)
 	}
 
+	s.notifyAccountsChanged()
 	return result, nil
 }
 
@@ -1838,6 +1855,7 @@ func (s *adminServiceImpl) DeleteAccount(ctx context.Context, id int64) error {
 	if err := s.accountRepo.Delete(ctx, id); err != nil {
 		return err
 	}
+	s.notifyAccountsChanged()
 	return nil
 }
 
@@ -1866,11 +1884,20 @@ func (s *adminServiceImpl) ClearAccountError(ctx context.Context, id int64) (*Ac
 	if err := s.accountRepo.ClearTempUnschedulable(ctx, id); err != nil {
 		return nil, err
 	}
-	return s.accountRepo.GetByID(ctx, id)
+	updated, err := s.accountRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.notifyAccountsChanged()
+	return updated, nil
 }
 
 func (s *adminServiceImpl) SetAccountError(ctx context.Context, id int64, errorMsg string) error {
-	return s.accountRepo.SetError(ctx, id, errorMsg)
+	if err := s.accountRepo.SetError(ctx, id, errorMsg); err != nil {
+		return err
+	}
+	s.notifyAccountsChanged()
+	return nil
 }
 
 func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, schedulable bool) (*Account, error) {
@@ -1881,6 +1908,7 @@ func (s *adminServiceImpl) SetAccountSchedulable(ctx context.Context, id int64, 
 	if err != nil {
 		return nil, err
 	}
+	s.notifyAccountsChanged()
 	return updated, nil
 }
 

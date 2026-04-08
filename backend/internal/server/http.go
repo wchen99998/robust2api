@@ -10,6 +10,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/health"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/Wei-Shaw/sub2api/internal/server/routes"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/gin-gonic/gin"
@@ -19,11 +20,52 @@ import (
 	"golang.org/x/net/http2/h2c"
 )
 
+// GatewayProviderSet provides server-layer dependencies for the gateway binary.
+var GatewayProviderSet = wire.NewSet(
+	ProvideGatewayRouter,
+	ProvideHTTPServer,
+)
+
+// ControlProviderSet provides server-layer dependencies for the control binary.
+var ControlProviderSet = wire.NewSet(
+	ProvideControlRouter,
+	ProvideHTTPServer,
+)
+
 // ProviderSet 提供服务器层的依赖
 var ProviderSet = wire.NewSet(
 	ProvideRouter,
 	ProvideHTTPServer,
 )
+
+// ProvideGatewayRouter provides the gateway-only router.
+func ProvideGatewayRouter(
+	cfg *config.Config,
+	handlers *handler.GatewayHandlers,
+	apiKeyAuth middleware2.APIKeyAuthMiddleware,
+	apiKeyService *service.APIKeyService,
+	subscriptionService *service.SubscriptionService,
+	settingService *service.SettingService,
+	healthChecker *health.Checker,
+) *gin.Engine {
+	r := newEngine(cfg)
+	return SetupGatewayRouter(r, handlers, apiKeyAuth, apiKeyService, subscriptionService, settingService, cfg, healthChecker)
+}
+
+// ProvideControlRouter provides the control-plane router.
+func ProvideControlRouter(
+	cfg *config.Config,
+	handlers *handler.ControlHandlers,
+	jwtAuth middleware2.JWTAuthMiddleware,
+	adminAuth middleware2.AdminAuthMiddleware,
+	settingService *service.SettingService,
+	buildInfo service.BuildInfo,
+	redisClient *redis.Client,
+	healthChecker *health.Checker,
+) *gin.Engine {
+	r := newEngine(cfg)
+	return SetupControlRouter(r, handlers, jwtAuth, adminAuth, settingService, buildInfo, cfg, redisClient, healthChecker)
+}
 
 // ProvideRouter 提供路由器
 func ProvideRouter(
@@ -39,6 +81,25 @@ func ProvideRouter(
 	redisClient *redis.Client,
 	healthChecker *health.Checker,
 ) *gin.Engine {
+	r := newEngine(cfg)
+	SetupControlRouter(r, &handler.ControlHandlers{
+		Auth:         handlers.Auth,
+		User:         handlers.User,
+		APIKey:       handlers.APIKey,
+		Usage:        handlers.Usage,
+		Redeem:       handlers.Redeem,
+		Subscription: handlers.Subscription,
+		Announcement: handlers.Announcement,
+		Admin:        handlers.Admin,
+		Setting:      handlers.Setting,
+		Totp:         handlers.Totp,
+	}, jwtAuth, adminAuth, settingService, buildInfo, cfg, redisClient, healthChecker)
+	routes.RegisterGatewayCompatRoutes(r)
+	routes.RegisterGatewayRoutes(r, handlers, apiKeyAuth, apiKeyService, subscriptionService, settingService, cfg)
+	return r
+}
+
+func newEngine(cfg *config.Config) *gin.Engine {
 	if cfg.Server.Mode == "release" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -57,8 +118,7 @@ func ProvideRouter(
 			log.Printf("Warning: server.trusted_proxies is empty in release mode; client IP trust chain is disabled")
 		}
 	}
-
-	return SetupRouter(r, handlers, jwtAuth, adminAuth, apiKeyAuth, apiKeyService, subscriptionService, settingService, buildInfo, cfg, redisClient, healthChecker)
+	return r
 }
 
 // ProvideHTTPServer 提供 HTTP 服务器
@@ -66,7 +126,7 @@ func ProvideHTTPServer(cfg *config.Config, router *gin.Engine) *http.Server {
 	httpHandler := http.Handler(router)
 
 	globalMaxSize := cfg.Server.MaxRequestBodySize
-	if globalMaxSize <= 0 {
+	if globalMaxSize <= 0 && cfg.Gateway.MaxBodySize > 0 {
 		globalMaxSize = cfg.Gateway.MaxBodySize
 	}
 	if globalMaxSize > 0 {

@@ -6,7 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"net/http"
+	"os"
 	"regexp"
 	"strings"
 	"time"
@@ -26,6 +28,8 @@ var semverPattern = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
 // menuItemIDPattern validates custom menu item IDs: alphanumeric, hyphens, underscores only.
 var menuItemIDPattern = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
+const extraFrameSrcOriginsEnv = "EXTRA_FRAME_SRC_ORIGINS"
+
 // generateMenuItemID generates a short random hex ID for a custom menu item.
 func generateMenuItemID() (string, error) {
 	b := make([]byte, 8)
@@ -33,6 +37,47 @@ func generateMenuItemID() (string, error) {
 		return "", fmt.Errorf("generate menu item ID: %w", err)
 	}
 	return hex.EncodeToString(b), nil
+}
+
+func embeddedOriginAllowlist() (map[string]struct{}, bool) {
+	raw, ok := os.LookupEnv(extraFrameSrcOriginsEnv)
+	if !ok {
+		return nil, false
+	}
+
+	allowed := make(map[string]struct{})
+	for _, value := range strings.Fields(raw) {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		allowed[trimmed] = struct{}{}
+	}
+	return allowed, true
+}
+
+func validateEmbeddedOriginAllowed(rawURL, fieldName string) error {
+	rawURL = strings.TrimSpace(rawURL)
+	if rawURL == "" {
+		return nil
+	}
+
+	allowed, enforce := embeddedOriginAllowlist()
+	if !enforce {
+		return nil
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return fmt.Errorf("%s must be an absolute http(s) URL", fieldName)
+	}
+
+	origin := parsed.Scheme + "://" + parsed.Host
+	if _, ok := allowed[origin]; ok {
+		return nil
+	}
+
+	return fmt.Errorf("%s origin %q is not allowed by deployment; add it to control.frontend.extraFrameSrcOrigins", fieldName, origin)
 }
 
 // SettingHandler 系统设置处理器
@@ -335,15 +380,27 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			response.BadRequest(c, "Purchase Subscription URL must be an absolute http(s) URL")
 			return
 		}
+		if err := validateEmbeddedOriginAllowed(purchaseURL, "Purchase Subscription URL"); err != nil {
+			response.BadRequest(c, err.Error())
+			return
+		}
 	} else if purchaseURL != "" {
 		if err := config.ValidateAbsoluteHTTPURL(purchaseURL); err != nil {
 			response.BadRequest(c, "Purchase Subscription URL must be an absolute http(s) URL")
+			return
+		}
+		if err := validateEmbeddedOriginAllowed(purchaseURL, "Purchase Subscription URL"); err != nil {
+			response.BadRequest(c, err.Error())
 			return
 		}
 	}
 	if grafanaURL != "" {
 		if err := config.ValidateAbsoluteHTTPURL(grafanaURL); err != nil {
 			response.BadRequest(c, "Grafana URL must be an absolute http(s) URL")
+			return
+		}
+		if err := validateEmbeddedOriginAllowed(grafanaURL, "Grafana URL"); err != nil {
+			response.BadRequest(c, err.Error())
 			return
 		}
 	}
@@ -353,6 +410,18 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 	if req.FrontendURL != "" {
 		if err := config.ValidateAbsoluteHTTPURL(req.FrontendURL); err != nil {
 			response.BadRequest(c, "Frontend URL must be an absolute http(s) URL")
+			return
+		}
+	}
+
+	trimmedHomeContent := strings.TrimSpace(req.HomeContent)
+	if strings.HasPrefix(strings.ToLower(trimmedHomeContent), "http://") || strings.HasPrefix(strings.ToLower(trimmedHomeContent), "https://") {
+		if err := config.ValidateAbsoluteHTTPURL(trimmedHomeContent); err != nil {
+			response.BadRequest(c, "Home content URL must be an absolute http(s) URL")
+			return
+		}
+		if err := validateEmbeddedOriginAllowed(trimmedHomeContent, "Home content URL"); err != nil {
+			response.BadRequest(c, err.Error())
 			return
 		}
 	}
@@ -392,6 +461,10 @@ func (h *SettingHandler) UpdateSettings(c *gin.Context) {
 			}
 			if err := config.ValidateAbsoluteHTTPURL(strings.TrimSpace(item.URL)); err != nil {
 				response.BadRequest(c, "Custom menu item URL must be an absolute http(s) URL")
+				return
+			}
+			if err := validateEmbeddedOriginAllowed(item.URL, "Custom menu item URL"); err != nil {
+				response.BadRequest(c, err.Error())
 				return
 			}
 			if item.Visibility != "user" && item.Visibility != "admin" {
