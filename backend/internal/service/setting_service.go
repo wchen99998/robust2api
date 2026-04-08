@@ -80,6 +80,7 @@ const backendModeDBTimeout = 5 * time.Second
 type cachedGatewayForwardingSettings struct {
 	fingerprintUnification bool
 	metadataPassthrough    bool
+	cchSigning             bool
 	expiresAt              int64 // unix nano
 }
 
@@ -95,6 +96,7 @@ var gatewayHotPathSettingKeys = []string{
 	SettingKeyBackendModeEnabled,
 	SettingKeyEnableFingerprintUnification,
 	SettingKeyEnableMetadataPassthrough,
+	SettingKeyEnableCCHSigning,
 	SettingKeyMinClaudeCodeVersion,
 	SettingKeyMaxClaudeCodeVersion,
 	SettingKeyEnableIdentityPatch,
@@ -115,6 +117,7 @@ type gatewayHotPathSettingsSnapshot struct {
 	backendModeEnabled       bool
 	fingerprintUnification   bool
 	metadataPassthrough      bool
+	cchSigning               bool
 	minClaudeCodeVersion     string
 	maxClaudeCodeVersion     string
 	identityPatchEnabled     bool
@@ -336,6 +339,7 @@ func (s *SettingService) storeGatewayHotPathSnapshot(snapshot *gatewayHotPathSet
 	gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
 		fingerprintUnification: copied.fingerprintUnification,
 		metadataPassthrough:    copied.metadataPassthrough,
+		cchSigning:             copied.cchSigning,
 		expiresAt:              time.Now().Add(gatewayForwardingCacheTTL).UnixNano(),
 	})
 }
@@ -350,6 +354,7 @@ func (s *SettingService) buildGatewayHotPathSnapshot(values map[string]string) *
 		snapshot.fingerprintUnification = raw == "true"
 	}
 	snapshot.metadataPassthrough = values[SettingKeyEnableMetadataPassthrough] == "true"
+	snapshot.cchSigning = values[SettingKeyEnableCCHSigning] == "true"
 	snapshot.minClaudeCodeVersion = values[SettingKeyMinClaudeCodeVersion]
 	snapshot.maxClaudeCodeVersion = values[SettingKeyMaxClaudeCodeVersion]
 	if raw, ok := values[SettingKeyEnableIdentityPatch]; ok && raw != "" {
@@ -441,6 +446,7 @@ func (s *SettingService) storeGatewayHotPathSnapshotFromSystemSettings(settings 
 	snapshot.backendModeEnabled = settings.BackendModeEnabled
 	snapshot.fingerprintUnification = settings.EnableFingerprintUnification
 	snapshot.metadataPassthrough = settings.EnableMetadataPassthrough
+	snapshot.cchSigning = settings.EnableCCHSigning
 	snapshot.minClaudeCodeVersion = settings.MinClaudeCodeVersion
 	snapshot.maxClaudeCodeVersion = settings.MaxClaudeCodeVersion
 	snapshot.identityPatchEnabled = settings.EnableIdentityPatch
@@ -609,6 +615,7 @@ func (s *SettingService) UpdateSettings(ctx context.Context, settings *SystemSet
 	// Gateway forwarding behavior
 	updates[SettingKeyEnableFingerprintUnification] = strconv.FormatBool(settings.EnableFingerprintUnification)
 	updates[SettingKeyEnableMetadataPassthrough] = strconv.FormatBool(settings.EnableMetadataPassthrough)
+	updates[SettingKeyEnableCCHSigning] = strconv.FormatBool(settings.EnableCCHSigning)
 
 	err = s.settingRepo.SetMultiple(ctx, updates)
 	if err == nil {
@@ -718,23 +725,23 @@ func (s *SettingService) IsBackendModeEnabled(ctx context.Context) bool {
 
 // GetGatewayForwardingSettings returns cached gateway forwarding settings.
 // Uses in-process atomic.Value cache with 60s TTL, zero-lock hot path.
-// Returns (fingerprintUnification, metadataPassthrough).
-func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fingerprintUnification, metadataPassthrough bool) {
+// Returns (fingerprintUnification, metadataPassthrough, cchSigning).
+func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fingerprintUnification, metadataPassthrough, cchSigning bool) {
 	if snapshot, ok := s.currentGatewayHotPathSnapshot(); ok {
-		return snapshot.fingerprintUnification, snapshot.metadataPassthrough
+		return snapshot.fingerprintUnification, snapshot.metadataPassthrough, snapshot.cchSigning
 	}
 	if cached, ok := gatewayForwardingCache.Load().(*cachedGatewayForwardingSettings); ok && cached != nil {
 		if time.Now().UnixNano() < cached.expiresAt {
-			return cached.fingerprintUnification, cached.metadataPassthrough
+			return cached.fingerprintUnification, cached.metadataPassthrough, cached.cchSigning
 		}
 	}
 	type gwfResult struct {
-		fp, mp bool
+		fp, mp, cch bool
 	}
 	val, _, _ := gatewayForwardingSF.Do("gateway_forwarding", func() (any, error) {
 		if cached, ok := gatewayForwardingCache.Load().(*cachedGatewayForwardingSettings); ok && cached != nil {
 			if time.Now().UnixNano() < cached.expiresAt {
-				return gwfResult{cached.fingerprintUnification, cached.metadataPassthrough}, nil
+				return gwfResult{cached.fingerprintUnification, cached.metadataPassthrough, cached.cchSigning}, nil
 			}
 		}
 		dbCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), gatewayForwardingDBTimeout)
@@ -742,32 +749,36 @@ func (s *SettingService) GetGatewayForwardingSettings(ctx context.Context) (fing
 		values, err := s.settingRepo.GetMultiple(dbCtx, []string{
 			SettingKeyEnableFingerprintUnification,
 			SettingKeyEnableMetadataPassthrough,
+			SettingKeyEnableCCHSigning,
 		})
 		if err != nil {
 			slog.Warn("failed to get gateway forwarding settings", "error", err)
 			gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
 				fingerprintUnification: true,
 				metadataPassthrough:    false,
+				cchSigning:             false,
 				expiresAt:              time.Now().Add(gatewayForwardingErrorTTL).UnixNano(),
 			})
-			return gwfResult{true, false}, nil
+			return gwfResult{true, false, false}, nil
 		}
 		fp := true
 		if v, ok := values[SettingKeyEnableFingerprintUnification]; ok && v != "" {
 			fp = v == "true"
 		}
 		mp := values[SettingKeyEnableMetadataPassthrough] == "true"
+		cch := values[SettingKeyEnableCCHSigning] == "true"
 		gatewayForwardingCache.Store(&cachedGatewayForwardingSettings{
 			fingerprintUnification: fp,
 			metadataPassthrough:    mp,
+			cchSigning:             cch,
 			expiresAt:              time.Now().Add(gatewayForwardingCacheTTL).UnixNano(),
 		})
-		return gwfResult{fp, mp}, nil
+		return gwfResult{fp, mp, cch}, nil
 	})
 	if r, ok := val.(gwfResult); ok {
-		return r.fp, r.mp
+		return r.fp, r.mp, r.cch
 	}
-	return true, false // fail-open defaults
+	return true, false, false // fail-open defaults
 }
 
 // IsEmailVerifyEnabled 检查是否开启邮件验证
@@ -1049,13 +1060,14 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 	// 分组隔离
 	result.AllowUngroupedKeyScheduling = settings[SettingKeyAllowUngroupedKeyScheduling] == "true"
 
-	// Gateway forwarding behavior (defaults: fingerprint=true, metadata_passthrough=false)
+	// Gateway forwarding behavior (defaults: fingerprint=true, metadata_passthrough=false, cch_signing=false)
 	if v, ok := settings[SettingKeyEnableFingerprintUnification]; ok && v != "" {
 		result.EnableFingerprintUnification = v == "true"
 	} else {
 		result.EnableFingerprintUnification = true // default: enabled (current behavior)
 	}
 	result.EnableMetadataPassthrough = settings[SettingKeyEnableMetadataPassthrough] == "true"
+	result.EnableCCHSigning = settings[SettingKeyEnableCCHSigning] == "true"
 
 	return result
 }
