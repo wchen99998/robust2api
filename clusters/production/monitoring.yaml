@@ -5,8 +5,7 @@ metadata:
   namespace: flux-system
 spec:
   interval: 10m
-  # Enable this after configuring monitoring values and secrets.
-  suspend: true
+  suspend: false
   sourceRef:
     kind: GitRepository
     name: flux-system

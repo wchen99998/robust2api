@@ -52,24 +52,22 @@ spec:
       valuesKey: grafanaPostgresDatasource.password
       targetPath: grafanaPostgresDatasource.password
   values:
-    # CHANGEME: Set your Grafana hostname
     grafanaIngress:
-      host: grafana.do-prod.yourdomain.com
+      host: grafana.wuhao99.com
 
-    # CHANGEME: Set your R2 endpoint and bucket names
     tempo:
       tempo:
         storage:
           trace:
             s3:
               bucket: sub2api-tempo
-              endpoint: your-account-id.r2.cloudflarestorage.com
+              endpoint: 838c4cd9131d5dae0dfdf823ecd2e1ac.r2.cloudflarestorage.com
 
     loki:
       loki:
         storage:
           s3:
-            endpoint: your-account-id.r2.cloudflarestorage.com
+            endpoint: 838c4cd9131d5dae0dfdf823ecd2e1ac.r2.cloudflarestorage.com
           bucketNames:
             chunks: sub2api-loki
             ruler: sub2api-loki
@@ -77,8 +75,7 @@ spec:
 
     grafanaPostgresDatasource:
       enabled: true
-      # CHANGEME: Set your DB host (non-sensitive, sensitive fields come from monitoring-secrets)
-      host: your-db-host.db.ondigitalocean.com
-      port: 25060
+      host: sub2api-postgresql.sub2api.svc
+      port: 5432
       database: sub2api
-      sslmode: require
+      sslmode: disable

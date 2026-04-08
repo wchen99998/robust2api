@@ -55,15 +55,15 @@ spec:
     # --- Image tags (update these to deploy new versions) ---
     image:
       gateway:
-        tag: "0.1.0"
+        tag: "0.3.1"
       control:
-        tag: "0.1.0"
+        tag: "0.3.1"
       frontend:
-        tag: "0.1.0"
+        tag: "0.3.0"
       worker:
-        tag: "0.1.0"
+        tag: "0.3.1"
       bootstrap:
-        tag: "0.1.0"
+        tag: "0.3.1"
 
     imagePullSecrets:
       - name: ghcr-pull
@@ -72,19 +72,21 @@ spec:
     ingress:
       enabled: true
       className: nginx
-      cloudflareProxied: "true"
-      maxBodySize: "50m"
+      cloudflareProxied: true
+      maxBodySize: "10m"
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod
-      # CHANGEME: Set your gateway and control hostnames
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      tls:
+        enabled: true
       gateway:
         enabled: true
-        host: gateway-sub2api.do-prod.yourdomain.com
+        host: gateway-sub2api.wuhao99.com
         tls:
           enabled: true
       control:
         enabled: true
-        host: app-sub2api.do-prod.yourdomain.com
+        host: app-sub2api.wuhao99.com
         tls:
           enabled: true
 
@@ -94,30 +96,95 @@ spec:
       serverMode: release
       runMode: standard
       timezone: Asia/Shanghai
-      # CHANGEME: Set your public gateway URL
-      gatewayUrl: "https://gateway-sub2api.do-prod.yourdomain.com"
-      # Set when monitoring is enabled; the Grafana origin is auto-added to the iframe allowlist.
-      grafanaUrl: ""
+      gatewayUrl: "https://gateway-sub2api.wuhao99.com"
+      grafanaUrl: "https://grafana.wuhao99.com"
 
-    # --- Observability (enable after unsuspending the monitoring layer) ---
+    # --- Observability ---
     observability:
-      enabled: false
+      enabled: true
       otel:
         serviceName: sub2api
         endpoint: "monitoring-alloy.monitoring.svc:4317"
         traceSampleRate: "0.1"
         metricsPort: 9090
       serviceMonitor:
-        enabled: false
+        enabled: true
         interval: 15s
 
-    # --- Database (use external if managed DB enabled) ---
-    # Uncomment and configure for external DB:
-    # postgresql:
-    #   enabled: false
-    # externalDatabase:
-    #   host: your-db-host.db.ondigitalocean.com
-    #   port: 25060
-    #   user: sub2api
-    #   database: sub2api
-    #   sslmode: require
+    # --- Resources ---
+    gateway:
+      autoscaling:
+        enabled: false
+      pdb:
+        enabled: false
+      replicaCount: 1
+      resources:
+        limits:
+          cpu: 1
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+    control:
+      autoscaling:
+        enabled: false
+      pdb:
+        enabled: false
+      replicaCount: 1
+      resources:
+        limits:
+          cpu: 1
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+    worker:
+      healthPort: 8081
+      replicaCount: 1
+      resources:
+        limits:
+          cpu: 1
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+
+    # --- Database ---
+    postgresql:
+      image:
+        tag: latest
+      auth: {}
+      primary:
+        persistence:
+          size: 1Gi
+        resources:
+          limits:
+            cpu: 2
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+    redis:
+      image:
+        tag: latest
+      master:
+        persistence:
+          size: 1Gi
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+
+    affinity:
+      podAntiAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+                - key: app.kubernetes.io/name
+                  operator: In
+                  values:
+                    - postgresql
+            topologyKey: kubernetes.io/hostname

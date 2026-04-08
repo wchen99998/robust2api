@@ -5,8 +5,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    # CHANGEME: Set your Let's Encrypt notification email
-    email: your-email@example.com
+    email: admin@wuhao99.com
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:

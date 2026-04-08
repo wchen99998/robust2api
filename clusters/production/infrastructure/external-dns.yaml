@@ -32,13 +32,10 @@ spec:
             name: cloudflare-api-token
             key: api-token
     policy: sync
-    # CHANGEME: Set your cluster name for TXT record ownership
     txtOwnerId: sub2api
-    # CHANGEME: Set your domain suffix
     domainFilters:
-      - do-prod.yourdomain.com
+      - wuhao99.com
     sources:
       - ingress
-    # Uncomment to enable Cloudflare proxy on DNS records
-    # extraArgs:
-    #   - --cloudflare-proxied
+    extraArgs:
+      - --cloudflare-proxied
