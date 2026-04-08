@@ -42,16 +42,6 @@
             {{ t('home.docs') }}
           </a>
 
-          <!-- GitHub Link -->
-          <a
-            :href="githubUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="rounded-lg px-3 py-1.5 text-[13px] font-medium text-mica-text-secondary transition-all duration-150 hover:bg-black/[0.03] hover:text-mica-text-primary dark:text-mica-text-secondary-dark dark:hover:bg-white/[0.03] dark:hover:text-mica-text-primary-dark"
-          >
-            GitHub
-          </a>
-
           <!-- Theme Toggle -->
           <button
             @click="toggleTheme"
@@ -156,14 +146,6 @@
           >
             {{ t('home.docs') }}
           </a>
-          <a
-            :href="githubUrl"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="text-xs text-mica-text-tertiary transition-colors duration-150 hover:text-mica-text-primary dark:text-mica-text-tertiary-dark dark:hover:text-mica-text-primary-dark"
-          >
-            GitHub
-          </a>
         </div>
       </footer>
     </div>
@@ -192,8 +174,6 @@ const isHomeContentUrl = computed(() => {
 })
 
 const isDark = ref(document.documentElement.classList.contains('dark'))
-const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
-
 const isAuthenticated = computed(() => authStore.isAuthenticated)
 const isAdmin = computed(() => authStore.isAdmin)
 const dashboardPath = computed(() => isAdmin.value ? '/admin/dashboard' : '/dashboard')
