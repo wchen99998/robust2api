@@ -67,9 +67,24 @@ worker:
       cpu: "1"
       memory: 1Gi
 
+public:
+  baseDomain: example.com
+  gateway:
+    scheme: https
+  control:
+    scheme: https
+  grafana:
+    # Enable this when the monitoring chart also follows the default
+    # grafana-<namespace>.<public.baseDomain> convention.
+    enabled: true
+    # Mirror monitoring.grafanaIngress.host here when Grafana uses a vanity/shared hostname.
+    host: ""
+    scheme: https
+
 config:
-  # Set this to your Grafana ingress/base URL when monitoring is enabled so
-  # the admin dashboard can embed Grafana directly.
+  # Optional explicit override for a shared or vanity Grafana URL.
+  # When empty and public.grafana.enabled=true, the chart derives
+  # <public.grafana.scheme>://<public.grafana.host or grafana-monitoring.<public.baseDomain>>.
   # grafanaUrl: https://grafana.example.com
   database:
     maxOpenConns: 256
@@ -85,19 +100,13 @@ ingress:
   cloudflareProxied: "true"
   maxBodySize: "50m"
   annotations: {}
-  tls:
-    enabled: true
   gateway:
     enabled: true
-    host: gateway.sub2api.example.com
-    extraHosts: []
     tls:
       enabled: true
       secretName: ""
   control:
     enabled: true
-    host: app.sub2api.example.com
-    extraHosts: []
     tls:
       enabled: true
       secretName: ""

@@ -8,10 +8,11 @@ data:
   SERVER_HOST: "0.0.0.0"
   SERVER_PORT: {{ .Values.config.serverPort | quote }}
   SERVER_MODE: {{ .Values.config.serverMode | quote }}
+  SERVER_FRONTEND_URL: {{ include "sub2api.controlPublicURL" . | quote }}
   RUN_MODE: {{ .Values.config.runMode | quote }}
   TZ: {{ .Values.config.timezone | quote }}
-  GRAFANA_URL: {{ .Values.config.grafanaUrl | quote }}
-  GATEWAY_URL: {{ .Values.config.gatewayUrl | quote }}
+  GRAFANA_URL: {{ include "sub2api.grafanaPublicURL" . | quote }}
+  GATEWAY_URL: {{ include "sub2api.gatewayPublicURL" . | quote }}
   # Database (non-sensitive)
   DATABASE_HOST: {{ include "sub2api.databaseHost" . | quote }}
   DATABASE_PORT: {{ include "sub2api.databasePort" . | quote }}

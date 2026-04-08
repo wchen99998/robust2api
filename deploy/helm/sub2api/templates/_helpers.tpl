@@ -60,6 +60,88 @@ Service account name.
 {{- end }}
 
 {{/*
+Resolve a public service host using an explicit override or the shared
+<service>-<namespace>.<baseDomain> convention.
+*/}}
+{{- define "sub2api.publicServiceHostname" -}}
+{{- $host := trim (default "" .host) -}}
+{{- if $host -}}
+{{- $host -}}
+{{- else -}}
+{{- $service := trim (default "" .service) -}}
+{{- $namespace := trim (default "" .namespace) -}}
+{{- $baseDomain := trim (default "" .baseDomain) -}}
+{{- if and $service $namespace $baseDomain -}}
+{{- printf "%s-%s.%s" $service $namespace $baseDomain -}}
+{{- end -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolve a public service URL from the shared host convention.
+*/}}
+{{- define "sub2api.publicServiceURL" -}}
+{{- $host := include "sub2api.publicServiceHostname" . | trim -}}
+{{- if $host -}}
+{{- $scheme := lower (trim (default "" .scheme)) -}}
+{{- if not $scheme -}}
+{{- $scheme = ternary "https" "http" .tlsEnabled -}}
+{{- end -}}
+{{- printf "%s://%s" $scheme $host -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolved primary gateway ingress host.
+*/}}
+{{- define "sub2api.gatewayHost" -}}
+{{- include "sub2api.publicServiceHostname" (dict "service" "gateway" "namespace" .Release.Namespace "host" .Values.ingress.gateway.host "baseDomain" .Values.public.baseDomain) -}}
+{{- end }}
+
+{{/*
+Resolved primary control ingress host.
+*/}}
+{{- define "sub2api.controlHost" -}}
+{{- include "sub2api.publicServiceHostname" (dict "service" "app" "namespace" .Release.Namespace "host" .Values.ingress.control.host "baseDomain" .Values.public.baseDomain) -}}
+{{- end }}
+
+{{/*
+Resolved public gateway URL.
+*/}}
+{{- define "sub2api.gatewayPublicURL" -}}
+{{- $override := trim (default "" .Values.config.gatewayUrl) -}}
+{{- if $override -}}
+{{- $override -}}
+{{- else if and .Values.ingress.enabled .Values.ingress.gateway.enabled -}}
+{{- include "sub2api.publicServiceURL" (dict "service" "gateway" "namespace" .Release.Namespace "host" .Values.ingress.gateway.host "baseDomain" .Values.public.baseDomain "scheme" .Values.public.gateway.scheme "tlsEnabled" .Values.ingress.gateway.tls.enabled) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolved public control/frontend URL.
+*/}}
+{{- define "sub2api.controlPublicURL" -}}
+{{- $override := trim (default "" .Values.config.frontendUrl) -}}
+{{- if $override -}}
+{{- $override -}}
+{{- else if and .Values.ingress.enabled .Values.ingress.control.enabled -}}
+{{- include "sub2api.publicServiceURL" (dict "service" "app" "namespace" .Release.Namespace "host" .Values.ingress.control.host "baseDomain" .Values.public.baseDomain "scheme" .Values.public.control.scheme "tlsEnabled" .Values.ingress.control.tls.enabled) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolved public Grafana URL used by the control app.
+*/}}
+{{- define "sub2api.grafanaPublicURL" -}}
+{{- $override := trim (default "" .Values.config.grafanaUrl) -}}
+{{- if $override -}}
+{{- $override -}}
+{{- else if .Values.public.grafana.enabled -}}
+{{- include "sub2api.publicServiceURL" (dict "service" "grafana" "namespace" (.Values.public.grafana.namespace | default "monitoring") "host" .Values.public.grafana.host "baseDomain" .Values.public.baseDomain "scheme" .Values.public.grafana.scheme "tlsEnabled" .Values.public.grafana.tls.enabled) -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Database host: subchart service or external.
 */}}
 {{- define "sub2api.databaseHost" -}}
@@ -184,7 +266,7 @@ app.kubernetes.io/component: control
 
 {{/*
 Origins allowed in iframe embeds rendered by the control frontend.
-The configured Grafana URL origin is included automatically.
+The resolved Grafana public URL origin is included automatically.
 */}}
 {{- define "sub2api.frameSrcOrigins" -}}
 {{- $origins := list -}}
@@ -194,7 +276,7 @@ The configured Grafana URL origin is included automatically.
     {{- $origins = append $origins $trimmed -}}
   {{- end }}
 {{- end }}
-{{- $grafanaURL := trim .Values.config.grafanaUrl -}}
+{{- $grafanaURL := include "sub2api.grafanaPublicURL" . | trim -}}
 {{- if $grafanaURL }}
   {{- $parsed := urlParse $grafanaURL -}}
   {{- if and $parsed.scheme $parsed.host }}

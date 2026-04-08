@@ -68,6 +68,17 @@ spec:
     imagePullSecrets:
       - name: ghcr-pull
 
+    # --- Public Endpoint Convention ---
+    public:
+      baseDomain: wuhao99.com
+      gateway:
+        scheme: https
+      control:
+        scheme: https
+      grafana:
+        enabled: true
+        scheme: https
+
     # --- Ingress ---
     ingress:
       enabled: true
@@ -77,16 +88,12 @@ spec:
       annotations:
         cert-manager.io/cluster-issuer: letsencrypt-prod
         nginx.ingress.kubernetes.io/ssl-redirect: "true"
-      tls:
-        enabled: true
       gateway:
         enabled: true
-        host: gateway-sub2api.wuhao99.com
         tls:
           enabled: true
       control:
         enabled: true
-        host: app-sub2api.wuhao99.com
         tls:
           enabled: true
 
@@ -96,8 +103,6 @@ spec:
       serverMode: release
       runMode: standard
       timezone: Asia/Shanghai
-      gatewayUrl: "https://gateway-sub2api.wuhao99.com"
-      grafanaUrl: "https://grafana.wuhao99.com"
 
     # --- Observability ---
     observability:

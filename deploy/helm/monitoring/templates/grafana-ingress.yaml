@@ -1,4 +1,6 @@
-{{- if .Values.grafanaIngress.host }}
+{{- $grafanaHost := include "sub2api-monitoring.grafanaHost" . | trim -}}
+{{- $hostOverride := trim (default "" .Values.grafanaIngress.host) -}}
+{{- if and (or .Values.grafanaIngress.enabled $hostOverride) $grafanaHost }}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -6,16 +8,18 @@ metadata:
   namespace: {{ .Values.namespace }}
   annotations:
     cert-manager.io/cluster-issuer: {{ .Values.grafanaIngress.clusterIssuer }}
-    external-dns.alpha.kubernetes.io/hostname: {{ .Values.grafanaIngress.host }}
+    external-dns.alpha.kubernetes.io/hostname: {{ $grafanaHost }}
     external-dns.alpha.kubernetes.io/cloudflare-proxied: {{ .Values.grafanaIngress.cloudflareProxied | quote }}
 spec:
   ingressClassName: {{ .Values.grafanaIngress.className }}
+  {{- if .Values.grafanaIngress.tls.enabled }}
   tls:
     - hosts:
-        - {{ .Values.grafanaIngress.host | quote }}
-      secretName: grafana-tls
+        - {{ $grafanaHost | quote }}
+      secretName: {{ default "grafana-tls" .Values.grafanaIngress.tls.secretName }}
+  {{- end }}
   rules:
-    - host: {{ .Values.grafanaIngress.host | quote }}
+    - host: {{ $grafanaHost | quote }}
       http:
         paths:
           - path: /
