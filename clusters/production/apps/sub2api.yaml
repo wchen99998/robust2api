@@ -67,15 +67,15 @@ spec:
     # --- Image tags (update these to deploy new versions) ---
     image:
       gateway:
-        tag: "0.3.1"
+        tag: "0.3.3"
       control:
-        tag: "0.3.1"
+        tag: "0.3.3"
       frontend:
-        tag: "0.3.0"
+        tag: "0.3.3"
       worker:
-        tag: "0.3.1"
+        tag: "0.3.3"
       bootstrap:
-        tag: "0.3.1"
+        tag: "0.3.3"
 
     imagePullSecrets:
       - name: ghcr-pull
