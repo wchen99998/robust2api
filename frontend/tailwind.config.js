@@ -52,7 +52,8 @@ export default {
         mono: [
           'SF Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo',
           'Monaco', 'Consolas', 'monospace'
-        ]
+        ],
+        serif: ["'New York'", "'Iowan Old Style'", 'Georgia', "'Times New Roman'", 'serif']
       },
       fontSize: {
         'mica-caption': ['11px', { lineHeight: '1.2', fontWeight: '500', letterSpacing: '0.3px' }],
