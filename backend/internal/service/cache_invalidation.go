@@ -41,17 +41,84 @@ func publishInvalidation(scope string, publish func(context.Context) error) {
 }
 
 func newDebouncedInvalidationHandler(delay time.Duration, handler func()) func() {
-	var mu sync.Mutex
-	var timer *time.Timer
+	if handler == nil {
+		return func() {}
+	}
+
+	if delay <= 0 {
+		var mu sync.Mutex
+		return func() {
+			mu.Lock()
+			defer mu.Unlock()
+			handler()
+		}
+	}
+
+	type debouncer struct {
+		delay   time.Duration
+		handler func()
+
+		mu      sync.Mutex
+		timer   *time.Timer
+		pending bool
+		running bool
+	}
+
+	d := &debouncer{
+		delay:   delay,
+		handler: handler,
+		timer:   time.NewTimer(delay),
+	}
+	if !d.timer.Stop() {
+		select {
+		case <-d.timer.C:
+		default:
+		}
+	}
+
+	go func() {
+		for range d.timer.C {
+			d.mu.Lock()
+			if !d.pending || d.running {
+				d.mu.Unlock()
+				continue
+			}
+			d.pending = false
+			d.running = true
+			d.mu.Unlock()
+
+			d.handler()
+
+			d.mu.Lock()
+			d.running = false
+			if d.pending {
+				if !d.timer.Stop() {
+					select {
+					case <-d.timer.C:
+					default:
+					}
+				}
+				d.timer.Reset(d.delay)
+			}
+			d.mu.Unlock()
+		}
+	}()
 
 	return func() {
-		mu.Lock()
-		defer mu.Unlock()
+		d.mu.Lock()
+		defer d.mu.Unlock()
 
-		if timer != nil {
-			timer.Stop()
+		d.pending = true
+		if d.running {
+			return
 		}
-		timer = time.AfterFunc(delay, handler)
+		if !d.timer.Stop() {
+			select {
+			case <-d.timer.C:
+			default:
+			}
+		}
+		d.timer.Reset(d.delay)
 	}
 }
 

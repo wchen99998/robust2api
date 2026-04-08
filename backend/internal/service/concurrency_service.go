@@ -81,12 +81,18 @@ func (s *ConcurrencyService) CleanupStaleProcessSlots(ctx context.Context) error
 
 const (
 	// Default extra wait slots beyond concurrency limit
-	defaultExtraWaitSlots = 20
+	defaultExtraWaitSlots        = 20
+	queueDepthRefreshMinInterval = time.Second
+	queueDepthRefreshTimeout     = 2 * time.Second
 )
 
 // ConcurrencyService manages concurrent request limiting for accounts and users
 type ConcurrencyService struct {
 	cache ConcurrencyCache
+
+	queueDepthRefreshScheduled atomic.Bool
+	queueDepthLastRefreshUnix  atomic.Int64
+	queueDepthUpdatePending    atomic.Bool
 }
 
 type queueDepthReader interface {
@@ -386,11 +392,46 @@ func (s *ConcurrencyService) recordQueueDepth(ctx context.Context) {
 		return
 	}
 
-	depth, err := reader.GetTotalWaitingCount(ctx)
-	if err != nil {
-		logger.LegacyPrintf("service.concurrency", "Warning: read total waiting count failed: %v", err)
+	s.queueDepthUpdatePending.Store(true)
+	s.startQueueDepthRefreshLoop(reader)
+}
+
+func (s *ConcurrencyService) startQueueDepthRefreshLoop(reader queueDepthReader) {
+	if s == nil || reader == nil {
+		return
+	}
+	if !s.queueDepthRefreshScheduled.CompareAndSwap(false, true) {
 		return
 	}
 
-	appelotel.M().SetConcurrencyQueueDepth(ctx, depth)
+	go func() {
+		defer func() {
+			s.queueDepthRefreshScheduled.Store(false)
+			if s.queueDepthUpdatePending.Load() {
+				s.startQueueDepthRefreshLoop(reader)
+			}
+		}()
+
+		now := time.Now()
+		last := time.Unix(0, s.queueDepthLastRefreshUnix.Load())
+		if !last.IsZero() {
+			wait := queueDepthRefreshMinInterval - now.Sub(last)
+			if wait > 0 {
+				time.Sleep(wait)
+			}
+		}
+
+		s.queueDepthUpdatePending.Store(false)
+
+		readCtx, cancel := context.WithTimeout(context.Background(), queueDepthRefreshTimeout)
+		depth, err := reader.GetTotalWaitingCount(readCtx)
+		cancel()
+		if err != nil {
+			logger.LegacyPrintf("service.concurrency", "Warning: read total waiting count failed: %v", err)
+			return
+		}
+
+		s.queueDepthLastRefreshUnix.Store(time.Now().UnixNano())
+		appelotel.M().SetConcurrencyQueueDepth(context.Background(), depth)
+	}()
 }

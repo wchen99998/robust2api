@@ -7,7 +7,9 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -105,6 +107,26 @@ func (c *trackingConcurrencyCache) CleanupStaleProcessSlots(_ context.Context, p
 	return c.cleanupErr
 }
 
+type queueDepthCacheStub struct {
+	stubConcurrencyCacheForTest
+	depth      int64
+	depthErr   error
+	depthCalls atomic.Int32
+	blockRead  chan struct{}
+}
+
+func (c *queueDepthCacheStub) GetTotalWaitingCount(ctx context.Context) (int64, error) {
+	c.depthCalls.Add(1)
+	if c.blockRead != nil {
+		select {
+		case <-c.blockRead:
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		}
+	}
+	return c.depth, c.depthErr
+}
+
 func TestCleanupStaleProcessSlots_NilCache(t *testing.T) {
 	svc := &ConcurrencyService{cache: nil}
 	require.NoError(t, svc.CleanupStaleProcessSlots(context.Background()))
@@ -115,6 +137,29 @@ func TestCleanupStaleProcessSlots_DelegatesPrefix(t *testing.T) {
 	svc := NewConcurrencyService(cache)
 	require.NoError(t, svc.CleanupStaleProcessSlots(context.Background()))
 	require.Equal(t, RequestIDPrefix(), cache.cleanupPrefix)
+}
+
+func TestRecordQueueDepth_CoalescesConcurrentRefreshes(t *testing.T) {
+	blockRead := make(chan struct{})
+	cache := &queueDepthCacheStub{
+		depth:     3,
+		blockRead: blockRead,
+	}
+	svc := NewConcurrencyService(cache)
+
+	svc.recordQueueDepth(context.Background())
+	require.Eventually(t, func() bool {
+		return cache.depthCalls.Load() == 1
+	}, time.Second, 10*time.Millisecond)
+
+	for i := 0; i < 5; i++ {
+		svc.recordQueueDepth(context.Background())
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	require.Equal(t, int32(1), cache.depthCalls.Load(), "queue depth reads should be coalesced while a refresh is already running")
+
+	close(blockRead)
 }
 
 func TestAcquireAccountSlot_Success(t *testing.T) {

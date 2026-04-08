@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"net/url"
 	"net/http"
+	"net/url"
 	"os"
 	"regexp"
 	"strings"
@@ -77,7 +77,7 @@ func validateEmbeddedOriginAllowed(rawURL, fieldName string) error {
 		return nil
 	}
 
-	return fmt.Errorf("%s origin %q is not allowed by deployment; add it to control.frontend.extraFrameSrcOrigins", fieldName, origin)
+	return fmt.Errorf("%s origin %q is not allowed by deployment; add it to %s (or the deployment setting that populates it, such as control.frontend.extraFrameSrcOrigins)", fieldName, origin, extraFrameSrcOriginsEnv)
 }
 
 // SettingHandler 系统设置处理器

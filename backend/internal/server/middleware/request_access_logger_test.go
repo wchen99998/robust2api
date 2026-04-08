@@ -181,22 +181,26 @@ func TestLogger_AccessLogIncludesCoreFields(t *testing.T) {
 
 func TestLogger_ProbePathSkipped(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	sink := initMiddlewareTestLogger(t)
+	for _, path := range []string{"/health", "/livez", "/readyz", "/startupz"} {
+		t.Run(path, func(t *testing.T) {
+			sink := initMiddlewareTestLogger(t)
 
-	r := gin.New()
-	r.Use(Logger())
-	r.GET("/livez", func(c *gin.Context) {
-		c.Status(http.StatusOK)
-	})
+			r := gin.New()
+			r.Use(Logger())
+			r.GET(path, func(c *gin.Context) {
+				c.Status(http.StatusOK)
+			})
 
-	w := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodGet, "/livez", nil)
-	r.ServeHTTP(w, req)
-	if w.Code != http.StatusOK {
-		t.Fatalf("status=%d", w.Code)
-	}
-	if len(sink.list()) != 0 {
-		t.Fatalf("probe endpoint should not write access log")
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			r.ServeHTTP(w, req)
+			if w.Code != http.StatusOK {
+				t.Fatalf("status=%d", w.Code)
+			}
+			if len(sink.list()) != 0 {
+				t.Fatalf("probe endpoint should not write access log")
+			}
+		})
 	}
 }
 
