@@ -101,10 +101,14 @@ func valueOrZero(v *int64) int64 {
 }
 
 type UsageBillingApplyResult struct {
-	Applied              bool
-	APIKeyQuotaExhausted bool
+	Applied                          bool
+	UsageLogInserted                 bool
+	APIKeyQuotaExhausted             bool
+	APIKeyAuthCacheKey               string
+	NeedsAPIKeyAuthCacheInvalidation bool
 }
 
 type UsageBillingRepository interface {
 	Apply(ctx context.Context, cmd *UsageBillingCommand) (*UsageBillingApplyResult, error)
+	ApplyUsageCharge(ctx context.Context, event *UsageChargeEvent) (*UsageBillingApplyResult, error)
 }

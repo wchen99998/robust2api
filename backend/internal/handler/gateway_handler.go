@@ -493,7 +493,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
 			}
 
-			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				usageTracer := otel.Tracer("sub2api.gateway")
 				_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
@@ -844,7 +844,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
 			}
 
-			// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				usageTracer := otel.Tracer("sub2api.gateway")
 				_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
@@ -1768,11 +1768,8 @@ func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
 	if task == nil {
 		return
 	}
-	if h.usageRecordWorkerPool != nil {
-		h.usageRecordWorkerPool.Submit(task)
-		return
-	}
-	// 回退路径：worker 池未注入时同步执行，避免退回到无界 goroutine 模式。
+	// Billing publish is authoritative, so execute inline after the response is finalized
+	// instead of buffering behind an in-process worker queue.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	defer func() {

@@ -1,0 +1,73 @@
+# =============================================================================
+# Sub2API Billing — Multi-Stage Dockerfile
+# =============================================================================
+# Builds the standalone billing consumer binary.
+# Produces a minimal image with only the binary and TLS/timezone support.
+# =============================================================================
+
+ARG GOLANG_IMAGE=golang:1.26.2-alpine
+ARG ALPINE_IMAGE=alpine:3.21
+ARG GOPROXY=https://goproxy.cn,direct
+ARG GOSUMDB=sum.golang.google.cn
+
+# -----------------------------------------------------------------------------
+# Stage 1: Backend Builder
+# -----------------------------------------------------------------------------
+FROM ${GOLANG_IMAGE} AS backend-builder
+
+ARG VERSION=
+ARG COMMIT=docker
+ARG DATE
+ARG GOPROXY
+ARG GOSUMDB
+
+ENV GOPROXY=${GOPROXY}
+ENV GOSUMDB=${GOSUMDB}
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /app/backend
+
+COPY backend/go.mod backend/go.sum ./
+RUN go mod download
+
+COPY backend/ ./
+
+RUN VERSION_VALUE="${VERSION}" && \
+    if [ -z "${VERSION_VALUE}" ]; then VERSION_VALUE="$(tr -d '\r\n' < ./cmd/billing/VERSION)"; fi && \
+    DATE_VALUE="${DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}" && \
+    CGO_ENABLED=0 GOOS=linux go build \
+    -ldflags="-s -w -X main.Version=${VERSION_VALUE} -X main.Commit=${COMMIT} -X main.Date=${DATE_VALUE} -X main.BuildType=release" \
+    -trimpath \
+    -o /app/sub2api-billing \
+    ./cmd/billing
+
+# -----------------------------------------------------------------------------
+# Stage 2: Final Runtime Image
+# -----------------------------------------------------------------------------
+FROM ${ALPINE_IMAGE}
+
+LABEL maintainer="Wccccc <github.com/wchen99998>"
+LABEL description="Sub2API Billing - Usage Charge Consumer"
+LABEL org.opencontainers.image.source="https://github.com/wchen99998/sub2api"
+
+RUN apk add --no-cache \
+    ca-certificates \
+    tzdata \
+    && rm -rf /var/cache/apk/*
+
+RUN addgroup -g 1000 sub2api && \
+    adduser -u 1000 -G sub2api -s /bin/sh -D sub2api
+
+WORKDIR /app
+
+COPY --from=backend-builder --chown=sub2api:sub2api /app/sub2api-billing /app/sub2api-billing
+
+USER sub2api
+
+EXPOSE 8082
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
+    CMD wget -q -T 5 -O /dev/null http://localhost:${BILLING_HEALTH_PORT:-8082}/livez || exit 1
+
+ENTRYPOINT ["/app/sub2api-billing"]

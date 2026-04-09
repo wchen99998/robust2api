@@ -25,11 +25,19 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if cmd == nil {
 		return &service.UsageBillingApplyResult{}, nil
 	}
+	return r.ApplyUsageCharge(ctx, &service.UsageChargeEvent{Command: cmd})
+}
+
+func (r *usageBillingRepository) ApplyUsageCharge(ctx context.Context, event *service.UsageChargeEvent) (_ *service.UsageBillingApplyResult, err error) {
+	if event == nil || event.Command == nil {
+		return &service.UsageBillingApplyResult{}, nil
+	}
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
 	}
 
-	cmd.Normalize()
+	cmd := event.Command
+	normalizeUsageChargeEvent(event)
 	if cmd.RequestID == "" {
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
@@ -48,13 +56,27 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if err != nil {
 		return nil, err
 	}
-	if !applied {
-		return &service.UsageBillingApplyResult{Applied: false}, nil
-	}
 
-	result := &service.UsageBillingApplyResult{Applied: true}
-	if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
-		return nil, err
+	result := &service.UsageBillingApplyResult{Applied: applied}
+	if applied {
+		if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
+			return nil, err
+		}
+	}
+	if event.UsageLog != nil {
+		inserted, err := r.persistUsageLog(ctx, tx, event.UsageLog)
+		if err != nil {
+			return nil, err
+		}
+		result.UsageLogInserted = inserted
+	}
+	if cmd.APIKeyQuotaCost > 0 {
+		apiKeyKey, shouldInvalidate, err := r.resolveAPIKeyAuthProjection(ctx, tx, cmd.APIKeyID)
+		if err != nil {
+			return nil, err
+		}
+		result.APIKeyAuthCacheKey = apiKeyKey
+		result.NeedsAPIKeyAuthCacheInvalidation = shouldInvalidate
 	}
 
 	if err := tx.Commit(); err != nil {
@@ -62,6 +84,28 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	}
 	tx = nil
 	return result, nil
+}
+
+func normalizeUsageChargeEvent(event *service.UsageChargeEvent) {
+	if event == nil || event.Command == nil {
+		return
+	}
+	event.Command.Normalize()
+	requestID := strings.TrimSpace(event.RequestID)
+	if requestID == "" {
+		requestID = event.Command.RequestID
+	}
+	if event.UsageLog != nil {
+		event.UsageLog.RequestID = strings.TrimSpace(event.UsageLog.RequestID)
+		if event.UsageLog.RequestID == "" {
+			event.UsageLog.RequestID = requestID
+		}
+		if requestID == "" {
+			requestID = event.UsageLog.RequestID
+		}
+	}
+	event.Command.RequestID = requestID
+	event.RequestID = requestID
 }
 
 func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
@@ -141,6 +185,44 @@ func (r *usageBillingRepository) applyUsageBillingEffects(ctx context.Context, t
 	}
 
 	return nil
+}
+
+func (r *usageBillingRepository) persistUsageLog(ctx context.Context, tx *sql.Tx, usageLog *service.UsageLog) (bool, error) {
+	if usageLog == nil {
+		return false, nil
+	}
+	repo := &usageLogRepository{sql: tx}
+	return repo.createSingle(ctx, tx, usageLog)
+}
+
+func (r *usageBillingRepository) resolveAPIKeyAuthProjection(ctx context.Context, tx *sql.Tx, apiKeyID int64) (string, bool, error) {
+	if apiKeyID <= 0 {
+		return "", false, nil
+	}
+
+	var (
+		key       string
+		status    string
+		quota     float64
+		quotaUsed float64
+	)
+	err := tx.QueryRowContext(ctx, `
+		SELECT key, status, quota, quota_used
+		FROM api_keys
+		WHERE id = $1 AND deleted_at IS NULL
+	`, apiKeyID).Scan(&key, &status, &quota, &quotaUsed)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", false, service.ErrAPIKeyNotFound
+	}
+	if err != nil {
+		return "", false, err
+	}
+
+	quotaExhausted := quota > 0 && quotaUsed >= quota
+	if strings.EqualFold(status, service.StatusAPIKeyQuotaExhausted) {
+		quotaExhausted = true
+	}
+	return key, quotaExhausted, nil
 }
 
 func incrementUsageBillingSubscription(ctx context.Context, tx *sql.Tx, subscriptionID int64, costUSD float64) error {

@@ -2,29 +2,26 @@ package service
 
 import (
 	"context"
-	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
 // BillingConsumerService orchestrates the billing event consumption loop.
-// It reads events from a BillingEventConsumer, applies billing via UsageBillingRepository,
-// writes usage logs, and updates the billing cache.
+// It reads events from a BillingEventConsumer, applies billing+usage persistence
+// transactionally, and then updates cache/auth projections after commit.
 type BillingConsumerService struct {
-	consumer         BillingEventConsumer
-	billingRepo      UsageBillingRepository
-	usageLogRepo     UsageLogRepository
-	billingCache     *BillingCacheService
-	deferredService  *DeferredService
-	authInvalidator  APIKeyAuthCacheInvalidator
+	consumer        BillingEventConsumer
+	billingRepo     UsageBillingRepository
+	billingCache    *BillingCacheService
+	deferredService *DeferredService
+	authInvalidator APIKeyAuthCacheInvalidator
 }
 
 // NewBillingConsumerService creates a new billing consumer orchestrator.
 func NewBillingConsumerService(
 	consumer BillingEventConsumer,
 	billingRepo UsageBillingRepository,
-	usageLogRepo UsageLogRepository,
 	billingCache *BillingCacheService,
 	deferredService *DeferredService,
 	authInvalidator APIKeyAuthCacheInvalidator,
@@ -32,7 +29,6 @@ func NewBillingConsumerService(
 	svc := &BillingConsumerService{
 		consumer:        consumer,
 		billingRepo:     billingRepo,
-		usageLogRepo:    usageLogRepo,
 		billingCache:    billingCache,
 		deferredService: deferredService,
 		authInvalidator: authInvalidator,
@@ -60,8 +56,8 @@ func (s *BillingConsumerService) handleEvent(ctx context.Context, event *Billing
 	cmd := event.Command
 	cmd.Normalize()
 
-	// 1. Apply billing transaction (idempotent via usage_billing_dedup table).
-	result, err := s.billingRepo.Apply(ctx, cmd)
+	// Apply billing mutations and usage log persistence in a single transaction.
+	result, err := s.billingRepo.ApplyUsageCharge(ctx, event)
 	if err != nil {
 		logger.L().Error("billing consumer: apply failed",
 			zap.String("component", "service.billing_consumer"),
@@ -72,67 +68,28 @@ func (s *BillingConsumerService) handleEvent(ctx context.Context, event *Billing
 		return err
 	}
 
-	// If this was a duplicate (already applied), just schedule the account update and return.
-	if result == nil || !result.Applied {
-		if s.deferredService != nil {
-			s.deferredService.ScheduleLastUsedUpdate(cmd.AccountID)
-		}
-		return nil
+	if result == nil {
+		result = &UsageBillingApplyResult{}
 	}
 
-	// 2. Invalidate API key auth cache if quota was exhausted by this billing.
-	if result.APIKeyQuotaExhausted && event.APIKeyKey != "" && s.authInvalidator != nil {
-		s.authInvalidator.InvalidateAuthCacheByKey(ctx, event.APIKeyKey)
+	// Repair auth projection after commit. This is safe to repeat on replay.
+	if result.NeedsAPIKeyAuthCacheInvalidation && result.APIKeyAuthCacheKey != "" && s.authInvalidator != nil {
+		s.authInvalidator.InvalidateAuthCacheByKey(ctx, result.APIKeyAuthCacheKey)
 	}
 
-	// 3. Write usage log.
-	if event.UsageLog != nil && s.usageLogRepo != nil {
-		s.writeUsageLog(ctx, event.UsageLog)
+	// Cache updates must not reapply additive deltas on duplicate delivery.
+	if result.Applied {
+		s.updateBillingCache(event, cmd)
+	} else {
+		s.repairBillingCache(ctx, event, cmd)
 	}
 
-	// 4. Update billing cache so eligibility checks reflect this charge.
-	s.updateBillingCache(event, cmd)
-
-	// 5. Schedule deferred account last-used update.
+	// Deferred account touch is idempotent enough to repeat after replay.
 	if s.deferredService != nil {
 		s.deferredService.ScheduleLastUsedUpdate(cmd.AccountID)
 	}
 
 	return nil
-}
-
-// writeUsageLog persists the usage log record with best-effort retry.
-func (s *BillingConsumerService) writeUsageLog(ctx context.Context, usageLog *UsageLog) {
-	writeCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
-	defer cancel()
-
-	if writer, ok := s.usageLogRepo.(usageLogBestEffortWriter); ok {
-		if err := writer.CreateBestEffort(writeCtx, usageLog); err != nil {
-			logger.L().Error("billing consumer: usage log best-effort write failed",
-				zap.String("component", "service.billing_consumer"),
-				zap.String("request_id", usageLog.RequestID),
-				zap.Error(err),
-			)
-			if !IsUsageLogCreateDropped(err) {
-				if _, syncErr := s.usageLogRepo.Create(writeCtx, usageLog); syncErr != nil {
-					logger.L().Error("billing consumer: usage log sync fallback failed",
-						zap.String("component", "service.billing_consumer"),
-						zap.String("request_id", usageLog.RequestID),
-						zap.Error(syncErr),
-					)
-				}
-			}
-		}
-		return
-	}
-
-	if _, err := s.usageLogRepo.Create(writeCtx, usageLog); err != nil {
-		logger.L().Error("billing consumer: usage log write failed",
-			zap.String("component", "service.billing_consumer"),
-			zap.String("request_id", usageLog.RequestID),
-			zap.Error(err),
-		)
-	}
 }
 
 // updateBillingCache queues cache updates so that eligibility checks reflect this charge.
@@ -149,7 +106,45 @@ func (s *BillingConsumerService) updateBillingCache(event *BillingEvent, cmd *Us
 	}
 
 	// API key rate limit usage.
-	if cmd.APIKeyRateLimitCost > 0 && event.HasRateLimits {
+	if cmd.APIKeyRateLimitCost > 0 && event.HasAPIKeyRateLimitUsage {
 		s.billingCache.QueueUpdateAPIKeyRateLimitUsage(cmd.APIKeyID, cmd.APIKeyRateLimitCost)
+	}
+}
+
+func (s *BillingConsumerService) repairBillingCache(ctx context.Context, event *BillingEvent, cmd *UsageBillingCommand) {
+	if s.billingCache == nil {
+		return
+	}
+
+	if cmd.SubscriptionCost > 0 && cmd.SubscriptionID != nil && event.GroupID > 0 {
+		if err := s.billingCache.InvalidateSubscription(ctx, cmd.UserID, event.GroupID); err != nil {
+			logger.L().Warn("billing consumer: subscription cache repair failed",
+				zap.String("component", "service.billing_consumer"),
+				zap.String("request_id", cmd.RequestID),
+				zap.Int64("user_id", cmd.UserID),
+				zap.Int64("group_id", event.GroupID),
+				zap.Error(err),
+			)
+		}
+	} else if cmd.BalanceCost > 0 {
+		if err := s.billingCache.InvalidateUserBalance(ctx, cmd.UserID); err != nil {
+			logger.L().Warn("billing consumer: balance cache repair failed",
+				zap.String("component", "service.billing_consumer"),
+				zap.String("request_id", cmd.RequestID),
+				zap.Int64("user_id", cmd.UserID),
+				zap.Error(err),
+			)
+		}
+	}
+
+	if cmd.APIKeyRateLimitCost > 0 && event.HasAPIKeyRateLimitUsage {
+		if err := s.billingCache.InvalidateAPIKeyRateLimit(ctx, cmd.APIKeyID); err != nil {
+			logger.L().Warn("billing consumer: api key rate-limit cache repair failed",
+				zap.String("component", "service.billing_consumer"),
+				zap.String("request_id", cmd.RequestID),
+				zap.Int64("api_key_id", cmd.APIKeyID),
+				zap.Error(err),
+			)
+		}
 	}
 }

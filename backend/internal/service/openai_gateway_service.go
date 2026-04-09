@@ -470,7 +470,6 @@ func (s *OpenAIGatewayService) getCodexSnapshotThrottle() *accountWriteThrottle 
 	return defaultOpenAICodexSnapshotPersistThrottle
 }
 
-
 // CloseOpenAIWSPool 关闭 OpenAI WebSocket 连接池的后台 worker 和空闲连接。
 // 应在应用优雅关闭时调用。
 func (s *OpenAIGatewayService) CloseOpenAIWSPool() {
@@ -4605,7 +4604,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil {
 		groupID = *apiKey.GroupID
 	}
-	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.Key, apiKey.HasRateLimits())
+	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.HasRateLimits())
 	if err := s.billingPublisher.Publish(ctx, event); err != nil {
 		logger.LegacyPrintf("service.openai_gateway", "billing event publish failed: request_id=%s user_id=%d error=%v",
 			requestID, user.ID, err)

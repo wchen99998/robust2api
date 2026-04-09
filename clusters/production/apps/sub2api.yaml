@@ -74,6 +74,8 @@ spec:
         tag: "0.3.3"
       worker:
         tag: "0.3.3"
+      billing:
+        tag: "0.3.3"
       bootstrap:
         tag: "0.3.3"
 
@@ -167,6 +169,16 @@ spec:
     worker:
       healthPort: 8081
       replicaCount: 1
+      resources:
+        limits:
+          cpu: 1
+          memory: 1Gi
+        requests:
+          cpu: 100m
+          memory: 256Mi
+    billing:
+      healthPort: 8082
+      replicaCount: 2
       resources:
         limits:
           cpu: 1

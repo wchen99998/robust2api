@@ -38,6 +38,7 @@ data:
   SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS: {{ .Values.config.security.urlAllowlistUpstreamHosts | quote }}
   {{- end }}
   WORKER_HEALTH_PORT: {{ .Values.worker.healthPort | quote }}
+  BILLING_HEALTH_PORT: {{ .Values.billing.healthPort | quote }}
   {{- range $key, $value := .Values.extraEnv }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}

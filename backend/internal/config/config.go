@@ -311,9 +311,11 @@ type BillingStreamConfig struct {
 	Key                     string `mapstructure:"key"`
 	ConsumerGroup           string `mapstructure:"consumer_group"`
 	MaxLen                  int64  `mapstructure:"max_len"`
+	DLQKey                  string `mapstructure:"dlq_key"`
 	BatchSize               int    `mapstructure:"batch_size"`
 	BlockTimeoutSeconds     int    `mapstructure:"block_timeout_seconds"`
 	PendingRecoverySeconds  int    `mapstructure:"pending_recovery_seconds"`
+	MaxRetryCount           int    `mapstructure:"max_retry_count"`
 	Workers                 int    `mapstructure:"workers"`
 	PublishRetries          int    `mapstructure:"publish_retries"`
 }
@@ -1116,10 +1118,12 @@ func setDefaults() {
 	// Billing stream (Redis Stream message broker)
 	viper.SetDefault("billing.stream.key", "billing:events")
 	viper.SetDefault("billing.stream.consumer_group", "billing-workers")
-	viper.SetDefault("billing.stream.max_len", 100000)
+	viper.SetDefault("billing.stream.max_len", 0)
+	viper.SetDefault("billing.stream.dlq_key", "billing:events:dlq")
 	viper.SetDefault("billing.stream.batch_size", 50)
 	viper.SetDefault("billing.stream.block_timeout_seconds", 5)
 	viper.SetDefault("billing.stream.pending_recovery_seconds", 30)
+	viper.SetDefault("billing.stream.max_retry_count", 20)
 	viper.SetDefault("billing.stream.workers", 4)
 	viper.SetDefault("billing.stream.publish_retries", 3)
 	viper.SetDefault("billing.health_port", "8082")

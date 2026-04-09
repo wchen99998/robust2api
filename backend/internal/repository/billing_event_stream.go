@@ -13,7 +13,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// redisBillingEventPublisher publishes BillingEvents to a Redis Stream.
+// redisBillingEventPublisher publishes usage charge events to a Redis Stream.
 type redisBillingEventPublisher struct {
 	rdb     *redis.Client
 	key     string
@@ -29,9 +29,6 @@ func NewRedisBillingEventPublisher(rdb *redis.Client, cfg *config.Config) servic
 		key = "billing:events"
 	}
 	maxLen := streamCfg.MaxLen
-	if maxLen <= 0 {
-		maxLen = 100000
-	}
 	retries := streamCfg.PublishRetries
 	if retries <= 0 {
 		retries = 3
@@ -46,7 +43,7 @@ func NewRedisBillingEventPublisher(rdb *redis.Client, cfg *config.Config) servic
 
 // Publish serializes the event to JSON and appends it to the billing Redis Stream.
 // On failure, it retries with exponential backoff up to the configured retry count.
-func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service.BillingEvent) error {
+func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service.UsageChargeEvent) error {
 	if event == nil {
 		return nil
 	}
@@ -65,12 +62,17 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 			case <-time.After(backoff):
 			}
 		}
-		lastErr = p.rdb.XAdd(ctx, &redis.XAddArgs{
+		args := &redis.XAddArgs{
 			Stream: p.key,
-			MaxLen: p.maxLen,
-			Approx: true,
 			Values: map[string]interface{}{"data": string(data)},
-		}).Err()
+		}
+		if p.maxLen > 0 {
+			// Financial events are never trimmed by default. If retention is explicitly
+			// configured, use exact trimming so operators can reason about the bound.
+			args.MaxLen = p.maxLen
+			args.Approx = false
+		}
+		lastErr = p.rdb.XAdd(ctx, args).Err()
 		if lastErr == nil {
 			return nil
 		}

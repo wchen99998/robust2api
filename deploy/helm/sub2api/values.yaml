@@ -100,6 +100,30 @@ worker:
       path: /readyz
       periodSeconds: 10
 
+# -- Billing Configuration
+billing:
+  replicaCount: 2
+  healthPort: 8082
+  terminationGracePeriodSeconds: 30
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  probes:
+    startup:
+      path: /startupz
+      failureThreshold: 30
+      periodSeconds: 2
+    liveness:
+      path: /livez
+      periodSeconds: 30
+    readiness:
+      path: /readyz
+      periodSeconds: 10
+
 image:
   gateway:
     repository: ghcr.io/wchen99998/robust2api/gateway
@@ -115,6 +139,10 @@ image:
     pullPolicy: IfNotPresent
   worker:
     repository: ghcr.io/wchen99998/robust2api/worker
+    tag: ""
+    pullPolicy: IfNotPresent
+  billing:
+    repository: ghcr.io/wchen99998/robust2api/billing
     tag: ""
     pullPolicy: IfNotPresent
   bootstrap:
