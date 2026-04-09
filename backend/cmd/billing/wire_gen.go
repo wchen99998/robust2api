@@ -41,25 +41,23 @@ func initializeBillingApplication() (*BillingApplication, error) {
 		return nil, err
 	}
 	redisClient := repository.ProvideRedis(configConfig)
-
-	// Billing-specific: dedicated DB pool for billing writes.
+	checker := health.NewChecker(db, redisClient)
+	provider, err := otel.ProvideOtel(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
 	billingDB, err := repository.ProvideBillingDB(configConfig)
 	if err != nil {
 		return nil, err
 	}
+	billingEventConsumer := repository.NewRedisBillingEventConsumer(redisClient, configConfig)
 	usageBillingRepository := repository.NewUsageBillingRepository(billingDB)
-
-	// Usage log repository for writing usage records after billing.
-	usageLogRepository := repository.NewUsageLogRepository(client, db)
-
-	// Billing cache for updating balance/subscription/rate-limit caches after billing.
 	billingCache := repository.NewBillingCache(redisClient)
 	userRepository := repository.NewUserRepository(client, db)
 	userSubscriptionRepository := repository.NewUserSubscriptionRepository(client)
 	apiKeyRepository := repository.NewAPIKeyRepository(client, db)
 	billingCacheService := service.NewBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, configConfig)
-
-	// Deferred service for scheduling last-used account updates.
 	schedulerCache := repository.NewSchedulerCache(redisClient)
 	accountRepository := repository.NewAccountRepository(client, db, schedulerCache)
 	timingWheelService, err := service.ProvideBillingTimingWheelService()
@@ -67,30 +65,12 @@ func initializeBillingApplication() (*BillingApplication, error) {
 		return nil, err
 	}
 	deferredService := service.ProvideBillingDeferredService(accountRepository, timingWheelService)
-
-	// API key auth cache invalidation for quota exhaustion.
 	groupRepository := repository.NewGroupRepository(client, db)
 	userGroupRateRepository := repository.NewUserGroupRateRepository(db)
 	apiKeyCache := repository.NewAPIKeyCache(redisClient)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, apiKeyCache, configConfig)
 	apiKeyAuthCacheInvalidator := service.ProvideBillingAPIKeyAuthCacheInvalidator(apiKeyService)
-
-	// The billing event consumer reads from the Redis Stream.
-	billingEventConsumer := repository.NewRedisBillingEventConsumer(redisClient, configConfig)
-
-	// The billing consumer service orchestrates event processing.
-	billingConsumerService := service.NewBillingConsumerService(billingEventConsumer, usageBillingRepository, usageLogRepository, billingCacheService, deferredService, apiKeyAuthCacheInvalidator)
-
-	// Health checker.
-	checker := health.NewChecker(db, redisClient)
-
-	// OTel.
-	provider, err := otel.ProvideOtel(configConfig)
-	if err != nil {
-		return nil, err
-	}
-	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
-
+	billingConsumerService := service.NewBillingConsumerService(billingEventConsumer, usageBillingRepository, billingCacheService, deferredService, apiKeyAuthCacheInvalidator)
 	v := provideBillingCleanup(client, redisClient, provider, metricsServer, billingDB, billingConsumerService, billingCacheService, deferredService)
 	billingApplication := &BillingApplication{
 		Health:  checker,
@@ -101,6 +81,7 @@ func initializeBillingApplication() (*BillingApplication, error) {
 
 // wire.go:
 
+// BillingApplication is the top-level struct for the billing binary.
 type BillingApplication struct {
 	Health  *health.Checker
 	Cleanup func()
@@ -197,7 +178,6 @@ func provideBillingCleanup(
 
 		runParallel(parallelSteps)
 
-		// Shutdown OTel after services stop
 		if otelProvider != nil {
 			if err := otelProvider.Shutdown(ctx); err != nil {
 				log.Printf("OTel provider shutdown error: %v", err)

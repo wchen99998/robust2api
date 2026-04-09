@@ -114,6 +114,8 @@ jobs:
             dockerfile: Dockerfile.control
           - name: worker
             dockerfile: Dockerfile.worker
+          - name: billing
+            dockerfile: Dockerfile.billing
           - name: bootstrap
             dockerfile: Dockerfile.bootstrap
     runs-on: ubuntu-24.04
@@ -242,6 +244,7 @@ jobs:
           - gateway
           - control
           - worker
+          - billing
           - bootstrap
           - frontend
     steps:
@@ -326,6 +329,7 @@ jobs:
               `docker pull ghcr.io/${ownerLower}/${repoName}/control:${version}`,
               `docker pull ghcr.io/${ownerLower}/${repoName}/frontend:${version}`,
               `docker pull ghcr.io/${ownerLower}/${repoName}/worker:${version}`,
+              `docker pull ghcr.io/${ownerLower}/${repoName}/billing:${version}`,
               `docker pull ghcr.io/${ownerLower}/${repoName}/bootstrap:${version}`,
               "```",
               "",
@@ -397,10 +401,11 @@ jobs:
           echo "$VERSION" > backend/cmd/gateway/VERSION
           echo "$VERSION" > backend/cmd/control/VERSION
           echo "$VERSION" > backend/cmd/worker/VERSION
+          echo "$VERSION" > backend/cmd/billing/VERSION
           echo "$VERSION" > backend/cmd/bootstrap/VERSION
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add backend/cmd/gateway/VERSION backend/cmd/control/VERSION backend/cmd/worker/VERSION backend/cmd/bootstrap/VERSION
+          git add backend/cmd/gateway/VERSION backend/cmd/control/VERSION backend/cmd/worker/VERSION backend/cmd/billing/VERSION backend/cmd/bootstrap/VERSION
           git commit -m "chore: sync VERSION to ${VERSION} [skip ci]"
           git push origin HEAD:${{ github.event.repository.default_branch }}

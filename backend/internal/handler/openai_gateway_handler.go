@@ -444,7 +444,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 		clientIP := ip.GetClientIP(c)
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 
-		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+		// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据，
+		// 同时保留原始请求的 span context 以便账务链路继续关联。
 		requestSpanCtx := trace.SpanContextFromContext(c.Request.Context())
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			usageCtx := ctx
@@ -1663,11 +1664,8 @@ func (h *OpenAIGatewayHandler) submitUsageRecordTask(task service.UsageRecordTas
 	if task == nil {
 		return
 	}
-	if h.usageRecordWorkerPool != nil {
-		h.usageRecordWorkerPool.Submit(task)
-		return
-	}
-	// 回退路径：worker 池未注入时同步执行，避免退回到无界 goroutine 模式。
+	// Billing publish is authoritative, so execute inline after the response is finalized
+	// instead of buffering behind an in-process worker queue.
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	defer func() {

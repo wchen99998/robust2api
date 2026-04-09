@@ -628,6 +628,18 @@ func (s *BillingCacheService) QueueUpdateAPIKeyRateLimitUsage(apiKeyID int64, co
 	})
 }
 
+// InvalidateAPIKeyRateLimit invalidates the API key rate-limit cache entry so it will reload from DB.
+func (s *BillingCacheService) InvalidateAPIKeyRateLimit(ctx context.Context, apiKeyID int64) error {
+	if s.cache == nil {
+		return nil
+	}
+	if err := s.cache.InvalidateAPIKeyRateLimit(ctx, apiKeyID); err != nil {
+		logger.LegacyPrintf("service.billing_cache", "Warning: invalidate api key rate limit cache failed for api key %d: %v", apiKeyID, err)
+		return err
+	}
+	return nil
+}
+
 // ============================================
 // 统一检查方法
 // ============================================

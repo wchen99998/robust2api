@@ -7389,7 +7389,6 @@ func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 	return p.Cost.TotalCost > 0 && p.Account.IsAPIKeyOrBedrock() && p.Account.HasAnyQuotaLimit()
 }
 
-
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
 	if ctx != nil {
 		if clientRequestID, _ := ctx.Value(ctxkey.ClientRequestID).(string); strings.TrimSpace(clientRequestID) != "" {
@@ -7473,7 +7472,6 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	return cmd
 }
 
-
 func detachedBillingContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	base := context.Background()
 	if ctx != nil {
@@ -7491,7 +7489,6 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	}
 	return context.WithoutCancel(ctx), func() {}
 }
-
 
 func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog, logKey string) {
 	if repo == nil || usageLog == nil {
@@ -7731,7 +7728,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if apiKey.GroupID != nil {
 		groupID = *apiKey.GroupID
 	}
-	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.Key, apiKey.HasRateLimits())
+	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.HasRateLimits())
 	if err := s.billingPublisher.Publish(ctx, event); err != nil {
 		slog.Error("billing event publish failed",
 			"component", "service.gateway",

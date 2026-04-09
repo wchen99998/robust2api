@@ -467,3 +467,11 @@ Worker component labels.
 {{ include "sub2api.selectorLabels" . }}
 app.kubernetes.io/component: worker
 {{- end }}
+
+{{/*
+Billing component labels.
+*/}}
+{{- define "sub2api.billing.selectorLabels" -}}
+{{ include "sub2api.selectorLabels" . }}
+app.kubernetes.io/component: billing
+{{- end }}

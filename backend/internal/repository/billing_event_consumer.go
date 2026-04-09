@@ -19,11 +19,13 @@ import (
 type redisBillingEventConsumer struct {
 	rdb            *redis.Client
 	key            string
+	dlqKey         string
 	group          string
 	consumer       string
 	batchSize      int64
 	blockTimeout   time.Duration
 	pendingRecover time.Duration
+	maxRetryCount  int64
 	workers        int
 
 	cancel context.CancelFunc
@@ -36,6 +38,10 @@ func NewRedisBillingEventConsumer(rdb *redis.Client, cfg *config.Config) service
 	key := streamCfg.Key
 	if key == "" {
 		key = "billing:events"
+	}
+	dlqKey := streamCfg.DLQKey
+	if dlqKey == "" {
+		dlqKey = key + ":dlq"
 	}
 	group := streamCfg.ConsumerGroup
 	if group == "" {
@@ -53,6 +59,10 @@ func NewRedisBillingEventConsumer(rdb *redis.Client, cfg *config.Config) service
 	if pendingRecover <= 0 {
 		pendingRecover = 30 * time.Second
 	}
+	maxRetryCount := int64(streamCfg.MaxRetryCount)
+	if maxRetryCount <= 0 {
+		maxRetryCount = 20
+	}
 	workers := streamCfg.Workers
 	if workers <= 0 {
 		workers = 4
@@ -65,11 +75,13 @@ func NewRedisBillingEventConsumer(rdb *redis.Client, cfg *config.Config) service
 	return &redisBillingEventConsumer{
 		rdb:            rdb,
 		key:            key,
+		dlqKey:         dlqKey,
 		group:          group,
 		consumer:       hostname,
 		batchSize:      int64(batchSize),
 		blockTimeout:   blockTimeout,
 		pendingRecover: pendingRecover,
+		maxRetryCount:  maxRetryCount,
 		workers:        workers,
 	}
 }
@@ -153,7 +165,7 @@ func (c *redisBillingEventConsumer) readLoop(ctx context.Context, handler servic
 
 		for _, stream := range streams {
 			for _, msg := range stream.Messages {
-				c.processMessage(ctx, handler, msg, consumerName)
+				c.processMessage(ctx, handler, msg, consumerName, 0)
 			}
 		}
 	}
@@ -222,32 +234,49 @@ func (c *redisBillingEventConsumer) recoverPending(ctx context.Context, handler 
 		return
 	}
 
+	retryCountByID := make(map[string]int64, len(pending))
+	for _, p := range pending {
+		retryCountByID[p.ID] = p.RetryCount
+	}
+
 	for _, msg := range claimed {
-		c.processMessage(ctx, handler, msg, c.consumer+"-recovery")
+		c.processMessage(ctx, handler, msg, c.consumer+"-recovery", retryCountByID[msg.ID])
 	}
 }
 
 // processMessage deserializes and processes a single stream message, then ACKs it.
-func (c *redisBillingEventConsumer) processMessage(ctx context.Context, handler service.BillingEventConsumerHandler, msg redis.XMessage, consumerName string) {
+func (c *redisBillingEventConsumer) processMessage(ctx context.Context, handler service.BillingEventConsumerHandler, msg redis.XMessage, consumerName string, retryCount int64) {
 	dataStr, ok := msg.Values["data"].(string)
 	if !ok {
 		logger.L().Error("billing consumer: missing data field",
 			zap.String("component", "repository.billing_event_consumer"),
 			zap.String("msg_id", msg.ID),
 		)
-		// ACK to avoid reprocessing bad messages forever.
+		c.deadLetterMessage(ctx, msg, consumerName, retryCount, "missing_data_field", "")
 		_ = c.rdb.XAck(ctx, c.key, c.group, msg.ID).Err()
 		return
 	}
 
-	var event service.BillingEvent
+	var event service.UsageChargeEvent
 	if err := json.Unmarshal([]byte(dataStr), &event); err != nil {
 		logger.L().Error("billing consumer: unmarshal failed",
 			zap.String("component", "repository.billing_event_consumer"),
 			zap.String("msg_id", msg.ID),
 			zap.Error(err),
 		)
-		// ACK to avoid reprocessing permanently corrupt messages.
+		c.deadLetterMessage(ctx, msg, consumerName, retryCount, "unmarshal_failed", dataStr)
+		_ = c.rdb.XAck(ctx, c.key, c.group, msg.ID).Err()
+		return
+	}
+
+	if retryCount >= c.maxRetryCount && c.maxRetryCount > 0 {
+		logger.L().Error("billing consumer: max retries exceeded",
+			zap.String("component", "repository.billing_event_consumer"),
+			zap.String("msg_id", msg.ID),
+			zap.String("consumer", consumerName),
+			zap.Int64("retry_count", retryCount),
+		)
+		c.deadLetterMessage(ctx, msg, consumerName, retryCount, "max_retries_exceeded", dataStr)
 		_ = c.rdb.XAck(ctx, c.key, c.group, msg.ID).Err()
 		return
 	}
@@ -257,8 +286,13 @@ func (c *redisBillingEventConsumer) processMessage(ctx context.Context, handler 
 			zap.String("component", "repository.billing_event_consumer"),
 			zap.String("msg_id", msg.ID),
 			zap.String("consumer", consumerName),
+			zap.Int64("retry_count", retryCount),
 			zap.Error(err),
 		)
+		if retryCount >= c.maxRetryCount && c.maxRetryCount > 0 {
+			c.deadLetterMessage(ctx, msg, consumerName, retryCount, "handler_failed", dataStr)
+			_ = c.rdb.XAck(ctx, c.key, c.group, msg.ID).Err()
+		}
 		// Do NOT ACK — the message stays pending for retry via pendingRecoveryLoop.
 		return
 	}
@@ -267,6 +301,40 @@ func (c *redisBillingEventConsumer) processMessage(ctx context.Context, handler 
 		logger.L().Warn("billing consumer: ack failed",
 			zap.String("component", "repository.billing_event_consumer"),
 			zap.String("msg_id", msg.ID),
+			zap.Error(err),
+		)
+	}
+}
+
+func (c *redisBillingEventConsumer) deadLetterMessage(ctx context.Context, msg redis.XMessage, consumerName string, retryCount int64, reason string, data string) {
+	if c.dlqKey == "" {
+		return
+	}
+	if data == "" {
+		if raw, ok := msg.Values["data"].(string); ok {
+			data = raw
+		} else {
+			data = fmt.Sprintf("%v", msg.Values)
+		}
+	}
+
+	if err := c.rdb.XAdd(ctx, &redis.XAddArgs{
+		Stream: c.dlqKey,
+		Values: map[string]interface{}{
+			"data":              data,
+			"source_stream":     c.key,
+			"source_group":      c.group,
+			"source_message_id": msg.ID,
+			"consumer":          consumerName,
+			"retry_count":       retryCount,
+			"reason":            reason,
+			"failed_at":         time.Now().UTC().Format(time.RFC3339Nano),
+		},
+	}).Err(); err != nil {
+		logger.L().Warn("billing consumer: dlq publish failed",
+			zap.String("component", "repository.billing_event_consumer"),
+			zap.String("msg_id", msg.ID),
+			zap.String("dlq_stream", c.dlqKey),
 			zap.Error(err),
 		)
 	}

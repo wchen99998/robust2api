@@ -506,7 +506,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			}
 		}
 
-		// 使用量记录通过有界 worker 池提交，避免请求热路径创建无界 goroutine。
+		// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
 		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
