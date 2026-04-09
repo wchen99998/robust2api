@@ -107,7 +107,6 @@ spec:
           nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
           nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
           nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-        maxBodySize: "100m"
         tls:
           enabled: true
       control:
