@@ -13,6 +13,11 @@ backend/bin/
 backend/server
 backend/sub2api
 backend/main
+backend/gateway
+backend/control
+backend/worker
+backend/billing
+backend/bootstrap
 
 # Go 测试二进制
 *.test
