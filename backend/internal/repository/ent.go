@@ -14,6 +14,7 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	_ "github.com/lib/pq" // PostgreSQL 驱动，通过副作用导入注册驱动
+	"go.opentelemetry.io/otel/attribute"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
@@ -29,12 +30,18 @@ func InitEnt(cfg *config.Config) (*ent.Client, *sql.DB, error) {
 
 	// Wrap the SQL driver with OpenTelemetry instrumentation.
 	// This produces child spans for every DB query (db.query, db.exec).
-	db, err := openInstrumentedDB("postgres", dsn)
+	db, err := openInstrumentedDB("postgres", dsn,
+		otelsql.WithAttributes(attribute.String("db.pool.name", "main")),
+	)
 	if err != nil {
 		return nil, nil, err
 	}
 	applyDBPoolSettings(db, cfg)
-	if _, err := otelsql.RegisterDBStatsMetrics(db); err != nil {
+	if _, err := otelsql.RegisterDBStatsMetrics(db,
+		otelsql.WithAttributes(
+			attribute.String("db.pool.name", "main"),
+		),
+	); err != nil {
 		_ = db.Close()
 		return nil, nil, fmt.Errorf("registering db stats metrics: %w", err)
 	}

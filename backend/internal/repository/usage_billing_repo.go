@@ -6,7 +6,6 @@ import (
 	"errors"
 	"strings"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 )
@@ -15,8 +14,11 @@ type usageBillingRepository struct {
 	db *sql.DB
 }
 
-func NewUsageBillingRepository(_ *dbent.Client, sqlDB *sql.DB) service.UsageBillingRepository {
-	return &usageBillingRepository{db: sqlDB}
+func NewUsageBillingRepository(billingDB *BillingDB) service.UsageBillingRepository {
+	if billingDB == nil || billingDB.DB == nil {
+		return &usageBillingRepository{db: nil}
+	}
+	return &usageBillingRepository{db: billingDB.DB}
 }
 
 func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBillingCommand) (_ *service.UsageBillingApplyResult, err error) {

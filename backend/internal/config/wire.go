@@ -17,6 +17,11 @@ var WorkerProviderSet = wire.NewSet(
 	ProvideWorkerConfig,
 )
 
+// BillingProviderSet provides configuration for the billing binary.
+var BillingProviderSet = wire.NewSet(
+	ProvideBillingConfig,
+)
+
 // ProviderSet 提供配置层的依赖
 var ProviderSet = wire.NewSet(
 	ProvideConfig,
@@ -40,4 +45,9 @@ func ProvideControlConfig() (*Config, error) {
 // ProvideWorkerConfig 提供 worker 角色配置。
 func ProvideWorkerConfig() (*Config, error) {
 	return LoadWorker()
+}
+
+// ProvideBillingConfig 提供 billing 角色配置。
+func ProvideBillingConfig() (*Config, error) {
+	return LoadBilling()
 }

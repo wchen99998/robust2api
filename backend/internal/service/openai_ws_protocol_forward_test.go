@@ -599,24 +599,22 @@ func TestOpenAIGatewayService_Forward_ReturnErrorWhenOnlyWSv1Enabled(t *testing.
 func TestNewOpenAIGatewayService_InitializesOpenAIWSResolver(t *testing.T) {
 	cfg := &config.Config{}
 	svc := NewOpenAIGatewayService(
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
+		nil, // accountRepo
+		nil, // usageLogRepo
+		nil, // billingPublisher
+		nil, // userGroupRateRepo
+		nil, // cache
 		cfg,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
-		nil,
+		nil, // schedulerSnapshot
+		nil, // concurrencyService
+		nil, // billingService
+		nil, // rateLimitService
+		nil, // billingCacheService
+		nil, // httpUpstream
+		nil, // deferredService
+		nil, // openAITokenProvider
+		nil, // resolver
+		nil, // channelService
 	)
 
 	decision := svc.getOpenAIWSProtocolResolver().Resolve(nil)

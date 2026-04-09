@@ -26,6 +26,7 @@ const (
 	RoleGateway Role = "gateway"
 	RoleControl Role = "control"
 	RoleWorker  Role = "worker"
+	RoleBilling Role = "billing"
 )
 
 var configSearchPaths = []string{"/etc/sub2api"}
@@ -326,7 +327,32 @@ type ProxyProbeConfig struct {
 }
 
 type BillingConfig struct {
-	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+	CircuitBreaker CircuitBreakerConfig  `mapstructure:"circuit_breaker"`
+	Stream         BillingStreamConfig   `mapstructure:"stream"`
+	DBPool         BillingDBPoolConfig   `mapstructure:"db_pool"`
+	HealthPort     string                `mapstructure:"health_port"`
+}
+
+// BillingStreamConfig configures the Redis Stream used as a message broker
+// between the gateway (publisher) and the billing service (consumer).
+type BillingStreamConfig struct {
+	Key                     string `mapstructure:"key"`
+	ConsumerGroup           string `mapstructure:"consumer_group"`
+	MaxLen                  int64  `mapstructure:"max_len"`
+	BatchSize               int    `mapstructure:"batch_size"`
+	BlockTimeoutSeconds     int    `mapstructure:"block_timeout_seconds"`
+	PendingRecoverySeconds  int    `mapstructure:"pending_recovery_seconds"`
+	Workers                 int    `mapstructure:"workers"`
+	PublishRetries          int    `mapstructure:"publish_retries"`
+}
+
+// BillingDBPoolConfig configures the dedicated DB connection pool for billing writes.
+// When MaxOpenConns is 0, defaults are derived from the main pool settings.
+type BillingDBPoolConfig struct {
+	MaxOpenConns           int `mapstructure:"max_open_conns"`
+	MaxIdleConns           int `mapstructure:"max_idle_conns"`
+	ConnMaxLifetimeMinutes int `mapstructure:"conn_max_lifetime_minutes"`
+	ConnMaxIdleTimeMinutes int `mapstructure:"conn_max_idle_time_minutes"`
 }
 
 type CircuitBreakerConfig struct {
@@ -940,6 +966,11 @@ func LoadWorker() (*Config, error) {
 	return load(RoleWorker)
 }
 
+// LoadBilling reads and validates configuration for the billing role.
+func LoadBilling() (*Config, error) {
+	return load(RoleBilling)
+}
+
 // LoadForRole reads and validates configuration for a specific runtime role.
 func LoadForRole(role Role) (*Config, error) {
 	return load(role)
@@ -1140,6 +1171,17 @@ func setDefaults() {
 	viper.SetDefault("billing.circuit_breaker.failure_threshold", 5)
 	viper.SetDefault("billing.circuit_breaker.reset_timeout_seconds", 30)
 	viper.SetDefault("billing.circuit_breaker.half_open_requests", 3)
+
+	// Billing stream (Redis Stream message broker)
+	viper.SetDefault("billing.stream.key", "billing:events")
+	viper.SetDefault("billing.stream.consumer_group", "billing-workers")
+	viper.SetDefault("billing.stream.max_len", 100000)
+	viper.SetDefault("billing.stream.batch_size", 50)
+	viper.SetDefault("billing.stream.block_timeout_seconds", 5)
+	viper.SetDefault("billing.stream.pending_recovery_seconds", 30)
+	viper.SetDefault("billing.stream.workers", 4)
+	viper.SetDefault("billing.stream.publish_retries", 3)
+	viper.SetDefault("billing.health_port", "8082")
 
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)
@@ -1457,7 +1499,7 @@ func (c *Config) Validate() error {
 
 func (c *Config) ValidateForRole(role Role) error {
 	switch role {
-	case RoleGateway, RoleControl, RoleWorker, RoleGeneric:
+	case RoleGateway, RoleControl, RoleWorker, RoleBilling, RoleGeneric:
 	default:
 		role = RoleGeneric
 	}
@@ -2194,7 +2236,7 @@ func (c *Config) ValidateForRole(role Role) error {
 }
 
 func requiresControlPlaneValidation(role Role) bool {
-	return role != RoleGateway && role != RoleWorker
+	return role != RoleGateway && role != RoleWorker && role != RoleBilling
 }
 
 func normalizeStringSlice(values []string) []string {

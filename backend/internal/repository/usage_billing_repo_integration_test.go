@@ -18,7 +18,7 @@ import (
 func TestUsageBillingRepositoryApply_DeduplicatesBalanceBilling(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
+	repo := NewUsageBillingRepository(&BillingDB{DB: integrationDB})
 
 	user := mustCreateUser(t, client, &service.User{
 		Email:        fmt.Sprintf("usage-billing-user-%d@example.com", time.Now().UnixNano()),
@@ -83,7 +83,7 @@ func TestUsageBillingRepositoryApply_DeduplicatesBalanceBilling(t *testing.T) {
 func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
+	repo := NewUsageBillingRepository(&BillingDB{DB: integrationDB})
 
 	user := mustCreateUser(t, client, &service.User{
 		Email:        fmt.Sprintf("usage-billing-sub-user-%d@example.com", time.Now().UnixNano()),
@@ -131,7 +131,7 @@ func TestUsageBillingRepositoryApply_DeduplicatesSubscriptionBilling(t *testing.
 func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
+	repo := NewUsageBillingRepository(&BillingDB{DB: integrationDB})
 
 	user := mustCreateUser(t, client, &service.User{
 		Email:        fmt.Sprintf("usage-billing-conflict-user-%d@example.com", time.Now().UnixNano()),
@@ -165,7 +165,7 @@ func TestUsageBillingRepositoryApply_RequestFingerprintConflict(t *testing.T) {
 func TestUsageBillingRepositoryApply_UpdatesAccountQuota(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
+	repo := NewUsageBillingRepository(&BillingDB{DB: integrationDB})
 
 	user := mustCreateUser(t, client, &service.User{
 		Email:        fmt.Sprintf("usage-billing-account-user-%d@example.com", time.Now().UnixNano()),
@@ -235,7 +235,7 @@ func TestDashboardAggregationRepositoryCleanupUsageBillingDedup_BatchDeletesOldR
 func TestUsageBillingRepositoryApply_DeduplicatesAgainstArchivedKey(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)
-	repo := NewUsageBillingRepository(client, integrationDB)
+	repo := NewUsageBillingRepository(&BillingDB{DB: integrationDB})
 	aggRepo := newDashboardAggregationRepositoryWithSQL(integrationDB)
 
 	user := mustCreateUser(t, client, &service.User{
