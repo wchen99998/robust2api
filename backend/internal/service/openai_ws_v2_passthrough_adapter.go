@@ -11,10 +11,12 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	openaiwsv2 "github.com/Wei-Shaw/sub2api/internal/service/openai_ws_v2"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type openAIWSClientFrameConn struct {
@@ -269,11 +271,15 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 
 	relayErr := relayExit.Err
 	if relayExit.Stage == "idle_timeout" {
+		appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventStreamIdleTimeout)
 		relayErr = NewOpenAIWSClientCloseError(
 			coderws.StatusPolicyViolation,
 			"client websocket idle timeout",
 			relayErr,
 		)
+	}
+	if strings.Contains(relayExit.Stage, "client") || errors.Is(relayErr, context.Canceled) {
+		appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventClientDisconnect)
 	}
 	turnErr := wrapOpenAIWSIngressTurnError(
 		relayExit.Stage,

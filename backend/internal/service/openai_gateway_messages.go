@@ -15,6 +15,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
@@ -127,8 +128,20 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 	if account.Proxy != nil {
 		proxyURL = account.Proxy.URL()
 	}
+	attemptCtx, attemptSpan, attemptStartedAt := startOpenAIUpstreamAttemptSpan(ctx, account, originalModel, upstreamModel, "http")
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	if err != nil {
+		finishOpenAIUpstreamAttemptSpan(
+			attemptCtx,
+			attemptSpan,
+			account,
+			"http",
+			attemptStartedAt,
+			0,
+			openAIAttemptOutcome(0, err, false),
+			"",
+			err,
+		)
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
 		setOpsUpstreamError(c, 0, safeErr, "")
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -153,6 +166,17 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		upstreamMsg := strings.TrimSpace(extractUpstreamErrorMessage(respBody))
 		upstreamMsg = sanitizeUpstreamErrorMessage(upstreamMsg)
 		if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
+			finishOpenAIUpstreamAttemptSpan(
+				attemptCtx,
+				attemptSpan,
+				account,
+				"http",
+				attemptStartedAt,
+				resp.StatusCode,
+				openAIAttemptOutcome(resp.StatusCode, nil, true),
+				resp.Header.Get("x-request-id"),
+				nil,
+			)
 			upstreamDetail := ""
 			if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 				maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
@@ -180,12 +204,42 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 				RetryableOnSameAccount: account.IsPoolMode() && (isPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
 			}
 		}
+		finishOpenAIUpstreamAttemptSpan(
+			attemptCtx,
+			attemptSpan,
+			account,
+			"http",
+			attemptStartedAt,
+			resp.StatusCode,
+			openAIAttemptOutcome(resp.StatusCode, nil, false),
+			resp.Header.Get("x-request-id"),
+			nil,
+		)
 		// Non-failover error: return Anthropic-formatted error to client
 		return s.handleAnthropicErrorResponse(resp, c, account)
 	}
+	finishOpenAIUpstreamAttemptSpan(
+		attemptCtx,
+		attemptSpan,
+		account,
+		"http",
+		attemptStartedAt,
+		resp.StatusCode,
+		openAIAttemptOutcome(resp.StatusCode, nil, false),
+		resp.Header.Get("x-request-id"),
+		nil,
+	)
 
 	// 9. Handle normal response
 	// Upstream is always streaming; choose response format based on client preference.
+	_, responseSpan := appelotel.GatewayTracer().Start(ctx, "gateway.response_transform")
+	appelotel.SetSpanAttributes(responseSpan,
+		appelotel.AttrAccountID(account.ID),
+		appelotel.AttrPlatform(account.Platform),
+		appelotel.AttrRequestedModel(originalModel),
+		appelotel.AttrEffectiveModel(upstreamModel),
+		appelotel.AttrTransport("http"),
+	)
 	var result *OpenAIForwardResult
 	var handleErr error
 	if clientStream {
@@ -194,6 +248,15 @@ func (s *OpenAIGatewayService) ForwardAsAnthropic(
 		// Client wants JSON: buffer the streaming response and assemble a JSON reply.
 		result, handleErr = s.handleAnthropicBufferedStreamingResponse(resp, c, originalModel, billingModel, upstreamModel, startTime)
 	}
+	if handleErr != nil {
+		appelotel.RecordSpanError(responseSpan, handleErr, handleErr.Error())
+		responseSpan.End()
+		return result, handleErr
+	}
+	if result != nil && result.FirstTokenMs != nil {
+		appelotel.SetSpanAttributes(responseSpan, appelotel.AttrTTFTMs(int64(*result.FirstTokenMs)))
+	}
+	responseSpan.End()
 
 	// Propagate ServiceTier and ReasoningEffort to result for billing
 	if handleErr == nil && result != nil {

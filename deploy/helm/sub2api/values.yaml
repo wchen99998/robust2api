@@ -278,6 +278,7 @@ ingress:
     extraHosts: []
     # Optional per-ingress override for nginx.ingress.kubernetes.io/proxy-body-size.
     maxBodySize: ""
+    annotations: {}
     tls:
       enabled: false
       secretName: ""
@@ -288,6 +289,7 @@ ingress:
     extraHosts: []
     # Optional per-ingress override for nginx.ingress.kubernetes.io/proxy-body-size.
     maxBodySize: ""
+    annotations: {}
     tls:
       enabled: false
       secretName: ""
@@ -375,6 +377,7 @@ observability:
   enabled: false
   otel:
     serviceName: "sub2api"
+    environment: ""
     endpoint: "monitoring-alloy.monitoring.svc:4317"
     traceSampleRate: "0.1"
     metricsPort: 9090

@@ -101,7 +101,9 @@ type queueDepthReader interface {
 
 // NewConcurrencyService creates a new ConcurrencyService
 func NewConcurrencyService(cache ConcurrencyCache) *ConcurrencyService {
-	return &ConcurrencyService{cache: cache}
+	svc := &ConcurrencyService{cache: cache}
+	appelotel.M().SetConcurrencyQueueDepth(context.Background(), 0)
+	return svc
 }
 
 // AcquireResult represents the result of acquiring a concurrency slot

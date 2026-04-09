@@ -103,6 +103,10 @@ spec:
       gateway:
         enabled: true
         maxBodySize: "100m"
+        annotations:
+          nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
         tls:
           enabled: true
       control:
@@ -130,8 +134,9 @@ spec:
       enabled: true
       otel:
         serviceName: sub2api
+        environment: production
         endpoint: "monitoring-alloy.monitoring.svc:4317"
-        traceSampleRate: "0.1"
+        traceSampleRate: "0.05"
         metricsPort: 9090
       serviceMonitor:
         enabled: true
@@ -140,10 +145,21 @@ spec:
     # --- Resources ---
     gateway:
       autoscaling:
-        enabled: false
+        enabled: true
+        minReplicas: 2
+        maxReplicas: 10
+        targetCPUUtilization: 70
       pdb:
-        enabled: false
+        enabled: true
+        minAvailable: 1
       replicaCount: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
       resources:
         limits:
           cpu: 1

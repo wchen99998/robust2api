@@ -32,6 +32,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -2183,8 +2184,15 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 	wsRetryLoop:
 		for attempt := 1; attempt <= maxAttempts; attempt++ {
 			wsAttempts = attempt
-			wsResult, wsErr = s.forwardOpenAIWSV2(
+			attemptCtx, attemptSpan, attemptStartedAt := startOpenAIUpstreamAttemptSpan(
 				ctx,
+				account,
+				originalModel,
+				upstreamModel,
+				string(wsDecision.Transport),
+			)
+			wsResult, wsErr = s.forwardOpenAIWSV2(
+				attemptCtx,
 				c,
 				account,
 				wsReqBody,
@@ -2197,6 +2205,25 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 				startTime,
 				attempt,
 				wsLastFailureReason,
+			)
+			statusCode := 0
+			requestID := ""
+			if wsErr == nil {
+				statusCode = http.StatusSwitchingProtocols
+				if wsResult != nil {
+					requestID = wsResult.RequestID
+				}
+			}
+			finishOpenAIUpstreamAttemptSpan(
+				attemptCtx,
+				attemptSpan,
+				account,
+				string(wsDecision.Transport),
+				attemptStartedAt,
+				statusCode,
+				openAIAttemptOutcome(statusCode, wsErr, false),
+				requestID,
+				wsErr,
 			)
 			if wsErr == nil {
 				break
@@ -2318,10 +2345,22 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 		}
 
 		// Send request
+		attemptCtx, attemptSpan, attemptStartedAt := startOpenAIUpstreamAttemptSpan(ctx, account, originalModel, upstreamModel, "http")
 		upstreamStart := time.Now()
 		resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 		SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 		if err != nil {
+			finishOpenAIUpstreamAttemptSpan(
+				attemptCtx,
+				attemptSpan,
+				account,
+				"http",
+				attemptStartedAt,
+				0,
+				openAIAttemptOutcome(0, err, false),
+				"",
+				err,
+			)
 			// Ensure the client receives an error response (handlers assume Forward writes on non-failover errors).
 			safeErr := sanitizeUpstreamErrorMessage(err.Error())
 			setOpsUpstreamError(c, 0, safeErr, "")
@@ -2360,11 +2399,33 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 					setOpsUpstreamRequestBody(c, body)
 					httpInvalidEncryptedContentRetryTried = true
 					logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Retrying non-WSv2 request once after invalid_encrypted_content (account: %s)", account.Name)
+					finishOpenAIUpstreamAttemptSpan(
+						attemptCtx,
+						attemptSpan,
+						account,
+						"http",
+						attemptStartedAt,
+						resp.StatusCode,
+						openAIAttemptOutcome(resp.StatusCode, nil, false),
+						resp.Header.Get("x-request-id"),
+						nil,
+					)
 					continue
 				}
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI] Skip non-WSv2 invalid_encrypted_content retry because encrypted reasoning items are missing (account: %s)", account.Name)
 			}
 			if s.shouldFailoverOpenAIUpstreamResponse(resp.StatusCode, upstreamMsg, respBody) {
+				finishOpenAIUpstreamAttemptSpan(
+					attemptCtx,
+					attemptSpan,
+					account,
+					"http",
+					attemptStartedAt,
+					resp.StatusCode,
+					openAIAttemptOutcome(resp.StatusCode, nil, true),
+					resp.Header.Get("x-request-id"),
+					nil,
+				)
 				upstreamDetail := ""
 				if s.cfg != nil && s.cfg.Gateway.LogUpstreamErrorBody {
 					maxBytes := s.cfg.Gateway.LogUpstreamErrorBodyMaxBytes
@@ -2391,26 +2452,64 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 					RetryableOnSameAccount: account.IsPoolMode() && (isPoolModeRetryableStatus(resp.StatusCode) || isOpenAITransientProcessingError(resp.StatusCode, upstreamMsg, respBody)),
 				}
 			}
+			finishOpenAIUpstreamAttemptSpan(
+				attemptCtx,
+				attemptSpan,
+				account,
+				"http",
+				attemptStartedAt,
+				resp.StatusCode,
+				openAIAttemptOutcome(resp.StatusCode, nil, false),
+				resp.Header.Get("x-request-id"),
+				nil,
+			)
 			return s.handleErrorResponse(ctx, resp, c, account, body)
 		}
+		finishOpenAIUpstreamAttemptSpan(
+			attemptCtx,
+			attemptSpan,
+			account,
+			"http",
+			attemptStartedAt,
+			resp.StatusCode,
+			openAIAttemptOutcome(resp.StatusCode, nil, false),
+			resp.Header.Get("x-request-id"),
+			nil,
+		)
 		defer func() { _ = resp.Body.Close() }()
 
 		// Handle normal response
+		responseCtx, responseSpan := appelotel.GatewayTracer().Start(ctx, "gateway.response_transform")
+		appelotel.SetSpanAttributes(responseSpan,
+			appelotel.AttrAccountID(account.ID),
+			appelotel.AttrPlatform(account.Platform),
+			appelotel.AttrRequestedModel(originalModel),
+			appelotel.AttrEffectiveModel(upstreamModel),
+			appelotel.AttrTransport("http"),
+		)
 		var usage *OpenAIUsage
 		var firstTokenMs *int
 		if reqStream {
-			streamResult, err := s.handleStreamingResponse(ctx, resp, c, account, startTime, originalModel, upstreamModel)
+			streamResult, err := s.handleStreamingResponse(responseCtx, resp, c, account, startTime, originalModel, upstreamModel)
 			if err != nil {
+				appelotel.RecordSpanError(responseSpan, err, err.Error())
+				responseSpan.End()
 				return nil, err
 			}
 			usage = streamResult.usage
 			firstTokenMs = streamResult.firstTokenMs
 		} else {
-			usage, err = s.handleNonStreamingResponse(ctx, resp, c, account, originalModel, upstreamModel)
+			usage, err = s.handleNonStreamingResponse(responseCtx, resp, c, account, originalModel, upstreamModel)
 			if err != nil {
+				appelotel.RecordSpanError(responseSpan, err, err.Error())
+				responseSpan.End()
 				return nil, err
 			}
 		}
+		if firstTokenMs != nil {
+			appelotel.SetSpanAttributes(responseSpan, appelotel.AttrTTFTMs(int64(*firstTokenMs)))
+		}
+		responseSpan.End()
 
 		// Extract and save Codex usage snapshot from response headers (for OAuth accounts)
 		if account.Type == AccountTypeOAuth {
@@ -2539,10 +2638,22 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		c.Set("openai_passthrough", true)
 	}
 
+	attemptCtx, attemptSpan, attemptStartedAt := startOpenAIUpstreamAttemptSpan(ctx, account, reqModel, reqModel, "http")
 	upstreamStart := time.Now()
 	resp, err := s.httpUpstream.Do(upstreamReq, proxyURL, account.ID, account.Concurrency)
 	SetOpsLatencyMs(c, OpsUpstreamLatencyMsKey, time.Since(upstreamStart).Milliseconds())
 	if err != nil {
+		finishOpenAIUpstreamAttemptSpan(
+			attemptCtx,
+			attemptSpan,
+			account,
+			"http",
+			attemptStartedAt,
+			0,
+			openAIAttemptOutcome(0, err, false),
+			"",
+			err,
+		)
 		safeErr := sanitizeUpstreamErrorMessage(err.Error())
 		setOpsUpstreamError(c, 0, safeErr, "")
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
@@ -2568,26 +2679,75 @@ func (s *OpenAIGatewayService) forwardOpenAIPassthrough(
 		// 透传模式默认保持原样代理；但 429/529 属于网关必须兜底的
 		// 上游容量类错误，应先触发多账号 failover 以维持基础 SLA。
 		if shouldFailoverOpenAIPassthroughResponse(resp.StatusCode) {
+			finishOpenAIUpstreamAttemptSpan(
+				attemptCtx,
+				attemptSpan,
+				account,
+				"http",
+				attemptStartedAt,
+				resp.StatusCode,
+				openAIAttemptOutcome(resp.StatusCode, nil, true),
+				resp.Header.Get("x-request-id"),
+				nil,
+			)
 			return nil, s.handleFailoverErrorResponsePassthrough(ctx, resp, c, account, body)
 		}
+		finishOpenAIUpstreamAttemptSpan(
+			attemptCtx,
+			attemptSpan,
+			account,
+			"http",
+			attemptStartedAt,
+			resp.StatusCode,
+			openAIAttemptOutcome(resp.StatusCode, nil, false),
+			resp.Header.Get("x-request-id"),
+			nil,
+		)
 		return nil, s.handleErrorResponsePassthrough(ctx, resp, c, account, body)
 	}
+	finishOpenAIUpstreamAttemptSpan(
+		attemptCtx,
+		attemptSpan,
+		account,
+		"http",
+		attemptStartedAt,
+		resp.StatusCode,
+		openAIAttemptOutcome(resp.StatusCode, nil, false),
+		resp.Header.Get("x-request-id"),
+		nil,
+	)
 
+	responseCtx, responseSpan := appelotel.GatewayTracer().Start(ctx, "gateway.response_transform")
+	appelotel.SetSpanAttributes(responseSpan,
+		appelotel.AttrAccountID(account.ID),
+		appelotel.AttrPlatform(account.Platform),
+		appelotel.AttrRequestedModel(reqModel),
+		appelotel.AttrEffectiveModel(reqModel),
+		appelotel.AttrTransport("http"),
+	)
 	var usage *OpenAIUsage
 	var firstTokenMs *int
 	if reqStream {
-		result, err := s.handleStreamingResponsePassthrough(ctx, resp, c, account, startTime)
+		result, err := s.handleStreamingResponsePassthrough(responseCtx, resp, c, account, startTime)
 		if err != nil {
+			appelotel.RecordSpanError(responseSpan, err, err.Error())
+			responseSpan.End()
 			return nil, err
 		}
 		usage = result.usage
 		firstTokenMs = result.firstTokenMs
 	} else {
-		usage, err = s.handleNonStreamingResponsePassthrough(ctx, resp, c)
+		usage, err = s.handleNonStreamingResponsePassthrough(responseCtx, resp, c)
 		if err != nil {
+			appelotel.RecordSpanError(responseSpan, err, err.Error())
+			responseSpan.End()
 			return nil, err
 		}
 	}
+	if firstTokenMs != nil {
+		appelotel.SetSpanAttributes(responseSpan, appelotel.AttrTTFTMs(int64(*firstTokenMs)))
+	}
+	responseSpan.End()
 
 	if snapshot := ParseCodexRateLimitHeaders(resp.Header); snapshot != nil {
 		s.updateCodexUsageSnapshot(ctx, account.ID, snapshot)
@@ -2965,6 +3125,7 @@ func (s *OpenAIGatewayService) handleStreamingResponsePassthrough(
 		if !clientDisconnected {
 			if _, err := fmt.Fprintln(w, line); err != nil {
 				clientDisconnected = true
+				appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventClientDisconnect)
 				logger.LegacyPrintf("service.openai_gateway", "[OpenAI passthrough] Client disconnected during streaming, continue draining upstream for usage: account=%d", account.ID)
 			} else {
 				flusher.Flush()
@@ -3621,9 +3782,13 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		return &openaiStreamingResult{usage: usage, firstTokenMs: firstTokenMs}
 	}
 	finalizeStream := func() (*openaiStreamingResult, error) {
+		if clientDisconnected {
+			appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventClientDisconnect)
+		}
 		if !clientDisconnected {
 			if err := flushBuffered(); err != nil {
 				clientDisconnected = true
+				appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventClientDisconnect)
 				logger.LegacyPrintf("service.openai_gateway", "Client disconnected during final flush, returning collected usage")
 			}
 		}
@@ -3647,6 +3812,7 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 		}
 		// 客户端已断开时，上游出错仅影响体验，不影响计费；返回已收集 usage
 		if clientDisconnected {
+			appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventClientDisconnect)
 			return resultWithUsage(), fmt.Errorf("stream usage incomplete after disconnect: %w", scanErr), true
 		}
 		if errors.Is(scanErr, bufio.ErrTooLong) {
@@ -3789,8 +3955,10 @@ func (s *OpenAIGatewayService) handleStreamingResponse(ctx context.Context, resp
 				continue
 			}
 			if clientDisconnected {
+				appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventClientDisconnect)
 				return resultWithUsage(), fmt.Errorf("stream usage incomplete after timeout")
 			}
+			appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventStreamIdleTimeout)
 			logger.LegacyPrintf("service.openai_gateway", "Stream data interval timeout: account=%d model=%s interval=%s", account.ID, originalModel, streamInterval)
 			// 处理流超时，可能标记账户为临时不可调度或错误状态
 			if s.rateLimitService != nil {

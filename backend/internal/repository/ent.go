@@ -29,9 +29,7 @@ func InitEnt(cfg *config.Config) (*ent.Client, *sql.DB, error) {
 
 	// Wrap the SQL driver with OpenTelemetry instrumentation.
 	// This produces child spans for every DB query (db.query, db.exec).
-	db, err := otelsql.Open("postgres", dsn,
-		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
-	)
+	db, err := openInstrumentedDB("postgres", dsn)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -44,4 +42,13 @@ func InitEnt(cfg *config.Config) (*ent.Client, *sql.DB, error) {
 
 	client := ent.NewClient(ent.Driver(drv))
 	return client, drv.DB(), nil
+}
+
+func openInstrumentedDB(driverName, dsn string, opts ...otelsql.Option) (*sql.DB, error) {
+	baseOptions := []otelsql.Option{
+		otelsql.WithAttributes(semconv.DBSystemPostgreSQL),
+		otelsql.WithSpanOptions(otelsql.SpanOptions{OmitConnResetSession: true}),
+	}
+	baseOptions = append(baseOptions, opts...)
+	return otelsql.Open(driverName, dsn, baseOptions...)
 }

@@ -3,12 +3,14 @@ package otel
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"go.opentelemetry.io/contrib/instrumentation/runtime"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	promexporter "go.opentelemetry.io/otel/exporters/prometheus"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
@@ -66,6 +68,7 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	}
 
 	res, err := resource.New(ctx,
+		resource.WithFromEnv(),
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(cfg.ServiceName),
 		),
@@ -75,13 +78,14 @@ func Init(ctx context.Context, cfg *config.OtelConfig) (*Provider, error) {
 	}
 
 	// --- Tracer ---
-	traceExporter, err := otlptracegrpc.New(ctx,
+	otlpTraceExporter, err := otlptracegrpc.New(ctx,
 		otlptracegrpc.WithEndpoint(cfg.Endpoint),
 		otlptracegrpc.WithInsecure(),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating trace exporter: %w", err)
 	}
+	traceExporter := newFilteredTraceExporter(otlpTraceExporter)
 
 	sampler := sdktrace.ParentBased(
 		sdktrace.TraceIDRatioBased(cfg.TraceSampleRate),
@@ -136,4 +140,60 @@ func ProvideMetricsServer(cfg *config.Config, provider *Provider) *MetricsServer
 		return nil
 	}
 	return NewMetricsServer(cfg.Otel.MetricsPort, provider.PrometheusExporter())
+}
+
+type filteredTraceExporter struct {
+	next sdktrace.SpanExporter
+}
+
+func newFilteredTraceExporter(next sdktrace.SpanExporter) sdktrace.SpanExporter {
+	if next == nil {
+		return nil
+	}
+	return &filteredTraceExporter{next: next}
+}
+
+func (e *filteredTraceExporter) ExportSpans(ctx context.Context, spans []sdktrace.ReadOnlySpan) error {
+	if e == nil || e.next == nil || len(spans) == 0 {
+		return nil
+	}
+	filtered := spans[:0]
+	for _, span := range spans {
+		if shouldDropRedisSpan(span) {
+			continue
+		}
+		filtered = append(filtered, span)
+	}
+	if len(filtered) == 0 {
+		return nil
+	}
+	return e.next.ExportSpans(ctx, filtered)
+}
+
+func (e *filteredTraceExporter) Shutdown(ctx context.Context) error {
+	if e == nil || e.next == nil {
+		return nil
+	}
+	return e.next.Shutdown(ctx)
+}
+
+func shouldDropRedisSpan(span sdktrace.ReadOnlySpan) bool {
+	if span == nil {
+		return false
+	}
+	scope := span.InstrumentationScope().Name
+	if scope != "github.com/redis/go-redis/extra/redisotel" {
+		return false
+	}
+	name := strings.TrimSpace(span.Name())
+	if name == "redis.dial" {
+		return true
+	}
+	if span.Status().Code == codes.Error {
+		return false
+	}
+	if span.EndTime().Sub(span.StartTime()) >= time.Millisecond {
+		return false
+	}
+	return strings.HasPrefix(name, "redis.")
 }

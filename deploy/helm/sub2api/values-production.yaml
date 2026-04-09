@@ -115,6 +115,10 @@ ingress:
       enabled: true
       secretName: ""
 
+observability:
+  otel:
+    environment: production
+
 # Disable in-cluster databases for production (use managed services)
 postgresql:
   enabled: false
