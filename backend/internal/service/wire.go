@@ -496,6 +496,39 @@ var APIProviderSet = wire.NewSet(
 	ProvideAPIKeyAuthCacheInvalidator,
 )
 
+// BillingConsumerProviderSet is for the standalone billing consumer binary.
+// It includes the billing event consumer, billing repo dependencies, and cache services
+// needed to process billing events.
+var BillingConsumerProviderSet = wire.NewSet(
+	// The billing consumer orchestrator.
+	NewBillingConsumerService,
+	// Cache and deferred updates.
+	NewBillingCacheService,
+	ProvideBillingDeferredService,
+	ProvideBillingTimingWheelService,
+	// Auth cache invalidation on quota exhaustion.
+	NewAPIKeyService,
+	ProvideBillingAPIKeyAuthCacheInvalidator,
+)
+
+// ProvideBillingTimingWheelService creates a TimingWheelService for the billing binary.
+func ProvideBillingTimingWheelService() (*TimingWheelService, error) {
+	return NewTimingWheelService()
+}
+
+// ProvideBillingDeferredService creates a DeferredService for the billing binary.
+func ProvideBillingDeferredService(accountRepo AccountRepository, timingWheel *TimingWheelService) *DeferredService {
+	svc := NewDeferredService(accountRepo, timingWheel, 10*time.Second)
+	svc.Start()
+	return svc
+}
+
+// ProvideBillingAPIKeyAuthCacheInvalidator provides auth cache invalidation for the billing binary.
+func ProvideBillingAPIKeyAuthCacheInvalidator(apiKeyService *APIKeyService) APIKeyAuthCacheInvalidator {
+	apiKeyService.StartAuthCacheInvalidationSubscriber(context.Background())
+	return apiKeyService
+}
+
 // WorkerProviderSet is for background worker instances. It includes shared services plus
 // all maintenance loops and background schedulers.
 var WorkerProviderSet = wire.NewSet(

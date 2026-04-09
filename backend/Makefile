@@ -1,9 +1,9 @@
-.PHONY: build build-gateway build-control build-worker build-bootstrap generate test test-unit test-integration test-e2e
+.PHONY: build build-gateway build-control build-worker build-billing build-bootstrap generate test test-unit test-integration test-e2e
 
 VERSION ?= $(shell tr -d '\r\n' < ./cmd/gateway/VERSION)
 LDFLAGS ?= -s -w -X main.Version=$(VERSION)
 
-build: build-gateway build-control build-worker
+build: build-gateway build-control build-worker build-billing
 
 build-gateway:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o bin/gateway ./cmd/gateway
@@ -14,6 +14,9 @@ build-control:
 build-worker:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o bin/worker ./cmd/worker
 
+build-billing:
+	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o bin/billing ./cmd/billing
+
 build-bootstrap:
 	CGO_ENABLED=0 go build -ldflags="$(LDFLAGS)" -trimpath -o bin/bootstrap ./cmd/bootstrap
 
@@ -22,6 +25,7 @@ generate:
 	go generate ./cmd/gateway
 	go generate ./cmd/control
 	go generate ./cmd/worker
+	go generate ./cmd/billing
 
 test:
 	go test ./...

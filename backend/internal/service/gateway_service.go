@@ -543,9 +543,7 @@ type GatewayService struct {
 	accountRepo           AccountRepository
 	groupRepo             GroupRepository
 	usageLogRepo          UsageLogRepository
-	usageBillingRepo      UsageBillingRepository
-	userRepo              UserRepository
-	userSubRepo           UserSubscriptionRepository
+	billingPublisher      BillingEventPublisher
 	userGroupRateRepo     UserGroupRateRepository
 	cache                 GatewayCache
 	digestStore           *DigestSessionStore
@@ -581,9 +579,7 @@ func NewGatewayService(
 	accountRepo AccountRepository,
 	groupRepo GroupRepository,
 	usageLogRepo UsageLogRepository,
-	usageBillingRepo UsageBillingRepository,
-	userRepo UserRepository,
-	userSubRepo UserSubscriptionRepository,
+	billingPublisher BillingEventPublisher,
 	userGroupRateRepo UserGroupRateRepository,
 	cache GatewayCache,
 	cfg *config.Config,
@@ -611,9 +607,7 @@ func NewGatewayService(
 		accountRepo:          accountRepo,
 		groupRepo:            groupRepo,
 		usageLogRepo:         usageLogRepo,
-		usageBillingRepo:     usageBillingRepo,
-		userRepo:             userRepo,
-		userSubRepo:          userSubRepo,
+		billingPublisher:     billingPublisher,
 		userGroupRateRepo:    userGroupRateRepo,
 		cache:                cache,
 		digestStore:          digestStore,
@@ -7393,58 +7387,6 @@ func (p *postUsageBillingParams) shouldUpdateAccountQuota() bool {
 	return p.Cost.TotalCost > 0 && p.Account.IsAPIKeyOrBedrock() && p.Account.HasAnyQuotaLimit()
 }
 
-// postUsageBilling 统一处理使用量记录后的扣费逻辑：
-//   - 订阅/余额扣费
-//   - API Key 配额更新
-//   - API Key 限速用量更新
-//   - 账号配额用量更新（账号口径：TotalCost × 账号计费倍率）
-func postUsageBilling(ctx context.Context, p *postUsageBillingParams, deps *billingDeps) {
-	billingCtx, cancel := detachedBillingContext(ctx)
-	defer cancel()
-
-	cost := p.Cost
-
-	// 1. 订阅 / 余额扣费
-	if p.IsSubscriptionBill {
-		if cost.TotalCost > 0 {
-			if err := deps.userSubRepo.IncrementUsage(billingCtx, p.Subscription.ID, cost.TotalCost); err != nil {
-				slog.Error("increment subscription usage failed", "subscription_id", p.Subscription.ID, "error", err)
-			}
-			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, cost.TotalCost)
-		}
-	} else {
-		if cost.ActualCost > 0 {
-			if err := deps.userRepo.DeductBalance(billingCtx, p.User.ID, cost.ActualCost); err != nil {
-				slog.Error("deduct balance failed", "user_id", p.User.ID, "error", err)
-			}
-			deps.billingCacheService.QueueDeductBalance(p.User.ID, cost.ActualCost)
-		}
-	}
-
-	// 2. API Key 配额
-	if p.shouldDeductAPIKeyQuota() {
-		if err := p.APIKeyService.UpdateQuotaUsed(billingCtx, p.APIKey.ID, cost.ActualCost); err != nil {
-			slog.Error("update api key quota failed", "api_key_id", p.APIKey.ID, "error", err)
-		}
-	}
-
-	// 3. API Key 限速用量
-	if p.shouldUpdateRateLimits() {
-		if err := p.APIKeyService.UpdateRateLimitUsage(billingCtx, p.APIKey.ID, cost.ActualCost); err != nil {
-			slog.Error("update api key rate limit usage failed", "api_key_id", p.APIKey.ID, "error", err)
-		}
-	}
-
-	// 4. 账号配额用量（账号口径：TotalCost × 账号计费倍率）
-	if p.shouldUpdateAccountQuota() {
-		accountCost := cost.TotalCost * p.AccountRateMultiplier
-		if err := deps.accountRepo.IncrementQuotaUsed(billingCtx, p.Account.ID, accountCost); err != nil {
-			slog.Error("increment account quota used failed", "account_id", p.Account.ID, "cost", accountCost, "error", err)
-		}
-	}
-
-	finalizePostUsageBilling(p, deps)
-}
 
 func resolveUsageBillingRequestID(ctx context.Context, upstreamRequestID string) string {
 	if ctx != nil {
@@ -7529,59 +7471,6 @@ func buildUsageBillingCommand(requestID string, usageLog *UsageLog, p *postUsage
 	return cmd
 }
 
-func applyUsageBilling(ctx context.Context, requestID string, usageLog *UsageLog, p *postUsageBillingParams, deps *billingDeps, repo UsageBillingRepository) (bool, error) {
-	if p == nil || deps == nil {
-		return false, nil
-	}
-
-	cmd := buildUsageBillingCommand(requestID, usageLog, p)
-	if cmd == nil || cmd.RequestID == "" || repo == nil {
-		postUsageBilling(ctx, p, deps)
-		return true, nil
-	}
-
-	billingCtx, cancel := detachedBillingContext(ctx)
-	defer cancel()
-
-	result, err := repo.Apply(billingCtx, cmd)
-	if err != nil {
-		return false, err
-	}
-
-	if result == nil || !result.Applied {
-		deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
-		return false, nil
-	}
-
-	if result.APIKeyQuotaExhausted {
-		if invalidator, ok := p.APIKeyService.(apiKeyAuthCacheInvalidator); ok && p.APIKey != nil && p.APIKey.Key != "" {
-			invalidator.InvalidateAuthCacheByKey(billingCtx, p.APIKey.Key)
-		}
-	}
-
-	finalizePostUsageBilling(p, deps)
-	return true, nil
-}
-
-func finalizePostUsageBilling(p *postUsageBillingParams, deps *billingDeps) {
-	if p == nil || p.Cost == nil || deps == nil {
-		return
-	}
-
-	if p.IsSubscriptionBill {
-		if p.Cost.TotalCost > 0 && p.User != nil && p.APIKey != nil && p.APIKey.GroupID != nil {
-			deps.billingCacheService.QueueUpdateSubscriptionUsage(p.User.ID, *p.APIKey.GroupID, p.Cost.TotalCost)
-		}
-	} else if p.Cost.ActualCost > 0 && p.User != nil {
-		deps.billingCacheService.QueueDeductBalance(p.User.ID, p.Cost.ActualCost)
-	}
-
-	if p.Cost.ActualCost > 0 && p.APIKey != nil && p.APIKey.HasRateLimits() {
-		deps.billingCacheService.QueueUpdateAPIKeyRateLimitUsage(p.APIKey.ID, p.Cost.ActualCost)
-	}
-
-	deps.deferredService.ScheduleLastUsedUpdate(p.Account.ID)
-}
 
 func detachedBillingContext(ctx context.Context) (context.Context, context.CancelFunc) {
 	base := context.Background()
@@ -7601,24 +7490,6 @@ func detachStreamUpstreamContext(ctx context.Context, stream bool) (context.Cont
 	return context.WithoutCancel(ctx), func() {}
 }
 
-// billingDeps 扣费逻辑依赖的服务（由各 gateway service 提供）
-type billingDeps struct {
-	accountRepo         AccountRepository
-	userRepo            UserRepository
-	userSubRepo         UserSubscriptionRepository
-	billingCacheService *BillingCacheService
-	deferredService     *DeferredService
-}
-
-func (s *GatewayService) billingDeps() *billingDeps {
-	return &billingDeps{
-		accountRepo:         s.accountRepo,
-		userRepo:            s.userRepo,
-		userSubRepo:         s.userSubRepo,
-		billingCacheService: s.billingCacheService,
-		deferredService:     s.deferredService,
-	}
-}
 
 func writeUsageLogBestEffort(ctx context.Context, repo UsageLogRepository, usageLog *UsageLog, logKey string) {
 	if repo == nil || usageLog == nil {
@@ -7834,8 +7705,9 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		return nil
 	}
 
+	// Build the billing command and publish to the billing stream.
 	requestID := usageLog.RequestID
-	_, billingErr := applyUsageBilling(ctx, requestID, usageLog, &postUsageBillingParams{
+	p := &postUsageBillingParams{
 		Cost:                  cost,
 		User:                  user,
 		APIKey:                apiKey,
@@ -7845,12 +7717,28 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		IsSubscriptionBill:    isSubscriptionBilling,
 		AccountRateMultiplier: accountRateMultiplier,
 		APIKeyService:         input.APIKeyService,
-	}, s.billingDeps(), s.usageBillingRepo)
-
-	if billingErr != nil {
-		return billingErr
 	}
-	writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+	cmd := buildUsageBillingCommand(requestID, usageLog, p)
+	if cmd == nil {
+		// No billable data — just write the usage log.
+		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		return nil
+	}
+
+	var groupID int64
+	if apiKey.GroupID != nil {
+		groupID = *apiKey.GroupID
+	}
+	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.Key, apiKey.HasRateLimits())
+	if err := s.billingPublisher.Publish(ctx, event); err != nil {
+		slog.Error("billing event publish failed",
+			"component", "service.gateway",
+			"request_id", requestID,
+			"user_id", user.ID,
+			"error", err,
+		)
+		return err
+	}
 
 	return nil
 }
