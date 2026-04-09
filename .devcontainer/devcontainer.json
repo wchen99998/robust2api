@@ -1,0 +1,66 @@
+{
+  "name": "robust2api",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspaces/robust2api",
+  "runServices": [
+    "devcontainer",
+    "postgres",
+    "redis"
+  ],
+  "features": {
+    "ghcr.io/devcontainers/features/go:1": {
+      "version": "1.26"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    },
+    "ghcr.io/devcontainers/features/docker-outside-of-docker:1": {}
+  },
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+  "remoteEnv": {
+    "DATABASE_HOST": "postgres",
+    "DATABASE_PORT": "5432",
+    "DATABASE_USER": "sub2api",
+    "DATABASE_PASSWORD": "sub2api",
+    "DATABASE_DBNAME": "sub2api",
+    "DATABASE_SSLMODE": "disable",
+    "REDIS_HOST": "redis",
+    "REDIS_PORT": "6379"
+  },
+  "forwardPorts": [
+    8080,
+    8081,
+    5173,
+    5432,
+    6379
+  ],
+  "portsAttributes": {
+    "8080": {
+      "label": "Gateway API"
+    },
+    "8081": {
+      "label": "Control API"
+    },
+    "5173": {
+      "label": "Frontend Dev Server"
+    },
+    "5432": {
+      "label": "PostgreSQL"
+    },
+    "6379": {
+      "label": "Redis"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.go",
+        "Vue.volar",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}
