@@ -15,7 +15,7 @@
   <div v-else class="home-glitch">
     <div class="home-glitch__bg">
       <LetterGlitch
-        :glitch-colors="['#1f392f', '#3e8767', '#5fc8c5', '#7dd6f6']"
+        :glitch-colors="['#1d1d1f', '#6e6e73', '#007aff', '#aeaeb2']"
         :glitch-speed="38"
         :smooth="true"
         :outer-vignette="false"
@@ -30,19 +30,7 @@
 
     <div class="home-glitch__content">
       <nav class="glass-nav">
-        <GlassSurface
-          width="100%"
-          height="auto"
-          :border-radius="999"
-          :border-width="0.05"
-          :brightness="52"
-          :opacity="0.95"
-          :blur="18"
-          :background-opacity="0.48"
-          :saturation="1.5"
-          :displace="0"
-          class="glass-nav__surface"
-        >
+        <div class="glass-nav__surface">
           <div class="glass-nav__inner">
             <router-link to="/home" class="glass-nav__logo">
               <span class="glass-nav__logo-mark">
@@ -75,25 +63,13 @@
               </button>
             </div>
           </div>
-        </GlassSurface>
+        </div>
       </nav>
 
       <main class="glass-stage">
         <div class="glass-stage__halo glass-stage__halo--left"></div>
         <div class="glass-stage__halo glass-stage__halo--right"></div>
-        <GlassSurface
-          width="100%"
-          height="auto"
-          :border-radius="34"
-          :border-width="0.06"
-          :brightness="54"
-          :opacity="0.95"
-          :blur="20"
-          :background-opacity="0.52"
-          :saturation="1.5"
-          :displace="0"
-          class="glass-hero__surface"
-        >
+        <div class="glass-hero__surface">
           <section class="glass-hero">
             <div class="glass-hero__badge">
               <span class="glass-hero__badge-icon">
@@ -156,7 +132,7 @@
               </div>
             </div>
           </section>
-        </GlassSurface>
+        </div>
       </main>
 
       <footer class="glass-footer">
@@ -175,7 +151,7 @@ import { useAuthStore, useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
 import LetterGlitch from '@/components/effects/LetterGlitch.vue'
-import GlassSurface from '@/components/effects/GlassSurface.vue'
+
 
 const { t } = useI18n()
 
@@ -230,8 +206,8 @@ onMounted(() => {
   min-height: 100vh;
   min-height: 100svh;
   overflow: clip;
-  font-family: 'Space Grotesk', 'Avenir Next', 'Segoe UI', sans-serif;
-  color: #f2fbf6;
+  font-family: inherit;
+  color: #1d1d1f;
 }
 
 @media (max-width: 768px) {
@@ -257,13 +233,12 @@ onMounted(() => {
 .home-glitch__shade {
   z-index: 1;
   background:
-    radial-gradient(circle at 50% 42%, rgba(5, 8, 8, 0.06) 0%, rgba(5, 8, 8, 0.18) 28%, rgba(4, 6, 6, 0.48) 65%, rgba(2, 3, 3, 0.82) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0.04) 25%, rgba(0, 0, 0, 0.36) 100%);
+    radial-gradient(circle at 50% 42%, transparent 0%, transparent 35%, rgba(0, 0, 0, 0.04) 60%, rgba(0, 0, 0, 0.15) 100%);
 }
 
 .home-glitch__scanlines {
   z-index: 2;
-  opacity: 0.16;
+  opacity: 0.06;
   background-image: repeating-linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.045) 0,
@@ -277,15 +252,15 @@ onMounted(() => {
 .home-glitch__bloom {
   z-index: 2;
   filter: blur(90px);
-  opacity: 0.32;
+  opacity: 0.45;
 }
 
 .home-glitch__bloom--left {
-  background: radial-gradient(circle at 25% 22%, rgba(117, 243, 207, 0.52) 0%, transparent 32%);
+  background: radial-gradient(circle at 25% 22%, rgba(0, 122, 255, 0.35) 0%, transparent 32%);
 }
 
 .home-glitch__bloom--right {
-  background: radial-gradient(circle at 76% 58%, rgba(87, 187, 242, 0.34) 0%, transparent 28%);
+  background: radial-gradient(circle at 76% 58%, rgba(174, 174, 178, 0.34) 0%, transparent 28%);
 }
 
 .home-glitch__content {
@@ -309,6 +284,8 @@ onMounted(() => {
 }
 
 .glass-nav {
+  position: relative;
+  z-index: 10;
   width: 100%;
   max-width: 670px;
   flex-shrink: 0;
@@ -316,14 +293,12 @@ onMounted(() => {
 }
 
 .glass-nav__surface {
-  width: 100% !important;
-  height: auto !important;
-  border: 1px solid rgba(152, 255, 224, 0.14);
-  overflow: visible !important;
-}
-
-.glass-nav__surface :deep(.glass-surface__content) {
-  overflow: visible;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .glass-nav__inner {
@@ -340,7 +315,7 @@ onMounted(() => {
   gap: 10px;
   font-size: 15px;
   font-weight: 700;
-  color: #eefcf5;
+  color: #1d1d1f;
   text-decoration: none;
   letter-spacing: -0.03em;
 }
@@ -352,9 +327,9 @@ onMounted(() => {
   width: 32px;
   height: 32px;
   border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.02));
-  color: #8bf1cd;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(0, 122, 255, 0.12), rgba(0, 122, 255, 0.04));
+  color: #007aff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .glass-nav__links {
@@ -371,7 +346,7 @@ onMounted(() => {
   padding: 0 15px;
   font-size: 13px;
   font-weight: 600;
-  color: rgba(238, 252, 245, 0.72);
+  color: #6e6e73;
   text-decoration: none;
   border-radius: 999px;
   transition:
@@ -385,8 +360,8 @@ onMounted(() => {
 }
 
 .glass-nav__link:hover {
-  color: #f7fffb;
-  background: rgba(255, 255, 255, 0.08);
+  color: #1d1d1f;
+  background: rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
 }
 
@@ -418,19 +393,23 @@ onMounted(() => {
 .glass-stage__halo--left {
   left: calc(50% - 430px);
   top: 28%;
-  background: rgba(120, 248, 211, 0.9);
+  background: rgba(0, 122, 255, 0.6);
 }
 
 .glass-stage__halo--right {
   right: calc(50% - 420px);
   bottom: 20%;
-  background: rgba(88, 194, 255, 0.8);
+  background: rgba(174, 174, 178, 0.5);
 }
 
 .glass-hero__surface {
-  width: min(100%, 820px) !important;
-  height: auto !important;
-  border: 1px solid rgba(175, 255, 229, 0.16);
+  width: min(100%, 820px);
+  border-radius: 34px;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(20px) saturate(1.8);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5);
   animation: hero-enter 820ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
 }
 
@@ -470,15 +449,15 @@ onMounted(() => {
   padding: 10px 16px;
   margin-bottom: 24px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(5, 10, 9, 0.48);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  color: rgba(236, 252, 244, 0.82);
+  color: #1d1d1f;
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .glass-hero__badge-icon {
@@ -488,18 +467,18 @@ onMounted(() => {
   width: 20px;
   height: 20px;
   border-radius: 999px;
-  background: rgba(141, 253, 217, 0.12);
-  color: #90f3cf;
+  background: rgba(0, 122, 255, 0.1);
+  color: #007aff;
 }
 
 .glass-hero__badge-divider {
   width: 1px;
   height: 12px;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.1);
 }
 
 .glass-hero__badge-copy {
-  color: rgba(190, 232, 218, 0.7);
+  color: #aeaeb2;
   white-space: nowrap;
 }
 
@@ -523,9 +502,8 @@ onMounted(() => {
   font-weight: 800;
   line-height: 0.94;
   letter-spacing: -0.075em;
-  color: #f6fff9;
+  color: #1d1d1f;
   margin-bottom: 18px;
-  text-shadow: 0 18px 40px rgba(0, 0, 0, 0.24);
 }
 
 .glass-hero__title-row {
@@ -549,7 +527,7 @@ onMounted(() => {
 }
 
 .glass-hero__title-row--accent {
-  color: rgba(152, 251, 216, 0.52);
+  color: #007aff;
 }
 
 .glass-hero__desc {
@@ -558,7 +536,7 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 400;
   line-height: 1.7;
-  color: rgba(231, 246, 239, 0.78);
+  color: #6e6e73;
 }
 
 @media (max-width: 480px) {
@@ -606,32 +584,32 @@ onMounted(() => {
 }
 
 .glass-hero__btn--primary {
-  color: #07110d;
-  background: rgba(249, 255, 251, 0.95);
+  color: #ffffff;
+  background: #1d1d1f;
   box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.18),
-    inset 0 1px 0 rgba(255, 255, 255, 0.5);
+    0 10px 28px rgba(0, 0, 0, 0.15),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .glass-hero__btn--primary:hover {
-  background: #ffffff;
+  background: #3a3a3c;
   transform: translateY(-1px);
   box-shadow:
-    0 14px 34px rgba(0, 0, 0, 0.24),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    0 14px 34px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
 .glass-hero__btn--secondary {
-  color: rgba(241, 253, 247, 0.78);
-  background: rgba(255, 255, 255, 0.05);
-  border-color: rgba(255, 255, 255, 0.1);
+  color: #6e6e73;
+  background: rgba(255, 255, 255, 0.35);
+  border-color: rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(16px);
 }
 
 .glass-hero__btn--secondary:hover {
-  color: #f7fffb;
-  background: rgba(255, 255, 255, 0.09);
-  border-color: rgba(255, 255, 255, 0.18);
+  color: #1d1d1f;
+  background: rgba(255, 255, 255, 0.5);
+  border-color: rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
 
@@ -649,11 +627,11 @@ onMounted(() => {
   margin: 0 auto;
   max-width: 500px;
   border-radius: 18px;
-  font-family: 'IBM Plex Mono', 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: 'SF Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 12px;
-  background: rgba(5, 10, 9, 0.52);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  background: rgba(29, 29, 31, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 @media (max-width: 480px) {
@@ -664,13 +642,13 @@ onMounted(() => {
   }
 }
 
-.glass-hero__code-prompt { color: rgba(240, 240, 240, 0.2); }
-.glass-hero__code-cmd { font-weight: 600; color: rgba(240, 240, 240, 0.8); }
-.glass-hero__code-flag { color: #8df0cf; }
-.glass-hero__code-url { color: #7cc8f3; }
+.glass-hero__code-prompt { color: #aeaeb2; }
+.glass-hero__code-cmd { font-weight: 600; color: #1d1d1f; }
+.glass-hero__code-flag { color: #007aff; }
+.glass-hero__code-url { color: #007aff; }
 .glass-hero__code-spacer { flex: 1; }
-.glass-hero__code-arrow { font-size: 10px; color: rgba(240, 240, 240, 0.15); }
-.glass-hero__code-ok { font-weight: 600; color: #61dca3; }
+.glass-hero__code-arrow { font-size: 10px; color: #aeaeb2; }
+.glass-hero__code-ok { font-weight: 600; color: #34c759; }
 
 .glass-hero__metrics {
   display: flex;
@@ -680,7 +658,7 @@ onMounted(() => {
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(223, 246, 236, 0.55);
+  color: #aeaeb2;
 }
 
 @media (max-width: 480px) {
@@ -690,7 +668,7 @@ onMounted(() => {
 }
 
 .glass-hero__metrics-dot {
-  color: rgba(97, 220, 163, 0.3);
+  color: #aeaeb2;
 }
 
 .glass-footer {
@@ -700,7 +678,7 @@ onMounted(() => {
   gap: 10px;
   padding-top: 12px;
   font-size: 12px;
-  color: rgba(231, 246, 239, 0.38);
+  color: #aeaeb2;
   text-align: center;
   animation: footer-enter 760ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
 }
@@ -709,14 +687,14 @@ onMounted(() => {
   width: 3px;
   height: 3px;
   border-radius: 999px;
-  background: rgba(139, 241, 207, 0.42);
+  background: #aeaeb2;
 }
 
 /* --- Nav button base overrides --- */
 .glass-nav :deep(button) {
   min-height: 38px;
   border-radius: 999px;
-  color: rgba(238, 252, 245, 0.82) !important;
+  color: #6e6e73 !important;
   background: transparent !important;
   border: 1px solid transparent !important;
   transition:
@@ -726,41 +704,41 @@ onMounted(() => {
 }
 
 .glass-nav :deep(button:hover) {
-  color: #f7fffb !important;
-  background: rgba(255, 255, 255, 0.08) !important;
+  color: #1d1d1f !important;
+  background: rgba(0, 0, 0, 0.04) !important;
   transform: translateY(-1px);
 }
 
-/* --- LocaleSwitcher toggle — force light text over Tailwind grays --- */
+/* --- LocaleSwitcher toggle --- */
 .glass-nav :deep(.relative > button) {
-  color: rgba(238, 252, 245, 0.85) !important;
+  color: #6e6e73 !important;
   font-weight: 600;
 }
 
 .glass-nav :deep(.relative > button span) {
-  color: rgba(238, 252, 245, 0.85) !important;
+  color: #6e6e73 !important;
 }
 
 .glass-nav :deep(.relative > button svg) {
-  color: rgba(238, 252, 245, 0.5) !important;
+  color: #aeaeb2 !important;
 }
 
 /* --- LocaleSwitcher dropdown panel --- */
 .glass-nav :deep(.relative > div[class*="absolute"]) {
-  border: 1px solid rgba(175, 255, 229, 0.16) !important;
-  background: rgba(10, 16, 14, 0.92) !important;
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+  background: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: blur(28px) saturate(150%) !important;
   -webkit-backdrop-filter: blur(28px) saturate(150%) !important;
   box-shadow:
-    0 20px 50px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+    0 20px 50px rgba(0, 0, 0, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5) !important;
   border-radius: 14px !important;
   overflow: hidden !important;
 }
 
 /* --- LocaleSwitcher dropdown items --- */
 .glass-nav :deep(.relative > div[class*="absolute"] button) {
-  color: rgba(235, 250, 244, 0.82) !important;
+  color: #1d1d1f !important;
   background: transparent !important;
   border-radius: 0 !important;
   min-height: auto !important;
@@ -769,21 +747,21 @@ onMounted(() => {
 }
 
 .glass-nav :deep(.relative > div[class*="absolute"] button:hover) {
-  color: #f7fffb !important;
-  background: rgba(255, 255, 255, 0.08) !important;
+  color: #1d1d1f !important;
+  background: rgba(0, 0, 0, 0.04) !important;
   transform: none !important;
 }
 
 /* Active locale highlight */
 .glass-nav :deep(.relative > div[class*="absolute"] button.bg-primary-50),
 .glass-nav :deep(.relative > div[class*="absolute"] button[class*="bg-primary"]) {
-  background: rgba(139, 241, 207, 0.12) !important;
-  color: #8bf1cd !important;
+  background: rgba(0, 122, 255, 0.08) !important;
+  color: #007aff !important;
 }
 
 /* Check icon in active item */
 .glass-nav :deep(.relative > div[class*="absolute"] button svg) {
-  color: #8bf1cd !important;
+  color: #007aff !important;
 }
 
 @media (max-width: 768px) {

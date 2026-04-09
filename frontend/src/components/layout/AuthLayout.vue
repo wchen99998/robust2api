@@ -1,27 +1,46 @@
 <template>
-  <div class="relative flex min-h-screen items-center justify-center bg-canvas dark:bg-canvas-dark p-4">
-    <div class="relative z-10 w-full max-w-md">
-      <div class="mb-8 text-center">
+  <div class="auth-split">
+    <!-- Left pane: PixelBlast -->
+    <div class="auth-split__left">
+      <PixelBlast
+        variant="circle"
+        color="#1d1d1f"
+        :pixel-size="5"
+        :pattern-scale="2"
+        :pattern-density="1"
+        :speed="0.5"
+        :edge-fade="0.15"
+        :enable-ripples="true"
+        :ripple-speed="0.3"
+        :ripple-thickness="0.1"
+        :ripple-intensity-scale="1"
+      />
+    </div>
+
+    <!-- Right pane: Form -->
+    <div class="auth-split__right">
+      <div class="auth-split__form">
         <template v-if="settingsLoaded">
-          <div class="mb-4 inline-flex h-14 w-14 items-center justify-center overflow-hidden rounded-mica-lg">
-            <img :src="siteLogo || '/logo.png'" alt="Logo" class="h-full w-full object-contain" />
+          <div class="auth-split__header">
+            <div class="auth-split__logo">
+              <img :src="siteLogo || '/logo.png'" alt="Logo" />
+            </div>
+            <h1 class="auth-split__site-name">{{ siteName }}</h1>
+            <p class="auth-split__subtitle">{{ siteSubtitle }}</p>
           </div>
-          <h1 class="text-mica-title1 text-mica-text-primary dark:text-mica-text-primary-dark mb-1">
-            {{ siteName }}
-          </h1>
-          <p class="text-mica-subhead text-mica-text-secondary dark:text-mica-text-secondary-dark">
-            {{ siteSubtitle }}
-          </p>
         </template>
-      </div>
-      <div class="rounded-mica-lg bg-white/70 dark:bg-white/[0.05] backdrop-blur-xl border border-black/[0.06] dark:border-white/[0.08] p-8">
-        <slot />
-      </div>
-      <div class="mt-6 text-center text-mica-subhead">
-        <slot name="footer" />
-      </div>
-      <div class="mt-8 text-center text-mica-caption text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
-        &copy; {{ currentYear }} {{ siteName }}
+
+        <div class="auth-split__card">
+          <slot />
+        </div>
+
+        <div class="auth-split__footer-slot">
+          <slot name="footer" />
+        </div>
+
+        <div class="auth-split__copyright">
+          &copy; {{ currentYear }} {{ siteName }}
+        </div>
       </div>
     </div>
   </div>
@@ -31,6 +50,7 @@
 import { computed, onMounted } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
+import PixelBlast from '@/components/effects/PixelBlast.vue'
 
 const appStore = useAppStore()
 
@@ -45,3 +65,246 @@ onMounted(() => {
   appStore.fetchPublicSettings()
 })
 </script>
+
+<style scoped>
+.auth-split {
+  display: flex;
+  min-height: 100vh;
+  min-height: 100svh;
+  background: #f2f0ed;
+}
+
+/* Left pane - PixelBlast */
+.auth-split__left {
+  flex: 1;
+  position: relative;
+  background: #f2f0ed;
+  overflow: hidden;
+}
+
+/* Right pane - Form */
+.auth-split__right {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  background: #f2f0ed;
+}
+
+.auth-split__form {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.auth-split__header {
+  text-align: center;
+  margin-bottom: 36px;
+  animation: fade-down 500ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.auth-split__logo {
+  display: inline-flex;
+  width: 48px;
+  height: 48px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
+.auth-split__logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.auth-split__site-name {
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  color: #1d1d1f;
+  margin-bottom: 2px;
+}
+
+.auth-split__subtitle {
+  font-size: 13px;
+  font-weight: 500;
+  color: #6e6e73;
+}
+
+.auth-split__card {
+  width: 100%;
+  animation: fade-up 500ms cubic-bezier(0.16, 1, 0.3, 1) 60ms both;
+}
+
+/* Mica-style form overrides */
+.auth-split__card :deep(h2) {
+  color: #1d1d1f;
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.auth-split__card :deep(.text-mica-text-secondary) {
+  color: #6e6e73;
+}
+
+.auth-split__card :deep(.text-mica-text-tertiary) {
+  color: #aeaeb2;
+}
+
+.auth-split__card :deep(.input-label) {
+  color: #1d1d1f;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.auth-split__card :deep(.input) {
+  background-color: #ffffff;
+  border: 1px solid #e5e3e0;
+  border-radius: 8px;
+  color: #1d1d1f;
+  font-size: 15px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.auth-split__card :deep(.input:focus) {
+  border-color: #007aff;
+  box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
+  outline: none;
+}
+
+.auth-split__card :deep(.input::placeholder) {
+  color: #aeaeb2;
+}
+
+.auth-split__card :deep(.btn-primary) {
+  background-color: #1d1d1f;
+  color: #ffffff;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 15px;
+  padding: 10px 20px;
+  transition: background-color 0.18s ease, transform 0.18s ease;
+}
+
+.auth-split__card :deep(.btn-primary:hover) {
+  background-color: #3a3a3c;
+}
+
+.auth-split__card :deep(.btn-primary:active) {
+  transform: scale(0.98);
+}
+
+/* Password toggle */
+.auth-split__card :deep(button:not(.btn)) {
+  color: #aeaeb2;
+}
+
+.auth-split__card :deep(button:not(.btn):hover) {
+  color: #1d1d1f;
+}
+
+/* Links */
+.auth-split__card :deep(a) {
+  color: #007aff;
+  font-weight: 500;
+}
+
+.auth-split__card :deep(a:hover) {
+  color: #0066d6;
+}
+
+/* Error states */
+.auth-split__card :deep(.text-status-red) {
+  color: #ff3b30;
+}
+
+.auth-split__card :deep(.input-error-text) {
+  color: #ff3b30;
+}
+
+.auth-split__card :deep(.input-error) {
+  border-color: #ff3b30;
+}
+
+.auth-split__card :deep(.input-error:focus) {
+  box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.12);
+}
+
+/* Footer slot */
+.auth-split__footer-slot {
+  margin-top: 28px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 500;
+  animation: fade-up 500ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
+}
+
+.auth-split__footer-slot :deep(p) {
+  color: #6e6e73;
+}
+
+.auth-split__footer-slot :deep(a) {
+  color: #007aff;
+  font-weight: 600;
+}
+
+.auth-split__footer-slot :deep(a:hover) {
+  color: #0066d6;
+}
+
+.auth-split__copyright {
+  margin-top: 36px;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: 0.3px;
+  font-weight: 500;
+  color: #aeaeb2;
+  animation: fade-up 500ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+}
+
+/* Mobile: stack vertically, hide pixel blast */
+@media (max-width: 768px) {
+  .auth-split {
+    flex-direction: column;
+  }
+
+  .auth-split__left {
+    flex: none;
+    height: 180px;
+  }
+
+  .auth-split__right {
+    flex: 1;
+    padding: 24px 20px;
+  }
+}
+
+@keyframes fade-down {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+</style>

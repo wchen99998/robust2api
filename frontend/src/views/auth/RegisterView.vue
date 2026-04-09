@@ -3,10 +3,10 @@
     <div class="space-y-6">
       <!-- Title -->
       <div class="text-center">
-        <h2 class="text-2xl font-bold text-gray-900 dark:text-white">
+        <h2 class="text-mica-title1 text-mica-text-primary dark:text-mica-text-primary-dark">
           {{ t('auth.createAccount') }}
         </h2>
-        <p class="mt-2 text-sm text-gray-500 dark:text-dark-400">
+        <p class="mt-2 text-mica-subhead text-mica-text-secondary dark:text-mica-text-secondary-dark">
           {{ t('auth.signUpToStart', { siteName }) }}
         </p>
       </div>
@@ -17,13 +17,13 @@
       <!-- Registration Disabled Message -->
       <div
         v-if="!registrationEnabled && settingsLoaded"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+        class="rounded-xl border border-status-amber/20 bg-status-amber/5 p-4 dark:border-status-amber-dark/30 dark:bg-status-amber-dark/10"
       >
         <div class="flex items-start gap-3">
           <div class="flex-shrink-0">
-            <Icon name="exclamationCircle" size="md" class="text-amber-500" />
+            <Icon name="exclamationCircle" size="md" class="text-status-amber dark:text-status-amber-dark" />
           </div>
-          <p class="text-sm text-amber-700 dark:text-amber-400">
+          <p class="text-mica-body text-status-amber dark:text-status-amber-dark">
             {{ t('auth.registrationDisabled') }}
           </p>
         </div>
@@ -38,7 +38,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="mail" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="mail" size="md" class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark" />
             </div>
             <input
               id="email"
@@ -65,7 +65,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="lock" size="md" class="text-gray-400 dark:text-dark-500" />
+              <Icon name="lock" size="md" class="text-mica-text-tertiary dark:text-mica-text-tertiary-dark" />
             </div>
             <input
               id="password"
@@ -81,7 +81,7 @@
             <button
               type="button"
               @click="showPassword = !showPassword"
-              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-dark-300"
+              class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-mica-text-tertiary transition-colors hover:text-mica-text-primary dark:hover:text-mica-text-primary-dark"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />
               <Icon v-else name="eye" size="md" />
@@ -102,7 +102,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="key" size="md" :class="invitationValidation.valid ? 'text-green-500' : 'text-gray-400 dark:text-dark-500'" />
+              <Icon name="key" size="md" :class="invitationValidation.valid ? 'text-status-green dark:text-status-green-dark' : 'text-mica-text-tertiary dark:text-dark-500'" />
             </div>
             <input
               id="invitation_code"
@@ -111,31 +111,31 @@
               :disabled="isLoading"
               class="input pl-11 pr-10"
               :class="{
-                'border-green-500 focus:border-green-500 focus:ring-green-500': invitationValidation.valid,
-                'border-red-500 focus:border-red-500 focus:ring-red-500': invitationValidation.invalid || errors.invitation_code
+                'border-status-green focus:border-status-green focus:ring-status-green/15': invitationValidation.valid,
+                'border-status-red focus:border-status-red focus:ring-status-red/15': invitationValidation.invalid || errors.invitation_code
               }"
               :placeholder="t('auth.invitationCodePlaceholder')"
               @input="handleInvitationCodeInput"
             />
             <!-- Validation indicator -->
             <div v-if="invitationValidating" class="absolute inset-y-0 right-0 flex items-center pr-3.5">
-              <svg class="h-4 w-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+              <svg class="h-4 w-4 animate-spin text-mica-text-tertiary" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             </div>
             <div v-else-if="invitationValidation.valid" class="absolute inset-y-0 right-0 flex items-center pr-3.5">
-              <Icon name="checkCircle" size="md" class="text-green-500" />
+              <Icon name="checkCircle" size="md" class="text-status-green dark:text-status-green-dark" />
             </div>
             <div v-else-if="invitationValidation.invalid || errors.invitation_code" class="absolute inset-y-0 right-0 flex items-center pr-3.5">
-              <Icon name="exclamationCircle" size="md" class="text-red-500" />
+              <Icon name="exclamationCircle" size="md" class="text-status-red dark:text-status-red-dark" />
             </div>
           </div>
           <!-- Invitation code validation result -->
           <transition name="fade">
-            <div v-if="invitationValidation.valid" class="mt-2 flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 dark:bg-green-900/20">
-              <Icon name="checkCircle" size="sm" class="text-green-600 dark:text-green-400" />
-              <span class="text-sm text-green-700 dark:text-green-400">
+            <div v-if="invitationValidation.valid" class="mt-2 flex items-center gap-2 rounded-lg bg-status-green/5 px-3 py-2 dark:bg-status-green-dark/10">
+              <Icon name="checkCircle" size="sm" class="text-status-green dark:text-status-green-dark" />
+              <span class="text-sm text-status-green dark:text-status-green-dark">
                 {{ t('auth.invitationCodeValid') }}
               </span>
             </div>
@@ -152,11 +152,11 @@
         <div v-if="promoCodeEnabled">
           <label for="promo_code" class="input-label">
             {{ t('auth.promoCodeLabel') }}
-            <span class="ml-1 text-xs font-normal text-gray-400 dark:text-dark-500">({{ t('common.optional') }})</span>
+            <span class="ml-1 text-xs font-normal text-mica-text-tertiary dark:text-dark-500">({{ t('common.optional') }})</span>
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="gift" size="md" :class="promoValidation.valid ? 'text-green-500' : 'text-gray-400 dark:text-dark-500'" />
+              <Icon name="gift" size="md" :class="promoValidation.valid ? 'text-status-green dark:text-status-green-dark' : 'text-mica-text-tertiary dark:text-dark-500'" />
             </div>
             <input
               id="promo_code"
@@ -165,31 +165,31 @@
               :disabled="isLoading"
               class="input pl-11 pr-10"
               :class="{
-                'border-green-500 focus:border-green-500 focus:ring-green-500': promoValidation.valid,
-                'border-red-500 focus:border-red-500 focus:ring-red-500': promoValidation.invalid
+                'border-status-green focus:border-status-green focus:ring-status-green/15': promoValidation.valid,
+                'border-status-red focus:border-status-red focus:ring-status-red/15': promoValidation.invalid
               }"
               :placeholder="t('auth.promoCodePlaceholder')"
               @input="handlePromoCodeInput"
             />
             <!-- Validation indicator -->
             <div v-if="promoValidating" class="absolute inset-y-0 right-0 flex items-center pr-3.5">
-              <svg class="h-4 w-4 animate-spin text-gray-400" fill="none" viewBox="0 0 24 24">
+              <svg class="h-4 w-4 animate-spin text-mica-text-tertiary" fill="none" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
             </div>
             <div v-else-if="promoValidation.valid" class="absolute inset-y-0 right-0 flex items-center pr-3.5">
-              <Icon name="checkCircle" size="md" class="text-green-500" />
+              <Icon name="checkCircle" size="md" class="text-status-green dark:text-status-green-dark" />
             </div>
             <div v-else-if="promoValidation.invalid" class="absolute inset-y-0 right-0 flex items-center pr-3.5">
-              <Icon name="exclamationCircle" size="md" class="text-red-500" />
+              <Icon name="exclamationCircle" size="md" class="text-status-red dark:text-status-red-dark" />
             </div>
           </div>
           <!-- Promo code validation result -->
           <transition name="fade">
-            <div v-if="promoValidation.valid" class="mt-2 flex items-center gap-2 rounded-lg bg-green-50 px-3 py-2 dark:bg-green-900/20">
-              <Icon name="gift" size="sm" class="text-green-600 dark:text-green-400" />
-              <span class="text-sm text-green-700 dark:text-green-400">
+            <div v-if="promoValidation.valid" class="mt-2 flex items-center gap-2 rounded-lg bg-status-green/5 px-3 py-2 dark:bg-status-green-dark/10">
+              <Icon name="gift" size="sm" class="text-status-green dark:text-status-green-dark" />
+              <span class="text-sm text-status-green dark:text-status-green-dark">
                 {{ t('auth.promoCodeValid', { amount: promoValidation.bonusAmount?.toFixed(2) }) }}
               </span>
             </div>
@@ -217,13 +217,13 @@
         <transition name="fade">
           <div
             v-if="errorMessage"
-            class="rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-800/50 dark:bg-red-900/20"
+            class="rounded-xl border border-status-red/20 bg-status-red/5 p-4 dark:border-status-red-dark/30 dark:bg-status-red-dark/10"
           >
             <div class="flex items-start gap-3">
               <div class="flex-shrink-0">
-                <Icon name="exclamationCircle" size="md" class="text-red-500" />
+                <Icon name="exclamationCircle" size="md" class="text-status-red dark:text-status-red-dark" />
               </div>
-              <p class="text-sm text-red-700 dark:text-red-400">
+              <p class="text-mica-body text-status-red dark:text-status-red-dark">
                 {{ errorMessage }}
               </p>
             </div>
@@ -270,11 +270,11 @@
 
     <!-- Footer -->
     <template #footer>
-      <p class="text-gray-500 dark:text-dark-400">
+      <p class="text-mica-text-secondary dark:text-mica-text-secondary-dark">
         {{ t('auth.alreadyHaveAccount') }}
         <router-link
           to="/login"
-          class="font-medium text-primary-600 transition-colors hover:text-primary-500 dark:text-primary-400 dark:hover:text-primary-300"
+          class="font-medium text-status-blue transition-colors hover:text-primary-700 dark:text-status-blue-dark dark:hover:text-primary-300"
         >
           {{ t('auth.signIn') }}
         </router-link>

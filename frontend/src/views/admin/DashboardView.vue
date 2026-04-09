@@ -15,7 +15,7 @@
 
       <div
         v-if="grafanaDashboardUrl"
-        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-dark-700 dark:bg-dark-800"
+        class="overflow-hidden rounded-xl border border-black/[0.06] bg-surface dark:border-white/[0.08] dark:bg-surface-solid-dark"
       >
         <iframe
           :src="grafanaDashboardUrl"
@@ -35,8 +35,8 @@
           "
         >
           <template #icon>
-            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-100 dark:bg-dark-700">
-              <Icon name="chart" size="md" class="text-gray-500 dark:text-gray-300" />
+            <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-canvas dark:bg-dark-700">
+              <Icon name="chart" size="md" class="text-mica-text-secondary dark:text-mica-text-secondary-dark" />
             </div>
           </template>
         </EmptyState>
