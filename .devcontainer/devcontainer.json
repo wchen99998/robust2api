@@ -1,8 +1,8 @@
 {
-  "name": "robust2api",
+  "name": "sub2api",
   "dockerComposeFile": "docker-compose.yml",
   "service": "devcontainer",
-  "workspaceFolder": "/workspaces/robust2api",
+  "workspaceFolder": "/workspaces/sub2api",
   "runServices": [
     "devcontainer",
     "postgres",

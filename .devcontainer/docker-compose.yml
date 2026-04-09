@@ -4,7 +4,7 @@ services:
     init: true
     command: sleep infinity
     volumes:
-      - ..:/workspaces/robust2api:cached
+      - ..:/workspaces/sub2api:cached
       - go-mod-cache:/go/pkg/mod
       - go-build-cache:/home/vscode/.cache/go-build
     depends_on:
