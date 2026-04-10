@@ -30,7 +30,7 @@ func SetupGatewayRouter(
 
 	routes.RegisterHealthRoutes(r, healthChecker)
 	routes.RegisterGatewayCompatRoutes(r)
-	routes.RegisterGatewayRoutes(r, toLegacyHandlers(handlers), apiKeyAuth, apiKeyService, subscriptionService, settingService, cfg)
+	routes.RegisterGatewayRoutes(r, handlers, apiKeyAuth, apiKeyService, subscriptionService, settingService, cfg)
 
 	return r
 }
@@ -54,10 +54,9 @@ func SetupControlRouter(
 	routes.RegisterHealthRoutes(r, healthChecker)
 
 	v1 := r.Group("/api/v1")
-	legacy := toLegacyControlHandlers(handlers)
-	routes.RegisterAuthRoutes(v1, legacy, jwtAuth, redisClient, settingService)
-	routes.RegisterUserRoutes(v1, legacy, jwtAuth, settingService)
-	routes.RegisterAdminRoutes(v1, legacy, adminAuth, buildInfo)
+	routes.RegisterAuthRoutes(v1, handlers, jwtAuth, redisClient, settingService)
+	routes.RegisterUserRoutes(v1, handlers, jwtAuth, settingService)
+	routes.RegisterAdminRoutes(v1, handlers, adminAuth, buildInfo)
 
 	return r
 }
@@ -76,33 +75,5 @@ func applySharedRouterMiddleware(r *gin.Engine, cfg *config.Config) {
 	if cfg.Otel.Enabled {
 		r.Use(middleware2.TraceIDHeader())
 		r.Use(middleware2.RequestMetrics())
-	}
-}
-
-func toLegacyHandlers(handlers *handler.GatewayHandlers) *handler.Handlers {
-	if handlers == nil {
-		return &handler.Handlers{}
-	}
-	return &handler.Handlers{
-		Gateway:       handlers.Gateway,
-		OpenAIGateway: handlers.OpenAIGateway,
-	}
-}
-
-func toLegacyControlHandlers(handlers *handler.ControlHandlers) *handler.Handlers {
-	if handlers == nil {
-		return &handler.Handlers{}
-	}
-	return &handler.Handlers{
-		Auth:         handlers.Auth,
-		User:         handlers.User,
-		APIKey:       handlers.APIKey,
-		Usage:        handlers.Usage,
-		Redeem:       handlers.Redeem,
-		Subscription: handlers.Subscription,
-		Announcement: handlers.Announcement,
-		Admin:        handlers.Admin,
-		Setting:      handlers.Setting,
-		Totp:         handlers.Totp,
 	}
 }

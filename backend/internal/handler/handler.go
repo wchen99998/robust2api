@@ -48,25 +48,3 @@ type ControlHandlers struct {
 	Setting      *SettingHandler
 	Totp         *TotpHandler
 }
-
-// Handlers contains all HTTP handlers
-type Handlers struct {
-	Auth          *AuthHandler
-	User          *UserHandler
-	APIKey        *APIKeyHandler
-	Usage         *UsageHandler
-	Redeem        *RedeemHandler
-	Subscription  *SubscriptionHandler
-	Announcement  *AnnouncementHandler
-	Admin         *AdminHandlers
-	Gateway       *GatewayHandler
-	OpenAIGateway *OpenAIGatewayHandler
-	Setting       *SettingHandler
-	Totp          *TotpHandler
-}
-
-// BuildInfo contains build-time information
-type BuildInfo struct {
-	Version   string
-	BuildType string // "source" for manual builds, "release" for CI builds
-}

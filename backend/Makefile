@@ -19,9 +19,9 @@ build-bootstrap:
 
 generate:
 	go generate ./ent
-	go generate ./cmd/gateway
-	go generate ./cmd/control
-	go generate ./cmd/worker
+	go generate ./internal/app/gateway
+	go generate ./internal/app/control
+	go generate ./internal/app/worker
 
 test:
 	go test ./...

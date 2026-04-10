@@ -14,7 +14,14 @@ import (
 )
 
 type helmRelease struct {
+	Kind     string `yaml:"kind"`
+	Metadata struct {
+		Name string `yaml:"name"`
+	} `yaml:"metadata"`
 	Spec struct {
+		DependsOn []struct {
+			Name string `yaml:"name"`
+		} `yaml:"dependsOn"`
 		Values map[string]any `yaml:"values"`
 	} `yaml:"spec"`
 }
@@ -72,38 +79,23 @@ func TestHelmTemplate_MergesIngressAnnotationsAndSetsComponentServiceNames(t *te
 }
 
 func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testing.T) {
-	valuesPath := productionValuesPath(t)
-	secretsPath := writeValuesFile(t, map[string]any{
-		"postgresql": map[string]any{
-			"auth": map[string]any{
-				"password":         "test-password",
-				"postgresPassword": "test-postgres-password",
-			},
+	gatewayValuesPath := productionValuesPath(t, "sub2api-gateway")
+	sharedSecretsPath := writeValuesFile(t, map[string]any{
+		"externalDatabase": map[string]any{
+			"password": "test-password",
 		},
-		"redis": map[string]any{
-			"auth": map[string]any{
-				"password": "test-redis-password",
-			},
-		},
-		"grafanaProvisioning": map[string]any{
-			"reader": map[string]any{
-				"username": "grafana-reader",
-				"password": "grafana-password",
-			},
+		"externalRedis": map[string]any{
+			"password": "test-redis-password",
 		},
 	})
-	manifests := renderChart(t, valuesPath, secretsPath)
+	manifests := renderChart(t, gatewayValuesPath, sharedSecretsPath)
 
 	gatewayIngress := findManifest(t, manifests, "Ingress", "sub2api-gateway")
 	gatewayAnnotations := nestedStringMap(t, gatewayIngress, "metadata", "annotations")
 	require.Equal(t, "10", gatewayAnnotations["nginx.ingress.kubernetes.io/proxy-connect-timeout"])
 	require.Equal(t, "600", gatewayAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"])
 	require.Equal(t, "600", gatewayAnnotations["nginx.ingress.kubernetes.io/proxy-send-timeout"])
-
-	controlIngress := findManifest(t, manifests, "Ingress", "sub2api-control")
-	controlAnnotations := nestedStringMap(t, controlIngress, "metadata", "annotations")
-	_, controlHasLongReadTimeout := controlAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"]
-	require.False(t, controlHasLongReadTimeout)
+	requireManifestAbsent(t, manifests, "Ingress", "sub2api-control")
 
 	findManifest(t, manifests, "HorizontalPodAutoscaler", "sub2api-gateway")
 	findManifest(t, manifests, "PodDisruptionBudget", "sub2api-gateway")
@@ -112,16 +104,370 @@ func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testi
 	topologySpread := nestedSlice(t, gatewayDeployment, "spec", "template", "spec", "topologySpreadConstraints")
 	require.Len(t, topologySpread, 2)
 	require.Equal(t, "sub2api-gateway", containerEnvValue(t, gatewayDeployment, "OTEL_SERVICE_NAME"))
+
+	controlValuesPath := productionValuesPath(t, "sub2api-control")
+	controlSecretsPath := writeValuesFile(t, map[string]any{
+		"secrets": map[string]any{
+			"jwtSecret":         "jwt-secret",
+			"totpEncryptionKey": "totp-key",
+			"adminPassword":     "admin-password",
+		},
+		"externalDatabase": map[string]any{
+			"password": "test-password",
+		},
+		"externalRedis": map[string]any{
+			"password": "test-redis-password",
+		},
+		"grafanaProvisioning": map[string]any{
+			"reader": map[string]any{
+				"username": "grafana-reader",
+				"password": "grafana-password",
+			},
+		},
+	})
+	controlManifests := renderChart(t, controlValuesPath, controlSecretsPath)
+	controlIngress := findManifest(t, controlManifests, "Ingress", "sub2api-control")
+	controlAnnotations := nestedStringMap(t, controlIngress, "metadata", "annotations")
+	_, controlHasLongReadTimeout := controlAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"]
+	require.False(t, controlHasLongReadTimeout)
+}
+
+func TestHelmTemplate_DefaultValuesRenderLegacySingleReleaseTopology(t *testing.T) {
+	manifests := renderChart(t)
+
+	findManifest(t, manifests, "Deployment", "sub2api-gateway")
+	controlDeployment := findManifest(t, manifests, "Deployment", "sub2api-control")
+	findManifest(t, manifests, "Deployment", "sub2api-worker")
+	frontendDeployment := findManifest(t, manifests, "Deployment", "sub2api-frontend")
+
+	findManifest(t, manifests, "Service", "sub2api-gateway")
+	frontendService := findManifest(t, manifests, "Service", "sub2api-control")
+	findManifest(t, manifests, "Service", "sub2api-control-api")
+
+	findManifest(t, manifests, "Ingress", "sub2api-gateway")
+	findManifest(t, manifests, "Ingress", "sub2api-control")
+
+	bootstrapJob := findManifest(t, manifests, "Job", "sub2api-bootstrap")
+	require.Equal(t, "sub2api-bootstrap", stringValue(nestedMap(t, bootstrapJob, "metadata")["name"]))
+
+	controlContainers := nestedSlice(t, controlDeployment, "spec", "template", "spec", "containers")
+	require.Len(t, controlContainers, 1)
+	controlContainer, ok := controlContainers[0].(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, "control", stringValue(controlContainer["name"]))
+
+	require.Equal(t, "http://sub2api-control-api:8080", containerEnvValue(t, frontendDeployment, "CONTROL_UPSTREAM"))
+	require.Equal(t, "http://sub2api-gateway:80", containerEnvValue(t, frontendDeployment, "GATEWAY_UPSTREAM"))
+
+	frontendSelector := nestedMap(t, frontendService, "spec", "selector")
+	require.Equal(t, "frontend", stringValue(frontendSelector["app.kubernetes.io/component"]))
+}
+
+func TestHelmTemplate_ComponentSelectiveControlReleaseRendersWithoutGatewayAndWorker(t *testing.T) {
+	valuesPath := writeValuesFile(t, map[string]any{
+		"gateway": map[string]any{
+			"enabled": false,
+		},
+		"control": map[string]any{
+			"enabled": true,
+		},
+		"worker": map[string]any{
+			"enabled": false,
+		},
+		"bootstrap": map[string]any{
+			"enabled": false,
+		},
+		"frontend": map[string]any{
+			"enabled":            true,
+			"gatewayServiceName": "sub2api-gateway-gateway",
+		},
+		"ingress": map[string]any{
+			"enabled": true,
+			"gateway": map[string]any{
+				"enabled": false,
+			},
+			"control": map[string]any{
+				"enabled": true,
+			},
+		},
+		"postgresql": map[string]any{
+			"enabled": false,
+		},
+		"redis": map[string]any{
+			"enabled": false,
+		},
+		"externalDatabase": map[string]any{
+			"host":     "postgres.internal",
+			"password": "db-password",
+		},
+		"externalRedis": map[string]any{
+			"host":     "redis.internal",
+			"password": "redis-password",
+		},
+		"secrets": map[string]any{
+			"jwtSecret":         "jwt-secret",
+			"totpEncryptionKey": "totp-key",
+			"adminPassword":     "admin-password",
+		},
+	})
+	manifests := renderChart(t, valuesPath)
+
+	findManifest(t, manifests, "Deployment", "sub2api-control")
+	frontendDeployment := findManifest(t, manifests, "Deployment", "sub2api-frontend")
+	findManifest(t, manifests, "Service", "sub2api-control")
+	findManifest(t, manifests, "Service", "sub2api-control-api")
+	findManifest(t, manifests, "Ingress", "sub2api-control")
+
+	requireManifestAbsent(t, manifests, "Deployment", "sub2api-gateway")
+	requireManifestAbsent(t, manifests, "Deployment", "sub2api-worker")
+	requireManifestAbsent(t, manifests, "Job", "sub2api-bootstrap")
+	requireManifestAbsent(t, manifests, "Ingress", "sub2api-gateway")
+
+	require.Equal(t, "http://sub2api-gateway-gateway:80", containerEnvValue(t, frontendDeployment, "GATEWAY_UPSTREAM"))
+}
+
+func TestHelmTemplate_BootstrapChecksumTracksOnlyBootstrapInputs(t *testing.T) {
+	baseValues := map[string]any{
+		"gateway": map[string]any{
+			"enabled": false,
+		},
+		"control": map[string]any{
+			"enabled": false,
+		},
+		"worker": map[string]any{
+			"enabled": false,
+		},
+		"frontend": map[string]any{
+			"enabled": false,
+		},
+		"bootstrap": map[string]any{
+			"enabled":          true,
+			"manualRerunToken": "",
+		},
+		"postgresql": map[string]any{
+			"enabled": false,
+		},
+		"redis": map[string]any{
+			"enabled": false,
+		},
+		"externalDatabase": map[string]any{
+			"host":     "postgres.internal",
+			"port":     5432,
+			"user":     "sub2api",
+			"database": "sub2api",
+			"sslmode":  "require",
+			"password": "db-password",
+		},
+		"externalRedis": map[string]any{
+			"host":      "redis.internal",
+			"port":      6379,
+			"password":  "redis-password",
+			"enableTLS": true,
+		},
+		"secrets": map[string]any{
+			"jwtSecret":         "jwt-secret",
+			"totpEncryptionKey": "totp-key",
+			"adminPassword":     "admin-password",
+		},
+	}
+
+	checksumA := renderBootstrapChecksum(t, baseValues)
+
+	unrelatedValues := cloneMap(t, baseValues)
+	unrelatedValues["ingress"] = map[string]any{
+		"enabled": false,
+	}
+	checksumUnrelated := renderBootstrapChecksum(t, unrelatedValues)
+	require.Equal(t, checksumA, checksumUnrelated)
+
+	tokenValues := cloneMap(t, baseValues)
+	tokenValues["bootstrap"] = map[string]any{
+		"enabled":          true,
+		"manualRerunToken": "manual-rerun-1",
+	}
+	checksumWithToken := renderBootstrapChecksum(t, tokenValues)
+	require.NotEqual(t, checksumA, checksumWithToken)
+}
+
+func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
+	tests := []struct {
+		releaseName    string
+		secrets        map[string]any
+		expectedKind   string
+		expectedObject string
+	}{
+		{
+			releaseName: "sub2api",
+			secrets: map[string]any{
+				"postgresql": map[string]any{
+					"auth": map[string]any{
+						"password":         "db-password",
+						"postgresPassword": "postgres-password",
+					},
+				},
+				"redis": map[string]any{
+					"auth": map[string]any{
+						"password": "redis-password",
+					},
+				},
+				"grafanaProvisioning": map[string]any{
+					"reader": map[string]any{
+						"username": "grafana-reader",
+						"password": "grafana-password",
+					},
+				},
+			},
+			expectedKind:   "Service",
+			expectedObject: "sub2api-postgresql",
+		},
+		{
+			releaseName: "sub2api-bootstrap",
+			secrets: map[string]any{
+				"secrets": map[string]any{
+					"jwtSecret":         "jwt-secret",
+					"totpEncryptionKey": "totp-key",
+					"adminPassword":     "admin-password",
+				},
+				"externalDatabase": map[string]any{
+					"password": "db-password",
+				},
+				"externalRedis": map[string]any{
+					"password": "redis-password",
+				},
+			},
+			expectedKind:   "Job",
+			expectedObject: "sub2api-bootstrap-bootstrap",
+		},
+		{
+			releaseName: "sub2api-gateway",
+			secrets: map[string]any{
+				"externalDatabase": map[string]any{
+					"password": "db-password",
+				},
+				"externalRedis": map[string]any{
+					"password": "redis-password",
+				},
+			},
+			expectedKind:   "Deployment",
+			expectedObject: "sub2api-gateway-gateway",
+		},
+		{
+			releaseName: "sub2api-control",
+			secrets: map[string]any{
+				"secrets": map[string]any{
+					"jwtSecret":         "jwt-secret",
+					"totpEncryptionKey": "totp-key",
+					"adminPassword":     "admin-password",
+				},
+				"externalDatabase": map[string]any{
+					"password": "db-password",
+				},
+				"externalRedis": map[string]any{
+					"password": "redis-password",
+				},
+				"grafanaProvisioning": map[string]any{
+					"reader": map[string]any{
+						"username": "grafana-reader",
+						"password": "grafana-password",
+					},
+				},
+			},
+			expectedKind:   "Deployment",
+			expectedObject: "sub2api-control-frontend",
+		},
+		{
+			releaseName: "sub2api-worker",
+			secrets: map[string]any{
+				"externalDatabase": map[string]any{
+					"password": "db-password",
+				},
+				"externalRedis": map[string]any{
+					"password": "redis-password",
+				},
+			},
+			expectedKind:   "Deployment",
+			expectedObject: "sub2api-worker-worker",
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.releaseName, func(t *testing.T) {
+			valuesPath := productionValuesPath(t, tc.releaseName)
+			secretsPath := writeValuesFile(t, tc.secrets)
+			manifests := renderChartWithReleaseName(t, tc.releaseName, valuesPath, secretsPath)
+			findManifest(t, manifests, tc.expectedKind, tc.expectedObject)
+			if tc.releaseName == "sub2api" {
+				findManifest(t, manifests, "Secret", "sub2api-postgresql-crt")
+				postgresqlStatefulSet := findManifest(t, manifests, "StatefulSet", "sub2api-postgresql")
+				require.Equal(t, "yes", containerEnvValue(t, postgresqlStatefulSet, "POSTGRESQL_ENABLE_TLS"))
+				grafanaDatasource := findManifest(t, manifests, "Secret", "sub2api-grafana-datasource-postgres")
+				grafanaDatasourceConfig := nestedMap(t, grafanaDatasource, "stringData")
+				require.Contains(t, stringValue(grafanaDatasourceConfig["pg-datasource.yaml"]), "sslmode: \"require\"")
+			}
+		})
+	}
+}
+
+func TestProductionReleaseValues_PreserveSharedDataServicesAndOrdering(t *testing.T) {
+	releases := productionHelmReleases(t)
+
+	provisioning, ok := releases["sub2api"]
+	require.True(t, ok)
+	bootstrap, ok := releases["sub2api-bootstrap"]
+	require.True(t, ok)
+	gateway, ok := releases["sub2api-gateway"]
+	require.True(t, ok)
+	control, ok := releases["sub2api-control"]
+	require.True(t, ok)
+	worker, ok := releases["sub2api-worker"]
+	require.True(t, ok)
+
+	postgresqlValues, ok := provisioning.Spec.Values["postgresql"].(map[string]any)
+	require.True(t, ok)
+	require.True(t, boolValue(postgresqlValues["enabled"]))
+	postgresqlTLSValues, ok := postgresqlValues["tls"].(map[string]any)
+	require.True(t, ok)
+	require.True(t, boolValue(postgresqlTLSValues["enabled"]))
+	require.True(t, boolValue(postgresqlTLSValues["autoGenerated"]))
+
+	redisValues, ok := provisioning.Spec.Values["redis"].(map[string]any)
+	require.True(t, ok)
+	require.True(t, boolValue(redisValues["enabled"]))
+
+	require.Contains(t, dependencyNames(bootstrap), "sub2api")
+	require.Contains(t, dependencyNames(gateway), "sub2api-bootstrap")
+	require.Contains(t, dependencyNames(control), "sub2api-bootstrap")
+	require.Contains(t, dependencyNames(control), "sub2api-gateway")
+	require.Contains(t, dependencyNames(worker), "sub2api-bootstrap")
+
+	for _, releaseName := range []string{"sub2api-bootstrap", "sub2api-gateway", "sub2api-control", "sub2api-worker"} {
+		release := releases[releaseName]
+
+		externalDatabase, ok := release.Spec.Values["externalDatabase"].(map[string]any)
+		require.True(t, ok, "release %s missing externalDatabase values", releaseName)
+		require.Equal(t, "sub2api-postgresql", stringValue(externalDatabase["host"]))
+		require.Equal(t, "require", stringValue(externalDatabase["sslmode"]))
+
+		externalRedis, ok := release.Spec.Values["externalRedis"].(map[string]any)
+		require.True(t, ok, "release %s missing externalRedis values", releaseName)
+		require.Equal(t, "sub2api-redis-master", stringValue(externalRedis["host"]))
+	}
 }
 
 func renderChart(t *testing.T, valuesFiles ...string) []map[string]any {
+	t.Helper()
+	return renderChartWithReleaseName(t, "sub2api", valuesFiles...)
+}
+
+func renderChartWithReleaseName(t *testing.T, releaseName string, valuesFiles ...string) []map[string]any {
 	t.Helper()
 	if _, err := exec.LookPath("helm"); err != nil {
 		t.Skip("helm binary not available")
 	}
 
 	chartPath := filepath.Join(repoRoot(t), "deploy", "helm", "sub2api")
-	args := []string{"template", "sub2api", chartPath, "--namespace", "sub2api"}
+	args := []string{"template", releaseName, chartPath, "--namespace", "sub2api"}
 	for _, valuesFile := range valuesFiles {
 		args = append(args, "-f", valuesFile)
 	}
@@ -132,16 +478,51 @@ func renderChart(t *testing.T, valuesFiles ...string) []map[string]any {
 	return decodeManifestStream(t, output)
 }
 
-func productionValuesPath(t *testing.T) string {
+func productionValuesPath(t *testing.T, releaseName string) string {
+	t.Helper()
+
+	releases := productionReleaseValues(t)
+	values, ok := releases[releaseName]
+	require.True(t, ok, "production HelmRelease %q not found", releaseName)
+	return writeValuesFile(t, values)
+}
+
+func productionReleaseValues(t *testing.T) map[string]map[string]any {
+	t.Helper()
+
+	releases := productionHelmReleases(t)
+	values := map[string]map[string]any{}
+	for name, release := range releases {
+		values[name] = release.Spec.Values
+	}
+	return values
+}
+
+func productionHelmReleases(t *testing.T) map[string]helmRelease {
 	t.Helper()
 
 	releasePath := filepath.Join(repoRoot(t), "clusters", "production", "apps", "sub2api.yaml")
 	raw, err := os.ReadFile(releasePath)
 	require.NoError(t, err)
 
-	var release helmRelease
-	require.NoError(t, yaml.Unmarshal(raw, &release))
-	return writeValuesFile(t, release.Spec.Values)
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	releases := map[string]helmRelease{}
+	for {
+		var release helmRelease
+		err := decoder.Decode(&release)
+		if err != nil {
+			if err == io.EOF {
+				break
+			}
+			require.NoError(t, err)
+		}
+		if release.Kind != "HelmRelease" || release.Metadata.Name == "" {
+			continue
+		}
+		releases[release.Metadata.Name] = release
+	}
+
+	return releases
 }
 
 func writeValuesFile(t *testing.T, values map[string]any) string {
@@ -194,6 +575,23 @@ func findManifest(t *testing.T, manifests []map[string]any, kind, name string) m
 	}
 	t.Fatalf("manifest %s/%s not found", kind, name)
 	return nil
+}
+
+func requireManifestAbsent(t *testing.T, manifests []map[string]any, kind, name string) {
+	t.Helper()
+
+	for _, manifest := range manifests {
+		if stringValue(manifest["kind"]) != kind {
+			continue
+		}
+		metadata, ok := manifest["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if stringValue(metadata["name"]) == name {
+			t.Fatalf("manifest %s/%s unexpectedly rendered", kind, name)
+		}
+	}
 }
 
 func containerEnvValue(t *testing.T, manifest map[string]any, envName string) string {
@@ -261,6 +659,32 @@ func repoRoot(t *testing.T) string {
 	return filepath.Clean(filepath.Join(filepath.Dir(filename), "..", "..", ".."))
 }
 
+func renderBootstrapChecksum(t *testing.T, values map[string]any) string {
+	t.Helper()
+
+	overlayPath := writeValuesFile(t, values)
+	manifests := renderChart(t, overlayPath)
+	job := findManifest(t, manifests, "Job", "sub2api-bootstrap")
+
+	metadataAnnotations := nestedStringMap(t, job, "metadata", "annotations")
+	templateAnnotations := nestedStringMap(t, job, "spec", "template", "metadata", "annotations")
+	require.Equal(t, metadataAnnotations["sub2api.io/bootstrap-inputs-checksum"], templateAnnotations["sub2api.io/bootstrap-inputs-checksum"])
+
+	return metadataAnnotations["sub2api.io/bootstrap-inputs-checksum"]
+}
+
+func cloneMap(t *testing.T, src map[string]any) map[string]any {
+	t.Helper()
+
+	raw, err := yaml.Marshal(src)
+	require.NoError(t, err)
+
+	var out map[string]any
+	require.NoError(t, yaml.Unmarshal(raw, &out))
+
+	return out
+}
+
 func stringValue(value any) string {
 	if value == nil {
 		return ""
@@ -269,4 +693,25 @@ func stringValue(value any) string {
 		return s
 	}
 	return ""
+}
+
+func boolValue(value any) bool {
+	if value == nil {
+		return false
+	}
+	if b, ok := value.(bool); ok {
+		return b
+	}
+	return false
+}
+
+func dependencyNames(release helmRelease) []string {
+	names := make([]string, 0, len(release.Spec.DependsOn))
+	for _, dependency := range release.Spec.DependsOn {
+		if dependency.Name == "" {
+			continue
+		}
+		names = append(names, dependency.Name)
+	}
+	return names
 }

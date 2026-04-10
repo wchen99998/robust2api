@@ -1,3 +1,4 @@
+{{- if .Values.bootstrap.enabled }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -5,11 +6,15 @@ metadata:
   labels:
     {{- include "sub2api.labels" . | nindent 4 }}
     app.kubernetes.io/component: bootstrap
+  annotations:
+    sub2api.io/bootstrap-inputs-checksum: {{ include "sub2api.bootstrapInputsChecksum" . | quote }}
 spec:
   backoffLimit: {{ .Values.bootstrap.backoffLimit }}
   ttlSecondsAfterFinished: {{ .Values.bootstrap.ttlSecondsAfterFinished }}
   template:
     metadata:
+      annotations:
+        sub2api.io/bootstrap-inputs-checksum: {{ include "sub2api.bootstrapInputsChecksum" . | quote }}
       labels:
         {{- include "sub2api.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: bootstrap
@@ -58,3 +63,4 @@ spec:
       affinity:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+{{- end }}

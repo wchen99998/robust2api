@@ -15,7 +15,7 @@ import (
 // RegisterAuthRoutes 注册认证相关路由
 func RegisterAuthRoutes(
 	v1 *gin.RouterGroup,
-	h *handler.Handlers,
+	h *handler.ControlHandlers,
 	jwtAuth servermiddleware.JWTAuthMiddleware,
 	redisClient *redis.Client,
 	settingService *service.SettingService,

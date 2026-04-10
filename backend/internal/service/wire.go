@@ -16,6 +16,10 @@ type BuildInfo struct {
 	BuildType string
 }
 
+func ProvideOAuthRefreshLockTTL() []time.Duration {
+	return nil
+}
+
 // ProvidePricingService creates and initializes PricingService (loads data + starts update scheduler).
 // Used by WorkerProviderSet.
 func ProvidePricingService(cfg *config.Config, remoteClient PricingRemoteClient) (*PricingService, error) {
@@ -442,6 +446,7 @@ var SharedProviderSet = wire.NewSet(
 	NewCompositeTokenCacheInvalidator,
 	wire.Bind(new(TokenCacheInvalidator), new(*CompositeTokenCacheInvalidator)),
 	NewAntigravityOAuthService,
+	ProvideOAuthRefreshLockTTL,
 	NewOAuthRefreshAPI,
 	ProvideGeminiTokenProvider,
 	NewGeminiMessagesCompatService,
@@ -515,11 +520,4 @@ var WorkerProviderSet = wire.NewSet(
 	ProvideAccountExpiryService,
 	ProvideSubscriptionExpiryService,
 	ProvideScheduledTestRunnerService,
-	// Worker needs these because some shared services depend on them transitively.
-	// The goroutines they start (cache writers, email workers) are a known compromise —
-	// they run idle in the Worker since no HTTP requests generate work for them.
-	ProvideEmailQueueService,
-	NewBillingCacheService,
-	NewUsageRecordWorkerPool,
-	ProvideAPIKeyAuthCacheInvalidator,
 )

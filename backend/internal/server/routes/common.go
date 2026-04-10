@@ -23,9 +23,3 @@ func RegisterGatewayCompatRoutes(r gin.IRoutes) {
 		c.Status(http.StatusOK)
 	})
 }
-
-// RegisterCommonRoutes preserves the legacy combined registration behavior.
-func RegisterCommonRoutes(r *gin.Engine, healthChecker *health.Checker) {
-	RegisterHealthRoutes(r, healthChecker)
-	RegisterGatewayCompatRoutes(r)
-}

@@ -1,5 +1,6 @@
 # -- Gateway Configuration
 gateway:
+  enabled: true
   replicaCount: 1
   terminationGracePeriodSeconds: 20
   resources:
@@ -32,6 +33,7 @@ gateway:
 
 # -- Control Configuration
 control:
+  enabled: true
   replicaCount: 1
   terminationGracePeriodSeconds: 20
   resources:
@@ -76,8 +78,22 @@ control:
     # or URL-based home content. Cloudflare Turnstile is always allowed automatically.
     extraFrameSrcOrigins: []
 
+# -- Frontend edge proxy configuration
+frontend:
+  enabled: true
+  replicaCount: 1
+  terminationGracePeriodSeconds: 20
+  topologySpreadConstraints: []
+  # Optional explicit in-cluster control service name for Nginx proxying.
+  # Empty preserves single-release behavior by targeting <release>-control-api.
+  controlServiceName: ""
+  # Optional explicit in-cluster gateway service name for Nginx proxying.
+  # Empty preserves single-release behavior by targeting <release>-gateway.
+  gatewayServiceName: ""
+
 # -- Worker Configuration
 worker:
+  enabled: true
   replicaCount: 1
   healthPort: 8081
   terminationGracePeriodSeconds: 30
@@ -240,8 +256,11 @@ extraSecretEnv: {}
 # Bootstrap Job
 # =============================================================================
 bootstrap:
+  enabled: true
   backoffLimit: 5
   ttlSecondsAfterFinished: 300
+  # Increment to force a new bootstrap run without changing other values.
+  manualRerunToken: ""
 
 # =============================================================================
 # Service
@@ -253,6 +272,10 @@ service:
 controlService:
   type: ClusterIP
   port: 80
+
+controlAPIService:
+  type: ClusterIP
+  port: 8080
 
 # =============================================================================
 # Ingress

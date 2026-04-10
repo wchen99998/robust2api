@@ -11,7 +11,7 @@ import (
 // RegisterUserRoutes 注册用户相关路由（需要认证）
 func RegisterUserRoutes(
 	v1 *gin.RouterGroup,
-	h *handler.Handlers,
+	h *handler.ControlHandlers,
 	jwtAuth middleware.JWTAuthMiddleware,
 	settingService *service.SettingService,
 ) {

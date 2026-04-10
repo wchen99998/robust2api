@@ -1,10 +1,11 @@
+{{- if and .Values.frontend.enabled .Values.control.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "sub2api.fullname" . }}-control
+  name: {{ include "sub2api.frontendServiceName" . }}
   labels:
     {{- include "sub2api.labels" . | nindent 4 }}
-    app.kubernetes.io/component: control
+    app.kubernetes.io/component: frontend
 spec:
   type: {{ .Values.controlService.type }}
   ports:
@@ -13,4 +14,5 @@ spec:
       protocol: TCP
       name: http
   selector:
-    {{- include "sub2api.control.selectorLabels" . | nindent 4 }}
+    {{- include "sub2api.frontend.selectorLabels" . | nindent 4 }}
+{{- end }}

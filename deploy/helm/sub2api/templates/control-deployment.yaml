@@ -1,3 +1,4 @@
+{{- if .Values.control.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -89,22 +90,6 @@ spec:
           securityContext:
             runAsNonRoot: true
             runAsUser: 1000
-        - name: frontend
-          image: "{{ .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
-          env:
-            - name: CONTROL_UPSTREAM
-              value: "http://127.0.0.1:8080"
-            - name: GATEWAY_UPSTREAM
-              value: "http://{{ include "sub2api.fullname" . }}-gateway:{{ .Values.service.port }}"
-            - name: EXTRA_FRAME_SRC_ORIGINS
-              value: {{ include "sub2api.frameSrcOrigins" . | quote }}
-          ports:
-            - name: frontend
-              containerPort: {{ .Values.control.frontend.port }}
-              protocol: TCP
-          resources:
-            {{- toYaml .Values.control.frontend.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -133,3 +118,4 @@ spec:
           {{- end }}
         {{- end }}
       {{- end }}
+{{- end }}

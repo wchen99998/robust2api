@@ -4,7 +4,7 @@
 //go:build !wireinject
 // +build !wireinject
 
-package main
+package control
 
 import (
 	"context"
@@ -14,6 +14,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/admin"
 	"github.com/Wei-Shaw/sub2api/internal/health"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	health2 "github.com/Wei-Shaw/sub2api/internal/platform/health"
+	"github.com/Wei-Shaw/sub2api/internal/platform/httpserver"
+	otel2 "github.com/Wei-Shaw/sub2api/internal/platform/otel"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/server"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -25,14 +28,9 @@ import (
 	"time"
 )
 
-import (
-	_ "embed"
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-)
-
 // Injectors from wire.go:
 
-func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplication, error) {
+func initialize(buildInfo BuildInfo) (*Application, error) {
 	configConfig, err := config.ProvideControlConfig()
 	if err != nil {
 		return nil, err
@@ -138,7 +136,8 @@ func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplicat
 	tlsFingerprintProfileCache := repository.NewTLSFingerprintProfileCache(redisClient)
 	tlsFingerprintProfileService := service.NewTLSFingerprintProfileService(tlsFingerprintProfileRepository, tlsFingerprintProfileCache)
 	accountUsageService := service.NewAccountUsageService(accountRepository, usageLogRepository, claudeUsageFetcher, geminiQuotaService, antigravityQuotaFetcher, usageCache, identityCache, tlsFingerprintProfileService)
-	oAuthRefreshAPI := service.NewOAuthRefreshAPI(accountRepository, geminiTokenCache)
+	v := service.ProvideOAuthRefreshLockTTL()
+	oAuthRefreshAPI := service.NewOAuthRefreshAPI(accountRepository, geminiTokenCache, v...)
 	geminiTokenProvider := service.ProvideGeminiTokenProvider(accountRepository, geminiTokenCache, geminiOAuthService, oAuthRefreshAPI)
 	gatewayCache := repository.NewGatewayCache(redisClient)
 	schedulerOutboxRepository := repository.NewSchedulerOutboxRepository(db)
@@ -186,7 +185,8 @@ func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplicat
 	billingService := service.ProvideBillingService(configConfig, pricingService, runtimeCacheInvalidationBus)
 	channelHandler := admin.NewChannelHandler(channelService, billingService)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler)
-	handlerSettingHandler := handler.ProvideSettingHandler(settingService, buildInfo)
+	serviceBuildInfo := provideServiceBuildInfo(buildInfo)
+	handlerSettingHandler := handler.ProvideSettingHandler(settingService, serviceBuildInfo)
 	totpHandler := handler.NewTotpHandler(totpService)
 	controlCacheInvalidationSubscribers := service.ProvideControlCacheInvalidationSubscribers(runtimeCacheInvalidationBus, settingService, channelService, pricingService)
 	idempotencyRepository := repository.NewIdempotencyRepository(client, db)
@@ -195,31 +195,30 @@ func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplicat
 	controlHandlers := handler.ProvideControlHandlers(authHandler, userHandler, apiKeyHandler, usageHandler, redeemHandler, subscriptionHandler, announcementHandler, adminHandlers, handlerSettingHandler, totpHandler, controlCacheInvalidationSubscribers, idempotencyCoordinator, idempotencyCleanupService)
 	jwtAuthMiddleware := middleware.NewJWTAuthMiddleware(authService, userService)
 	adminAuthMiddleware := middleware.NewAdminAuthMiddleware(authService, userService, settingService)
-	serviceBuildInfo := provideServiceBuildInfo(buildInfo)
 	checker := health.NewChecker(db, redisClient)
 	engine := server.ProvideControlRouter(configConfig, controlHandlers, jwtAuthMiddleware, adminAuthMiddleware, settingService, serviceBuildInfo, redisClient, checker)
-	httpServer := server.ProvideHTTPServer(configConfig, engine)
+	httpServer := httpserver.ProvideHTTPServer(configConfig, engine)
 	provider, err := otel.ProvideOtel(configConfig)
 	if err != nil {
 		return nil, err
 	}
-	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
-	v := provideControlCleanup(client, redisClient, provider, metricsServer, emailQueueService, billingCacheService, subscriptionService, pricingService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
-	controlApplication := &ControlApplication{
+	v2 := otel.ProvideMetricsServer(configConfig, provider)
+	v3 := provideCleanup(client, redisClient, provider, v2, emailQueueService, billingCacheService, subscriptionService, pricingService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
+	application := &Application{
 		Server:        httpServer,
-		MetricsServer: metricsServer,
+		MetricsServer: v2,
 		Health:        checker,
-		Cleanup:       v,
+		Cleanup:       v3,
 	}
-	return controlApplication, nil
+	return application, nil
 }
 
 // wire.go:
 
-type ControlApplication struct {
+type Application struct {
 	Server        *http.Server
-	MetricsServer *otel.MetricsServer
-	Health        *health.Checker
+	MetricsServer *otel2.MetricsServer
+	Health        *health2.Checker
 	Cleanup       func()
 }
 
@@ -227,18 +226,18 @@ func providePrivacyClientFactory() service.PrivacyClientFactory {
 	return repository.CreatePrivacyReqClient
 }
 
-func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
+func provideServiceBuildInfo(buildInfo BuildInfo) service.BuildInfo {
 	return service.BuildInfo{
 		Version:   buildInfo.Version,
 		BuildType: buildInfo.BuildType,
 	}
 }
 
-func provideControlCleanup(
+func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
-	otelProvider *otel.Provider,
-	metricsServer *otel.MetricsServer,
+	otelProvider *otel2.Provider,
+	metricsServer *otel2.MetricsServer,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	subscriptionService *service.SubscriptionService,

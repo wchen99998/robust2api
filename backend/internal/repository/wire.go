@@ -41,8 +41,8 @@ func ProvideSessionLimitCache(rdb *redis.Client, cfg *config.Config) service.Ses
 	return NewSessionLimitCache(rdb, defaultIdleTimeoutMinutes)
 }
 
-// ProviderSet is the Wire provider set for all repositories
-var ProviderSet = wire.NewSet(
+// AdapterProviderSet is the Wire provider set for repository/cache adapters.
+var AdapterProviderSet = wire.NewSet(
 	NewUserRepository,
 	NewAPIKeyRepository,
 	NewGroupRepository,
@@ -107,7 +107,11 @@ var ProviderSet = wire.NewSet(
 	NewGeminiOAuthClient,
 	NewGeminiCliCodeAssistClient,
 	NewGeminiDriveClient,
+)
 
+// ProviderSet is the full Wire provider set for repositories and storage clients.
+var ProviderSet = wire.NewSet(
+	AdapterProviderSet,
 	ProvideEnt,
 	ProvideSQLDB,
 	ProvideRedis,
