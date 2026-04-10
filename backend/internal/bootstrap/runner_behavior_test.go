@@ -66,9 +66,9 @@ func TestSeedAdmin_IdempotentOnConflict(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	mock.ExpectQuery("SELECT COUNT\\(1\\) FROM users").
+	mock.ExpectQuery("SELECT COUNT\\(1\\) FROM users WHERE deleted_at IS NULL").
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(0)))
-	mock.ExpectExec("INSERT INTO users").
+	mock.ExpectExec("INSERT INTO users[\\s\\S]*ON CONFLICT \\(email\\) WHERE deleted_at IS NULL DO NOTHING").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	err = seedAdmin(context.Background(), db, BootstrapEnv{
