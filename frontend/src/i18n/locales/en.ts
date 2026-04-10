@@ -367,6 +367,8 @@ export default {
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset Your Password',
     forgotPasswordHint: 'Enter your email address and we will send you a link to reset your password.',
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
     sendResetLink: 'Send Reset Link',
     sendingResetLink: 'Sending...',
     sendResetLinkFailed: 'Failed to send reset link. Please try again.',

@@ -66,7 +66,7 @@
             <button
               type="button"
               @click="showPassword = !showPassword"
-              :aria-label="showPassword ? 'Hide password' : 'Show password'"
+              :aria-label="showPassword ? t('auth.hidePassword') : t('auth.showPassword')"
               class="absolute inset-y-0 right-0 flex items-center pr-3.5 text-mica-text-tertiary transition-colors hover:text-mica-text-primary dark:hover:text-mica-text-primary-dark"
             >
               <Icon v-if="showPassword" name="eyeOff" size="md" />

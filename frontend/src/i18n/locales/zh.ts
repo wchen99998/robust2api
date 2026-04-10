@@ -366,6 +366,8 @@ export default {
     forgotPassword: '忘记密码？',
     forgotPasswordTitle: '重置密码',
     forgotPasswordHint: '输入您的邮箱地址，我们将向您发送密码重置链接。',
+    showPassword: '显示密码',
+    hidePassword: '隐藏密码',
     sendResetLink: '发送重置链接',
     sendingResetLink: '发送中...',
     sendResetLinkFailed: '发送重置链接失败，请重试。',

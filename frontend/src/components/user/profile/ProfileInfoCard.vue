@@ -9,7 +9,7 @@
           {{ user?.email?.charAt(0).toUpperCase() || 'U' }}
         </div>
         <div class="min-w-0 flex-1">
-          <h2 class="truncate text-mica-text-primary dark:text-mica-text-primary-dark" style="font-size: 20px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2;">
+          <h2 class="truncate text-[20px] font-bold leading-[1.2] tracking-[-0.02em] text-mica-text-primary dark:text-mica-text-primary-dark">
             {{ user?.email }}
           </h2>
           <div class="mt-1.5 flex items-center gap-2">
@@ -67,6 +67,7 @@
 import { useI18n } from 'vue-i18n'
 import Icon from '@/components/icons/Icon.vue'
 import type { User } from '@/types'
+import { formatDate } from '@/utils/format'
 
 defineProps<{
   user: User | null
@@ -79,7 +80,6 @@ const { t } = useI18n()
 
 const formatMemberSince = (dateStr: string) => {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
-  return date.toLocaleDateString(undefined, { year: 'numeric', month: 'long' })
+  return formatDate(dateStr, { year: 'numeric', month: 'long' })
 }
 </script>
