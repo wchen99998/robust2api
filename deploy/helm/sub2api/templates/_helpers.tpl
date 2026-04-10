@@ -427,6 +427,18 @@ app.kubernetes.io/component: frontend
 {{- end }}
 
 {{/*
+Extract just the scheme+host origin from a URL. This keeps chart rendering
+working even before Flux substitutes placeholders like ${BASE_DOMAIN} into
+production HelmRelease values.
+*/}}
+{{- define "sub2api.urlOrigin" -}}
+{{- $url := trim (default "" .) -}}
+{{- if $url -}}
+{{- regexFind "^[A-Za-z][A-Za-z0-9+.-]*://[^/?#[:space:]]+" $url -}}
+{{- end -}}
+{{- end }}
+
+{{/*
 Origins allowed in iframe embeds rendered by the control frontend.
 The resolved Grafana public URL origin is included automatically.
 */}}
@@ -440,9 +452,9 @@ The resolved Grafana public URL origin is included automatically.
 {{- end }}
 {{- $grafanaURL := include "sub2api.grafanaPublicURL" . | trim -}}
 {{- if $grafanaURL }}
-  {{- $parsed := urlParse $grafanaURL -}}
-  {{- if and $parsed.scheme $parsed.host }}
-    {{- $origins = append $origins (printf "%s://%s" $parsed.scheme $parsed.host) -}}
+  {{- $grafanaOrigin := include "sub2api.urlOrigin" $grafanaURL | trim -}}
+  {{- if $grafanaOrigin }}
+    {{- $origins = append $origins $grafanaOrigin -}}
   {{- end }}
 {{- end }}
 {{- join " " ($origins | uniq) -}}

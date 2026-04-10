@@ -130,6 +130,8 @@ func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testi
 	controlAnnotations := nestedStringMap(t, controlIngress, "metadata", "annotations")
 	_, controlHasLongReadTimeout := controlAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"]
 	require.False(t, controlHasLongReadTimeout)
+	frontendDeployment := findManifest(t, controlManifests, "Deployment", "sub2api-frontend")
+	require.Equal(t, "https://grafana-monitoring.${BASE_DOMAIN}", containerEnvValue(t, frontendDeployment, "EXTRA_FRAME_SRC_ORIGINS"))
 }
 
 func TestHelmTemplate_DefaultValuesRenderLegacySingleReleaseTopology(t *testing.T) {
