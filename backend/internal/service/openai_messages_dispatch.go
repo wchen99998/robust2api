@@ -59,6 +59,9 @@ func (g *Group) ResolveMessagesDispatchModel(requestedModel string) string {
 	if g == nil {
 		return ""
 	}
+	if !g.AllowMessagesDispatch {
+		return ""
+	}
 	requestedModel = strings.TrimSpace(requestedModel)
 	if requestedModel == "" {
 		return ""

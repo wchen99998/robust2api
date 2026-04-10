@@ -40,6 +40,7 @@ func TestNormalizeOpenAIMessagesDispatchModelConfig(t *testing.T) {
 func TestGroupResolveMessagesDispatchModel(t *testing.T) {
 	t.Run("exact override wins over family mapping", func(t *testing.T) {
 		group := &Group{
+			AllowMessagesDispatch: true,
 			MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
 				SonnetMappedModel: "gpt-5.2",
 				ExactModelMappings: map[string]string{
@@ -53,6 +54,7 @@ func TestGroupResolveMessagesDispatchModel(t *testing.T) {
 
 	t.Run("uses configured family mapping", func(t *testing.T) {
 		group := &Group{
+			AllowMessagesDispatch: true,
 			MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
 				OpusMappedModel:  "gpt-5.2",
 				HaikuMappedModel: "gpt-5.4-mini",
@@ -64,16 +66,17 @@ func TestGroupResolveMessagesDispatchModel(t *testing.T) {
 	})
 
 	t.Run("falls back to built-in family defaults", func(t *testing.T) {
-		group := &Group{}
+		group := &Group{AllowMessagesDispatch: true}
 
 		require.Equal(t, "gpt-5.4", group.ResolveMessagesDispatchModel("claude-opus-4-6"))
 		require.Equal(t, "gpt-5.3-codex", group.ResolveMessagesDispatchModel("claude-sonnet-4-5-20250929"))
 		require.Equal(t, "gpt-5.4-mini", group.ResolveMessagesDispatchModel("claude-haiku-4-5-20251001"))
 	})
 
-	t.Run("returns empty for non claude models", func(t *testing.T) {
+	t.Run("returns empty when dispatch is disabled or request is non claude", func(t *testing.T) {
 		group := &Group{}
 
+		require.Empty(t, group.ResolveMessagesDispatchModel("claude-sonnet-4-5-20250929"))
 		require.Empty(t, group.ResolveMessagesDispatchModel("gpt-5.4"))
 		require.Empty(t, group.ResolveMessagesDispatchModel(""))
 		require.Empty(t, (*Group)(nil).ResolveMessagesDispatchModel("claude-sonnet-4-5-20250929"))

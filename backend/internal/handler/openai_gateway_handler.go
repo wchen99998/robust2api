@@ -57,6 +57,17 @@ func resolveOpenAIMessagesDispatchMappedModel(apiKey *service.APIKey, requestedM
 	return strings.TrimSpace(apiKey.Group.ResolveMessagesDispatchModel(requestedModel))
 }
 
+func resolveOpenAIMessagesLegacyFallbackModel(apiKey *service.APIKey, routingModel, preferredMappedModel string) string {
+	if strings.TrimSpace(preferredMappedModel) != "" {
+		return ""
+	}
+	fallbackModel := resolveOpenAIForwardDefaultMappedModel(apiKey, "")
+	if fallbackModel == "" || fallbackModel == strings.TrimSpace(routingModel) {
+		return ""
+	}
+	return fallbackModel
+}
+
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
 func NewOpenAIGatewayHandler(
 	gatewayService *service.OpenAIGatewayService,
@@ -705,6 +716,13 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		}
 		reqLog.Debug("openai_messages.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
 		selectCtx, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
+		selectSpanEnded := false
+		endSelectSpan := func() {
+			if !selectSpanEnded {
+				selectSpan.End()
+				selectSpanEnded = true
+			}
+		}
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
 			selectCtx,
 			apiKey.GroupID,
@@ -716,14 +734,44 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		)
 		if err != nil {
 			appelotel.RecordSpanError(selectSpan, err, err.Error())
-			selectSpan.End()
+			endSelectSpan()
 			appelotel.RecordSpanError(span, err, err.Error())
 			reqLog.Warn("openai_messages.account_select_failed",
 				zap.Error(err),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
 			if len(failedAccountIDs) == 0 {
-				if err != nil {
+				fallbackMappedModel := resolveOpenAIMessagesLegacyFallbackModel(apiKey, routingModel, preferredMappedModel)
+				if fallbackMappedModel != "" {
+					reqLog.Info("openai_messages.fallback_to_default_model",
+						zap.String("default_mapped_model", fallbackMappedModel),
+					)
+					fallbackSelectCtx, fallbackSelectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
+					fallbackSelection, fallbackDecision, fallbackErr := h.gatewayService.SelectAccountWithScheduler(
+						fallbackSelectCtx,
+						apiKey.GroupID,
+						"",
+						sessionHash,
+						fallbackMappedModel,
+						failedAccountIDs,
+						service.OpenAIUpstreamTransportAny,
+					)
+					if fallbackErr != nil {
+						appelotel.RecordSpanError(fallbackSelectSpan, fallbackErr, fallbackErr.Error())
+						fallbackSelectSpan.End()
+					} else if fallbackSelection == nil || fallbackSelection.Account == nil {
+						appelotel.RecordSpanError(fallbackSelectSpan, nil, "no available accounts")
+						fallbackSelectSpan.End()
+					} else {
+						setOpenAIAccountSpanIdentity(fallbackSelectSpan, fallbackSelection.Account, "")
+						fallbackSelectSpan.End()
+						selection = fallbackSelection
+						scheduleDecision = fallbackDecision
+						err = nil
+						effectiveMappedModel = fallbackMappedModel
+					}
+				}
+				if err != nil || selection == nil || selection.Account == nil {
 					h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable", streamStarted)
 					return
 				}
@@ -737,14 +785,18 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			}
 		}
 		if selection == nil || selection.Account == nil {
-			appelotel.RecordSpanError(selectSpan, nil, "no available accounts")
-			selectSpan.End()
+			if !selectSpanEnded {
+				appelotel.RecordSpanError(selectSpan, nil, "no available accounts")
+			}
+			endSelectSpan()
 			appelotel.RecordSpanError(span, nil, "no available accounts")
 			h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
 			return
 		}
-		setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
-		selectSpan.End()
+		if !selectSpanEnded {
+			setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
+		}
+		endSelectSpan()
 		account := selection.Account
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai_messages.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))

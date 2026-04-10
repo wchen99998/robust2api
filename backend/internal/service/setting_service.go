@@ -238,11 +238,9 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		if name := strings.TrimSpace(s.cfg.OIDC.ProviderName); name != "" {
 			oidcProviderName = name
 		}
-		if s.cfg.OIDC.Enabled {
-			if _, err := s.GetOIDCConnectOAuthConfig(ctx); err == nil {
-				oidcEnabled = true
-			}
-		}
+		// Keep /api/public/settings local-only: exposing the OIDC button must not
+		// depend on live provider discovery or the current reachability of the IdP.
+		oidcEnabled = oidcPublicLoginEnabled(s.cfg.OIDC)
 	}
 
 	// Password reset requires email verification to be enabled
@@ -1517,6 +1515,60 @@ func scopesContainOpenID(scopes string) bool {
 		}
 	}
 	return false
+}
+
+func oidcPublicLoginEnabled(cfg config.OIDCConnectConfig) bool {
+	if !cfg.Enabled {
+		return false
+	}
+	if strings.TrimSpace(cfg.ClientID) == "" ||
+		strings.TrimSpace(cfg.IssuerURL) == "" ||
+		strings.TrimSpace(cfg.RedirectURL) == "" ||
+		strings.TrimSpace(cfg.FrontendRedirectURL) == "" {
+		return false
+	}
+	if !scopesContainOpenID(cfg.Scopes) {
+		return false
+	}
+	if cfg.ClockSkewSeconds < 0 || cfg.ClockSkewSeconds > 600 {
+		return false
+	}
+	if err := config.ValidateAbsoluteHTTPURL(cfg.IssuerURL); err != nil {
+		return false
+	}
+	if err := config.ValidateAbsoluteHTTPURL(cfg.RedirectURL); err != nil {
+		return false
+	}
+	if err := config.ValidateFrontendRedirectURL(cfg.FrontendRedirectURL); err != nil {
+		return false
+	}
+	for _, rawURL := range []string{cfg.DiscoveryURL, cfg.AuthorizeURL, cfg.TokenURL, cfg.UserInfoURL, cfg.JWKSURL} {
+		if strings.TrimSpace(rawURL) == "" {
+			continue
+		}
+		if err := config.ValidateAbsoluteHTTPURL(rawURL); err != nil {
+			return false
+		}
+	}
+
+	switch method := strings.ToLower(strings.TrimSpace(cfg.TokenAuthMethod)); method {
+	case "", "client_secret_post", "client_secret_basic":
+		if strings.TrimSpace(cfg.ClientSecret) == "" {
+			return false
+		}
+	case "none":
+		if !cfg.UsePKCE {
+			return false
+		}
+	default:
+		return false
+	}
+
+	if cfg.ValidateIDToken && strings.TrimSpace(cfg.AllowedSigningAlgs) == "" {
+		return false
+	}
+
+	return true
 }
 
 type oidcProviderMetadata struct {
