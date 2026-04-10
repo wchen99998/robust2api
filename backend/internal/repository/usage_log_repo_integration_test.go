@@ -34,6 +34,24 @@ func (s *UsageLogRepoSuite) SetupTest() {
 	s.tx = tx
 	s.client = tx.Client()
 	s.repo = newUsageLogRepositoryWithSQL(s.client, tx)
+	s.resetUsageStatsTables()
+}
+
+func (s *UsageLogRepoSuite) resetUsageStatsTables() {
+	s.T().Helper()
+
+	queries := []string{
+		"DELETE FROM usage_dashboard_hourly_users",
+		"DELETE FROM usage_dashboard_daily_users",
+		"DELETE FROM usage_dashboard_hourly",
+		"DELETE FROM usage_dashboard_daily",
+		"DELETE FROM usage_logs",
+	}
+
+	for _, query := range queries {
+		_, err := s.tx.ExecContext(s.ctx, query)
+		s.Require().NoError(err, query)
+	}
 }
 
 func TestUsageLogRepoSuite(t *testing.T) {
