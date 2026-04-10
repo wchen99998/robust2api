@@ -8,13 +8,15 @@ vi.mock('@/i18n', () => ({
 
 describe('API Client', () => {
   let apiClient: AxiosInstance
+  let cookieValue = 'control_csrf_token=test-csrf-token'
 
   beforeEach(async () => {
     localStorage.clear()
     vi.resetModules()
+    cookieValue = 'control_csrf_token=test-csrf-token'
     Object.defineProperty(document, 'cookie', {
       configurable: true,
-      get: () => 'control_csrf_token=test-csrf-token'
+      get: () => cookieValue
     })
     const mod = await import('@/api/client')
     apiClient = mod.apiClient
@@ -111,6 +113,54 @@ describe('API Client', () => {
       apiClient.defaults.adapter = adapter
 
       await expect(apiClient.get('/test', { cancelToken: source.token })).rejects.toBeDefined()
+    })
+
+    it('replays mutating requests with the refreshed csrf token', async () => {
+      cookieValue = 'control_csrf_token=stale-csrf-token'
+      let attempt = 0
+      const adapter = vi.fn().mockImplementation(async (config) => {
+        attempt += 1
+
+        if (attempt === 1) {
+          expect(config.headers.get('X-CSRF-Token')).toBe('stale-csrf-token')
+          return Promise.reject({
+            response: {
+              status: 401,
+              data: {
+                code: 'TOKEN_EXPIRED',
+                message: 'expired'
+              }
+            },
+            config
+          })
+        }
+
+        expect(config.headers.get('X-CSRF-Token')).toBe('fresh-csrf-token')
+        return {
+          status: 200,
+          data: { code: 0, data: { ok: true } },
+          headers: {},
+          config,
+          statusText: 'OK'
+        }
+      })
+      apiClient.defaults.adapter = adapter
+
+      const refreshSpy = vi.spyOn(axios, 'post').mockImplementation(async () => {
+        cookieValue = 'control_csrf_token=fresh-csrf-token'
+        return {
+          data: {
+            code: 0,
+            data: {}
+          }
+        } as any
+      })
+
+      const response = await apiClient.post('/me/password/change', { ok: true })
+
+      expect(refreshSpy).toHaveBeenCalledTimes(1)
+      expect(adapter).toHaveBeenCalledTimes(2)
+      expect(response.data).toEqual({ ok: true })
     })
   })
 })

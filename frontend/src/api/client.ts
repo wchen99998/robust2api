@@ -3,7 +3,13 @@
  * Base client with interceptors for authentication, token refresh, and error handling
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, {
+  AxiosHeaders,
+  AxiosInstance,
+  AxiosError,
+  InternalAxiosRequestConfig,
+  AxiosResponse
+} from 'axios'
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
 
@@ -107,6 +113,23 @@ function isAuthExcludedPath(path: string): boolean {
   )
 }
 
+function syncCSRFHeader(config: InternalAxiosRequestConfig): void {
+  if (!shouldAttachCSRF(config)) {
+    return
+  }
+
+  const headers = AxiosHeaders.from(config.headers)
+  headers.delete(CSRF_HEADER_NAME)
+  headers.delete(CSRF_HEADER_NAME.toLowerCase())
+
+  const csrf = getCSRFToken()
+  if (csrf) {
+    headers.set(CSRF_HEADER_NAME, csrf)
+  }
+
+  config.headers = headers
+}
+
 function clearLegacyAuthStorage(): void {
   localStorage.removeItem('auth_token')
   localStorage.removeItem('refresh_token')
@@ -200,6 +223,7 @@ apiClient.interceptors.response.use(
               subscribeTokenRefresh((ok: boolean) => {
                 if (ok) {
                   originalRequest._retry = true
+                  syncCSRFHeader(originalRequest)
                   resolve(apiClient(originalRequest))
                 } else {
                   reject({
@@ -231,6 +255,7 @@ apiClient.interceptors.response.use(
             onTokenRefreshed(true)
 
             isRefreshing = false
+            syncCSRFHeader(originalRequest)
             return apiClient(originalRequest)
           } catch (refreshError) {
             onTokenRefreshed(false)

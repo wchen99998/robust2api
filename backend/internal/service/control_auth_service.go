@@ -21,6 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -441,7 +442,14 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 		return nil, nil, ErrRefreshTokenInvalid
 	}
 
-	sessionRecord, refreshRecord, err := s.authRepo.GetSessionByRefreshTokenHash(ctx, hashToken(rawRefreshToken))
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("begin refresh transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+	txCtx := dbent.NewTxContext(ctx, tx)
+
+	sessionRecord, refreshRecord, err := s.authRepo.GetSessionByRefreshTokenHash(txCtx, hashToken(rawRefreshToken))
 	if err != nil {
 		if errors.Is(err, ErrSessionNotFound) {
 			return nil, nil, ErrRefreshTokenInvalid
@@ -454,7 +462,10 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 		return nil, nil, ErrRefreshTokenInvalid
 	}
 	if refreshRecord.RotatedAt != nil || refreshRecord.ReplacedByTokenHash != nil {
-		_ = s.authRepo.RevokeSession(ctx, sessionRecord.SessionID, now)
+		_ = s.authRepo.RevokeSession(txCtx, sessionRecord.SessionID, now)
+		if err := tx.Commit(); err != nil {
+			return nil, nil, fmt.Errorf("commit refresh reuse revocation: %w", err)
+		}
 		_ = s.sessionCache.DeleteSessionSnapshot(ctx, sessionRecord.SessionID)
 		return nil, nil, ErrRefreshTokenReused
 	}
@@ -469,12 +480,15 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 		}
 		return nil, nil, err
 	}
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
+	bundle, err := s.authRepo.EnsureSubjectShadow(txCtx, user)
 	if err != nil {
 		return nil, nil, err
 	}
 	if bundle.Subject.AuthVersion != sessionRecord.AuthVersion || !strings.EqualFold(bundle.Subject.Status, StatusActive) || !user.IsActive() {
-		_ = s.authRepo.RevokeSession(ctx, sessionRecord.SessionID, now)
+		_ = s.authRepo.RevokeSession(txCtx, sessionRecord.SessionID, now)
+		if err := tx.Commit(); err != nil {
+			return nil, nil, fmt.Errorf("commit refresh revocation: %w", err)
+		}
 		_ = s.sessionCache.DeleteSessionSnapshot(ctx, sessionRecord.SessionID)
 		return nil, nil, ErrTokenRevoked
 	}
@@ -505,20 +519,25 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 	sessionRecord.ExpiresAt = nextIdleExpiry
 	sessionRecord.UpdatedAt = now
 
-	if err := s.authRepo.RotateSessionRefreshToken(ctx, sessionRecord, refreshRecord.TokenHash, nextRefreshRecord, now); err != nil {
+	if err := s.authRepo.RotateSessionRefreshToken(txCtx, sessionRecord, refreshRecord.TokenHash, nextRefreshRecord, now); err != nil {
+		if errors.Is(err, ErrRefreshTokenInvalid) || errors.Is(err, ErrRefreshTokenReused) {
+			return nil, nil, err
+		}
 		return nil, nil, fmt.Errorf("rotate refresh token: %w", err)
 	}
 
 	snapshot := sessionRecordToSnapshot(sessionRecord)
-	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
-		return nil, nil, err
-	}
-
 	accessToken, accessExpiry, err := s.signAccessToken(sessionRecord.SubjectID, sessionRecord.SessionID, sessionRecord.AuthVersion, sessionRecord.AMR, now)
 	if err != nil {
 		return nil, nil, err
 	}
 	identity := buildAuthenticatedIdentity(bundle, snapshot, user)
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("commit refresh transaction: %w", err)
+	}
+	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
+		return nil, nil, err
+	}
 	return identity, &ControlSessionTokens{
 		AccessToken:       accessToken,
 		RefreshToken:      nextRefreshToken,
@@ -602,10 +621,7 @@ func (s *ControlAuthService) GetRegistrationChallenge(ctx context.Context, chall
 }
 
 func (s *ControlAuthService) CreateAuthFlow(ctx context.Context, provider, purpose, issuer, redirectTo string, codeVerifier, nonce *string) (*AuthFlowRecord, string, error) {
-	flowID, err := randomHexString(24)
-	if err != nil {
-		return nil, "", err
-	}
+	flowID := newUUIDString()
 	state, err := randomHexString(24)
 	if err != nil {
 		return nil, "", err
@@ -677,10 +693,7 @@ func (s *ControlAuthService) newSessionRecords(bundle *IdentityBundle, user *Use
 	if err != nil {
 		return nil, nil, "", err
 	}
-	sessionID, err := randomHexString(16)
-	if err != nil {
-		return nil, nil, "", err
-	}
+	sessionID := newUUIDString()
 
 	absoluteExpiry := now.Add(controlRefreshAbsoluteTTL)
 	idleExpiry := now.Add(controlRefreshIdleTTL)
@@ -831,6 +844,10 @@ func buildAuthenticatedIdentity(bundle *IdentityBundle, snapshot *SessionSnapsho
 		SessionAbsoluteAt: snapshot.AbsoluteExpiresAt,
 		SessionLastSeenAt: snapshot.LastSeenAt,
 	}
+}
+
+func newUUIDString() string {
+	return uuid.NewString()
 }
 
 func buildSigningKey(privateKey *ecdsa.PrivateKey) (*controlSigningKey, error) {

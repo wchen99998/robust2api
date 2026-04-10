@@ -68,8 +68,23 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.setItem('auth_user', JSON.stringify(currentUser))
   }
 
+  function hydrate(response: BootstrapResponse): void {
+    applyBootstrap(response)
+    initialized.value = true
+  }
+
   async function bootstrapSession(): Promise<void> {
     const response = await authAPI.bootstrap()
+    if (!response.auth_state.authenticated && response.auth_state.refresh_available) {
+      try {
+        const refreshed = await authAPI.refreshSession()
+        hydrate(refreshed)
+        return
+      } catch {
+        applyBootstrap(response)
+        return
+      }
+    }
     applyBootstrap(response)
   }
 
@@ -107,8 +122,7 @@ export const useAuthStore = defineStore('auth', () => {
       return response
     }
 
-    applyBootstrap(response)
-    initialized.value = true
+    hydrate(response)
     return response
   }
 
@@ -117,8 +131,7 @@ export const useAuthStore = defineStore('auth', () => {
       login_challenge_id: tempToken,
       totp_code: totpCode
     })
-    applyBootstrap(response)
-    initialized.value = true
+    hydrate(response)
     if (!user.value) {
       throw new Error('Authentication failed')
     }
@@ -127,8 +140,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function register(userData: RegisterRequest): Promise<User> {
     const response = await authAPI.register(userData)
-    applyBootstrap(response)
-    initialized.value = true
+    hydrate(response)
     if (!user.value) {
       throw new Error('Registration failed')
     }
@@ -170,6 +182,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAdmin,
     isSimpleMode,
     initialized: readonly(initialized),
+    hydrate,
     login,
     login2FA,
     register,

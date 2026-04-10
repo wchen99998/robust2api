@@ -342,12 +342,14 @@ func (r *controlAuthRepository) RotateSessionRefreshToken(ctx context.Context, s
 	if err != nil {
 		return err
 	}
-	_, err = exec.ExecContext(
+	result, err := exec.ExecContext(
 		ctx,
 		`UPDATE auth_refresh_tokens
 		    SET rotated_at = $2,
 		        replaced_by_token_hash = $3
-		  WHERE token_hash = $1`,
+		  WHERE token_hash = $1
+		    AND rotated_at IS NULL
+		    AND revoked_at IS NULL`,
 		currentTokenHash,
 		rotatedAt,
 		nextToken.TokenHash,
@@ -355,6 +357,52 @@ func (r *controlAuthRepository) RotateSessionRefreshToken(ctx context.Context, s
 	if err != nil {
 		return fmt.Errorf("rotate refresh token: %w", err)
 	}
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("rotate refresh token rows affected: %w", err)
+	}
+	if affected != 1 {
+		return service.ErrRefreshTokenReused
+	}
+
+	result, err = exec.ExecContext(
+		ctx,
+		`UPDATE auth_sessions
+		    SET status = $3,
+		        amr = $4,
+		        last_seen_at = $5,
+		        expires_at = $6,
+		        absolute_expires_at = $7,
+		        revoked_at = $8,
+		        current_refresh_token_hash = $9,
+		        auth_version = $10,
+		        updated_at = NOW()
+		  WHERE sid = $1
+		    AND current_refresh_token_hash = $2
+		    AND revoked_at IS NULL
+		    AND status = 'active'`,
+		session.SessionID,
+		currentTokenHash,
+		session.Status,
+		session.AMR,
+		session.LastSeenAt,
+		session.ExpiresAt,
+		session.AbsoluteExpiresAt,
+		session.RevokedAt,
+		session.CurrentRefreshTokenHash,
+		session.AuthVersion,
+	)
+	if err != nil {
+		return fmt.Errorf("update rotated auth_session: %w", err)
+	}
+	affected, err = result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("update rotated auth_session rows affected: %w", err)
+	}
+	if affected != 1 {
+		return service.ErrRefreshTokenReused
+	}
+
 	_, err = exec.ExecContext(
 		ctx,
 		`INSERT INTO auth_refresh_tokens
@@ -370,10 +418,6 @@ func (r *controlAuthRepository) RotateSessionRefreshToken(ctx context.Context, s
 	)
 	if err != nil {
 		return fmt.Errorf("insert rotated refresh token: %w", err)
-	}
-	session.CurrentRefreshTokenHash = nextToken.TokenHash
-	if err := r.UpdateSession(ctx, session); err != nil {
-		return err
 	}
 	return nil
 }
@@ -784,29 +828,29 @@ func (r *controlAuthRepository) GetRegistrationChallenge(ctx context.Context, ch
 }
 
 func (r *controlAuthRepository) ConsumeRegistrationChallenge(ctx context.Context, challengeID string, now time.Time) (*service.RegistrationChallengeRecord, error) {
-	record, err := r.GetRegistrationChallenge(ctx, challengeID)
-	if err != nil {
-		return nil, err
-	}
-	if record.ConsumedAt != nil || now.After(record.ExpiresAt) {
-		return nil, service.ErrRegistrationChallengeNotFound
-	}
 	exec, err := sqlExecutorFromContext(ctx, r.sql)
 	if err != nil {
 		return nil, err
 	}
-	_, err = exec.ExecContext(
+	row := queryRowContext(
 		ctx,
+		exec,
 		`UPDATE auth_registration_challenges
 		    SET consumed_at = $2,
 		        updated_at = NOW()
-		  WHERE challenge_id = $1`,
+		  WHERE challenge_id = $1
+		    AND consumed_at IS NULL
+		    AND expires_at > $2
+		RETURNING challenge_id, provider, issuer, external_subject, email, registration_email, username, redirect_to, expires_at, consumed_at, created_at, updated_at`,
 		challengeID, now,
 	)
+	record, err := scanRegistrationChallenge(row)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrRegistrationChallengeNotFound
+		}
 		return nil, fmt.Errorf("consume registration challenge: %w", err)
 	}
-	record.ConsumedAt = &now
 	return record, nil
 }
 

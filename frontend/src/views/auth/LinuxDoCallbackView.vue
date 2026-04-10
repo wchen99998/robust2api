@@ -105,8 +105,8 @@ async function handleSubmitInvitation() {
 
   isSubmitting.value = true
   try {
-    await completeOAuthRegistration(invitationCode.value.trim())
-    await authStore.initialize(true)
+    const response = await completeOAuthRegistration(invitationCode.value.trim())
+    authStore.hydrate(response)
     appStore.showSuccess(t('auth.loginSuccess'))
     await router.replace(redirectTo.value)
   } catch (e: unknown) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -114,7 +115,7 @@ func (s *ControlAuthService) SendRegistrationEmailCode(ctx context.Context, emai
 		return fmt.Errorf("generate verification code: %w", err)
 	}
 	record := &EmailVerificationRecord{
-		VerificationID: mustRandomHex(24),
+		VerificationID: newUUIDString(),
 		Purpose:        controlEmailPurposeRegistration,
 		Email:          email,
 		CodeHash:       hashToken(code),
@@ -252,7 +253,7 @@ func (s *ControlAuthService) RequestPasswordReset(ctx context.Context, email str
 		return fmt.Errorf("generate password reset token: %w", err)
 	}
 	record := &PasswordResetTokenRecord{
-		ResetID:   mustRandomHex(24),
+		ResetID:   newUUIDString(),
 		SubjectID: bundle.Subject.SubjectID,
 		Email:     email,
 		TokenHash: hashToken(token),
@@ -381,7 +382,9 @@ func (s *ControlAuthService) HandleOAuthLogin(ctx context.Context, input *Contro
 		return nil, infraerrors.BadRequest("OAUTH_IDENTITY_INVALID", "oauth identity is incomplete")
 	}
 
-	if bundle, err := s.authRepo.GetIdentityBundleByFederatedIdentity(ctx, input.Provider, issuer, externalSubject); err == nil && bundle != nil && bundle.Subject != nil {
+	bundle, err := s.authRepo.GetIdentityBundleByFederatedIdentity(ctx, input.Provider, issuer, externalSubject)
+	switch {
+	case err == nil && bundle != nil && bundle.Subject != nil:
 		user, err := s.userRepo.GetByID(ctx, bundle.Subject.LegacyUserID)
 		if err != nil {
 			return nil, err
@@ -394,6 +397,8 @@ func (s *ControlAuthService) HandleOAuthLogin(ctx context.Context, input *Contro
 			return nil, err
 		}
 		return &ControlOAuthLoginResult{Identity: identity, Tokens: tokens}, nil
+	case err != nil && !errors.Is(err, ErrFederatedIdentityNotFound):
+		return nil, err
 	}
 
 	loginEmail := strings.TrimSpace(input.LoginEmail)
@@ -409,7 +414,7 @@ func (s *ControlAuthService) HandleOAuthLogin(ctx context.Context, input *Contro
 
 	if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
 		challenge := &RegistrationChallengeRecord{
-			ChallengeID:       mustRandomHex(24),
+			ChallengeID:       newUUIDString(),
 			Provider:          input.Provider,
 			Issuer:            issuer,
 			ExternalSubject:   externalSubject,
@@ -441,15 +446,19 @@ func (s *ControlAuthService) HandleOAuthLogin(ctx context.Context, input *Contro
 }
 
 func (s *ControlAuthService) CompleteOAuthRegistration(ctx context.Context, challengeID, invitationCode string) (*AuthenticatedIdentity, *ControlSessionTokens, error) {
-	challenge, err := s.authRepo.ConsumeRegistrationChallenge(ctx, strings.TrimSpace(challengeID), time.Now())
+	challenge, err := s.authRepo.GetRegistrationChallenge(ctx, strings.TrimSpace(challengeID))
 	if err != nil {
 		if errors.Is(err, ErrRegistrationChallengeNotFound) {
 			return nil, nil, ErrRegistrationChallengeNotFound
 		}
 		return nil, nil, err
 	}
+	if challenge == nil || challenge.ConsumedAt != nil || time.Now().After(challenge.ExpiresAt) {
+		return nil, nil, ErrRegistrationChallengeNotFound
+	}
 
 	return s.registerOAuthSubject(ctx, &oauthRegistrationInput{
+		ChallengeID:       challenge.ChallengeID,
 		Provider:          challenge.Provider,
 		Issuer:            challenge.Issuer,
 		ExternalSubject:   challenge.ExternalSubject,
@@ -462,6 +471,7 @@ func (s *ControlAuthService) CompleteOAuthRegistration(ctx context.Context, chal
 }
 
 type oauthRegistrationInput struct {
+	ChallengeID       string
 	Provider          string
 	Issuer            string
 	ExternalSubject   string
@@ -536,6 +546,11 @@ func (s *ControlAuthService) registerOAuthSubject(ctx context.Context, input *oa
 	}
 	if err := s.assignDefaultSubscriptionsTx(txCtx, user.ID); err != nil {
 		return nil, nil, err
+	}
+	if strings.TrimSpace(input.ChallengeID) != "" {
+		if _, err := s.authRepo.ConsumeRegistrationChallenge(txCtx, strings.TrimSpace(input.ChallengeID), time.Now()); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	identity, tokens, snapshot, err := s.createSessionInTransaction(txCtx, bundle, user, input.AMR)
@@ -716,7 +731,11 @@ func (s *ControlAuthService) sendPasswordResetEmail(ctx context.Context, email, 
 	if s.settingService != nil {
 		siteName = s.settingService.GetSiteName(ctx)
 	}
-	resetURL := fmt.Sprintf("%s/reset-password?email=%s&token=%s", baseURL, email, token)
+	resetQuery := url.Values{
+		"email": []string{email},
+		"token": []string{token},
+	}
+	resetURL := fmt.Sprintf("%s/reset-password?%s", strings.TrimSuffix(baseURL, "/"), resetQuery.Encode())
 	subject := fmt.Sprintf("[%s] 密码重置请求", siteName)
 	body := s.emailService.buildPasswordResetEmailBody(resetURL, siteName)
 	return s.emailService.SendEmail(ctx, email, subject, body)
@@ -731,12 +750,4 @@ func hashPassword(password string) (string, error) {
 		return "", err
 	}
 	return string(bytes), nil
-}
-
-func mustRandomHex(byteLength int) string {
-	value, err := randomHexString(byteLength)
-	if err != nil {
-		panic(err)
-	}
-	return value
 }

@@ -7,6 +7,7 @@ const mockLogin = vi.fn()
 const mockLogin2FA = vi.fn()
 const mockRegister = vi.fn()
 const mockLogout = vi.fn()
+const mockRefreshSession = vi.fn()
 
 vi.mock('@/api', () => ({
   authAPI: {
@@ -14,7 +15,8 @@ vi.mock('@/api', () => ({
     login: (...args: any[]) => mockLogin(...args),
     login2FA: (...args: any[]) => mockLogin2FA(...args),
     register: (...args: any[]) => mockRegister(...args),
-    logout: (...args: any[]) => mockLogout(...args)
+    logout: (...args: any[]) => mockLogout(...args),
+    refreshSession: (...args: any[]) => mockRefreshSession(...args)
   },
   isTotp2FARequired: (response: any) => response?.mfa_required === true || response?.requires_2fa === true
 }))
@@ -105,6 +107,27 @@ describe('useAuthStore', () => {
 
     expect(store.isAuthenticated).toBe(false)
     expect(store.pendingRegistration?.challenge_id).toBe('challenge-1')
+  })
+
+  it('refreshes the session during initialize when bootstrap says refresh is available', async () => {
+    mockBootstrap.mockResolvedValue({
+      csrf_token: 'csrf-token',
+      run_mode: 'standard' as const,
+      public_settings: {} as any,
+      auth_state: {
+        authenticated: false,
+        refresh_available: true
+      },
+      me: { user: null }
+    })
+    mockRefreshSession.mockResolvedValue(fakeBootstrap)
+    const store = useAuthStore()
+
+    await store.initialize()
+
+    expect(mockRefreshSession).toHaveBeenCalledTimes(1)
+    expect(store.isAuthenticated).toBe(true)
+    expect(store.user?.email).toBe('test@example.com')
   })
 
   it('login2FA authenticates via challenge', async () => {
