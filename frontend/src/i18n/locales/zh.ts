@@ -343,6 +343,7 @@ export default {
     invitationCodeInvalid: '邀请码无效或已被使用',
     invitationCodeValidating: '正在验证邀请码...',
     invitationCodeInvalidCannotRegister: '邀请码无效，请检查后重试',
+    oauthOrContinue: '或使用邮箱密码继续',
     linuxdo: {
       signIn: '使用 Linux.do 登录',
       orContinue: '或使用邮箱密码继续',
@@ -353,6 +354,19 @@ export default {
       backToLogin: '返回登录',
       invitationRequired: '该 Linux.do 账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
       invalidPendingToken: '注册凭证已失效，请重新使用 Linux.do 登录。',
+      completeRegistration: '完成注册',
+      completing: '正在完成注册...',
+      completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
+    },
+    oidc: {
+      signIn: '使用 {providerName} 登录',
+      callbackTitle: '正在使用 {providerName} 完成登录',
+      callbackProcessing: '正在完成 {providerName} 登录，请稍候...',
+      callbackHint: '如果页面未自动跳转，请返回登录页重试。',
+      callbackMissingToken: '登录信息缺失，请返回重试。',
+      backToLogin: '返回登录',
+      invitationRequired: '该 {providerName} 账号尚未注册，站点已开启邀请码注册，请输入邀请码以完成注册。',
+      invalidPendingToken: '注册凭证已失效，请重新登录。',
       completeRegistration: '完成注册',
       completing: '正在完成注册...',
       completeRegistrationFailed: '注册失败，请检查邀请码后重试。'
@@ -1367,7 +1381,24 @@ export default {
         allowDispatchHint: '启用后，此 OpenAI 分组的 API Key 可以通过 /v1/messages 端点调度请求',
         defaultModel: '默认映射模型',
         defaultModelPlaceholder: '例如: gpt-4.1',
-        defaultModelHint: '当账号未配置模型映射时，所有请求模型将映射到此模型'
+        defaultModelHint: '当账号未配置模型映射时，所有请求模型将映射到此模型',
+        familyMappingTitle: 'Claude 系列映射',
+        familyMappingHint: '分别为 Opus、Sonnet、Haiku 请求指定默认的 OpenAI 目标模型。',
+        opusModel: 'Opus 目标模型',
+        opusModelPlaceholder: '例如: gpt-5.4',
+        sonnetModel: 'Sonnet 目标模型',
+        sonnetModelPlaceholder: '例如: gpt-5.3-codex',
+        haikuModel: 'Haiku 目标模型',
+        haikuModelPlaceholder: '例如: gpt-5.4-mini',
+        exactMappingTitle: '精确模型覆盖',
+        exactMappingHint: '当某个具体 Claude 模型版本需要不同的 OpenAI 目标模型时，在这里单独指定。',
+        noExactMappings: '暂无精确映射',
+        addExactMapping: '添加精确映射',
+        claudeModel: 'Claude 模型',
+        claudeModelPlaceholder: 'claude-sonnet-4-5-20250929',
+        targetModel: '目标 OpenAI 模型',
+        targetModelPlaceholder: 'gpt-5.2',
+        removeExactMapping: '删除'
       },
       invalidRequestFallback: {
         title: '无效请求兜底分组',
