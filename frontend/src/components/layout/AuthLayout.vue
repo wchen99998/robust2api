@@ -47,10 +47,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, defineAsyncComponent } from 'vue'
 import { useAppStore } from '@/stores'
 import { sanitizeUrl } from '@/utils/url'
-import PixelBlast from '@/components/effects/PixelBlast.vue'
+
+const PixelBlast = defineAsyncComponent(() => import('@/components/effects/PixelBlast.vue'))
 
 const appStore = useAppStore()
 
@@ -74,12 +75,20 @@ onMounted(() => {
   background: #f2f0ed;
 }
 
+:global(.dark) .auth-split {
+  background: #1c1c1e;
+}
+
 /* Left pane - PixelBlast */
 .auth-split__left {
   flex: 1;
   position: relative;
   background: #f2f0ed;
   overflow: hidden;
+}
+
+:global(.dark) .auth-split__left {
+  background: #1c1c1e;
 }
 
 /* Right pane - Form */
@@ -90,6 +99,10 @@ onMounted(() => {
   justify-content: center;
   padding: 32px;
   background: #f2f0ed;
+}
+
+:global(.dark) .auth-split__right {
+  background: #1c1c1e;
 }
 
 .auth-split__form {
@@ -131,10 +144,18 @@ onMounted(() => {
   margin-bottom: 2px;
 }
 
+:global(.dark) .auth-split__site-name {
+  color: #f5f5f7;
+}
+
 .auth-split__subtitle {
   font-size: 13px;
   font-weight: 500;
   color: #6e6e73;
+}
+
+:global(.dark) .auth-split__subtitle {
+  color: #a1a1a6;
 }
 
 .auth-split__card {
@@ -150,18 +171,34 @@ onMounted(() => {
   letter-spacing: -0.3px;
 }
 
+:global(.dark) .auth-split__card :deep(h2) {
+  color: #f5f5f7;
+}
+
 .auth-split__card :deep(.text-mica-text-secondary) {
   color: #6e6e73;
+}
+
+:global(.dark) .auth-split__card :deep(.text-mica-text-secondary) {
+  color: #a1a1a6;
 }
 
 .auth-split__card :deep(.text-mica-text-tertiary) {
   color: #aeaeb2;
 }
 
+:global(.dark) .auth-split__card :deep(.text-mica-text-tertiary) {
+  color: #636366;
+}
+
 .auth-split__card :deep(.input-label) {
   color: #1d1d1f;
   font-size: 13px;
   font-weight: 500;
+}
+
+:global(.dark) .auth-split__card :deep(.input-label) {
+  color: #f5f5f7;
 }
 
 .auth-split__card :deep(.input) {
@@ -173,14 +210,29 @@ onMounted(() => {
   transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
+:global(.dark) .auth-split__card :deep(.input) {
+  background-color: #2c2c2e;
+  border-color: #3a3a3c;
+  color: #f5f5f7;
+}
+
 .auth-split__card :deep(.input:focus) {
   border-color: #007aff;
   box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12);
   outline: none;
 }
 
+:global(.dark) .auth-split__card :deep(.input:focus) {
+  border-color: #0a84ff;
+  box-shadow: 0 0 0 3px rgba(10, 132, 255, 0.2);
+}
+
 .auth-split__card :deep(.input::placeholder) {
   color: #aeaeb2;
+}
+
+:global(.dark) .auth-split__card :deep(.input::placeholder) {
+  color: #636366;
 }
 
 .auth-split__card :deep(.btn-primary) {
@@ -193,8 +245,17 @@ onMounted(() => {
   transition: background-color 0.18s ease, transform 0.18s ease;
 }
 
+:global(.dark) .auth-split__card :deep(.btn-primary) {
+  background-color: #f5f5f7;
+  color: #1c1c1e;
+}
+
 .auth-split__card :deep(.btn-primary:hover) {
   background-color: #3a3a3c;
+}
+
+:global(.dark) .auth-split__card :deep(.btn-primary:hover) {
+  background-color: #ffffff;
 }
 
 .auth-split__card :deep(.btn-primary:active) {
@@ -206,8 +267,16 @@ onMounted(() => {
   color: #aeaeb2;
 }
 
+:global(.dark) .auth-split__card :deep(button:not(.btn)) {
+  color: #636366;
+}
+
 .auth-split__card :deep(button:not(.btn):hover) {
   color: #1d1d1f;
+}
+
+:global(.dark) .auth-split__card :deep(button:not(.btn):hover) {
+  color: #f5f5f7;
 }
 
 /* Links */
@@ -216,8 +285,16 @@ onMounted(() => {
   font-weight: 500;
 }
 
+:global(.dark) .auth-split__card :deep(a) {
+  color: #0a84ff;
+}
+
 .auth-split__card :deep(a:hover) {
   color: #0066d6;
+}
+
+:global(.dark) .auth-split__card :deep(a:hover) {
+  color: #409cff;
 }
 
 /* Error states */
@@ -225,16 +302,32 @@ onMounted(() => {
   color: #ff3b30;
 }
 
+:global(.dark) .auth-split__card :deep(.text-status-red) {
+  color: #ff453a;
+}
+
 .auth-split__card :deep(.input-error-text) {
   color: #ff3b30;
+}
+
+:global(.dark) .auth-split__card :deep(.input-error-text) {
+  color: #ff453a;
 }
 
 .auth-split__card :deep(.input-error) {
   border-color: #ff3b30;
 }
 
+:global(.dark) .auth-split__card :deep(.input-error) {
+  border-color: #ff453a;
+}
+
 .auth-split__card :deep(.input-error:focus) {
   box-shadow: 0 0 0 3px rgba(255, 59, 48, 0.12);
+}
+
+:global(.dark) .auth-split__card :deep(.input-error:focus) {
+  box-shadow: 0 0 0 3px rgba(255, 69, 58, 0.2);
 }
 
 /* Footer slot */
@@ -250,13 +343,25 @@ onMounted(() => {
   color: #6e6e73;
 }
 
+:global(.dark) .auth-split__footer-slot :deep(p) {
+  color: #a1a1a6;
+}
+
 .auth-split__footer-slot :deep(a) {
   color: #007aff;
   font-weight: 600;
 }
 
+:global(.dark) .auth-split__footer-slot :deep(a) {
+  color: #0a84ff;
+}
+
 .auth-split__footer-slot :deep(a:hover) {
   color: #0066d6;
+}
+
+:global(.dark) .auth-split__footer-slot :deep(a:hover) {
+  color: #409cff;
 }
 
 .auth-split__copyright {
@@ -267,6 +372,10 @@ onMounted(() => {
   font-weight: 500;
   color: #aeaeb2;
   animation: fade-up 500ms cubic-bezier(0.16, 1, 0.3, 1) 180ms both;
+}
+
+:global(.dark) .auth-split__copyright {
+  color: #636366;
 }
 
 /* Mobile: stack vertically, hide pixel blast */

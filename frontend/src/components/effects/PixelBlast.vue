@@ -1,5 +1,5 @@
 <template>
-  <div ref="containerRef" class="pixel-blast" aria-label="PixelBlast background" />
+  <div ref="containerRef" class="pixel-blast" aria-hidden="true" role="presentation" />
 </template>
 
 <script setup lang="ts">
@@ -220,18 +220,24 @@ let ro: ResizeObserver | null = null
 let clickIx = 0
 let uniforms: Record<string, THREE.IUniform> | null = null
 let timeOffset = 0
+let onPointerDown: ((e: PointerEvent) => void) | null = null
 
 function init() {
   const container = containerRef.value
   if (!container) return
 
   const canvas = document.createElement('canvas')
-  renderer = new THREE.WebGLRenderer({
-    canvas,
-    antialias: true,
-    alpha: true,
-    powerPreference: 'high-performance'
-  })
+  try {
+    renderer = new THREE.WebGLRenderer({
+      canvas,
+      antialias: true,
+      alpha: true,
+      powerPreference: 'high-performance'
+    })
+  } catch {
+    // WebGL not available — leave container empty as a silent fallback
+    return
+  }
   renderer.domElement.style.width = '100%'
   renderer.domElement.style.height = '100%'
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2))
@@ -301,7 +307,7 @@ function init() {
     }
   }
 
-  const onPointerDown = (e: PointerEvent) => {
+  onPointerDown = (e: PointerEvent) => {
     if (!uniforms) return
     const { fx, fy } = mapToPixels(e)
     ;(uniforms.uClickPos.value as THREE.Vector2[])[clickIx].set(fx, fy)
@@ -323,6 +329,10 @@ function init() {
 function cleanup() {
   ro?.disconnect()
   cancelAnimationFrame(raf)
+  if (onPointerDown && renderer) {
+    renderer.domElement.removeEventListener('pointerdown', onPointerDown)
+  }
+  onPointerDown = null
   quad?.geometry.dispose()
   material?.dispose()
   renderer?.dispose()

@@ -36,11 +36,13 @@ let ctx: CanvasRenderingContext2D | null = null
 let letters: Array<{
   char: string
   color: string
+  startColor: string
   targetColor: string
   colorProgress: number
 }> = []
 let grid = { columns: 0, rows: 0 }
 let lastGlitchTime = Date.now()
+let prefersReducedMotion = false
 
 const fontSize = 16
 const charWidth = 10
@@ -104,12 +106,16 @@ function calculateGrid(width: number, height: number) {
 function initializeLetters(columns: number, rows: number) {
   grid = { columns, rows }
   const total = columns * rows
-  letters = Array.from({ length: total }, () => ({
-    char: getRandomChar(),
-    color: getRandomColor(),
-    targetColor: getRandomColor(),
-    colorProgress: 1
-  }))
+  letters = Array.from({ length: total }, () => {
+    const color = getRandomColor()
+    return {
+      char: getRandomChar(),
+      color,
+      startColor: color,
+      targetColor: getRandomColor(),
+      colorProgress: 1
+    }
+  })
 }
 
 function resizeCanvas() {
@@ -164,8 +170,11 @@ function updateLetters() {
 
     if (!props.smooth) {
       letters[index].color = letters[index].targetColor
+      letters[index].startColor = letters[index].targetColor
       letters[index].colorProgress = 1
     } else {
+      letters[index].startColor = letters[index].targetColor
+      letters[index].targetColor = getRandomColor()
       letters[index].colorProgress = 0
     }
   }
@@ -178,7 +187,7 @@ function handleSmoothTransitions() {
       letter.colorProgress += 0.05
       if (letter.colorProgress > 1) letter.colorProgress = 1
 
-      const startRgb = hexToRgb(letter.color)
+      const startRgb = hexToRgb(letter.startColor)
       const endRgb = hexToRgb(letter.targetColor)
       if (startRgb && endRgb) {
         letter.color = interpolateColor(startRgb, endRgb, letter.colorProgress)
@@ -192,6 +201,12 @@ function handleSmoothTransitions() {
 }
 
 function animate() {
+  if (prefersReducedMotion) {
+    // Draw once and stop when reduced motion is preferred
+    drawLetters()
+    return
+  }
+
   const now = Date.now()
   if (now - lastGlitchTime >= props.glitchSpeed) {
     updateLetters()
@@ -232,14 +247,36 @@ function handleResize() {
   }, 100)
 }
 
+function handleVisibilityChange() {
+  if (document.hidden) {
+    stop()
+  } else if (!prefersReducedMotion) {
+    animate()
+  }
+}
+
 onMounted(() => {
+  const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+  prefersReducedMotion = mq.matches
+  mq.addEventListener('change', (e) => {
+    prefersReducedMotion = e.matches
+    if (e.matches) {
+      stop()
+      drawLetters()
+    } else {
+      animate()
+    }
+  })
+
   start()
   window.addEventListener('resize', handleResize)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onUnmounted(() => {
   stop()
   window.removeEventListener('resize', handleResize)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   clearTimeout(resizeTimeout)
 })
 

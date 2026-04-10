@@ -56,7 +56,9 @@
               >
                 {{ t('home.docs') }}
               </a>
-              <LocaleSwitcher />
+              <div class="glass-nav__locale">
+                <LocaleSwitcher />
+              </div>
               <button @click="toggleTheme" class="glass-nav__link glass-nav__link--icon" :title="isDark ? t('home.switchToLight') : t('home.switchToDark')">
                 <Icon v-if="isDark" name="sun" size="sm" />
                 <Icon v-else name="moon" size="sm" />
@@ -210,6 +212,10 @@ onMounted(() => {
   color: #1d1d1f;
 }
 
+:global(.dark) .home-glitch {
+  color: #f5f5f7;
+}
+
 @media (max-width: 768px) {
   .home-glitch {
     overflow: hidden;
@@ -301,6 +307,12 @@ onMounted(() => {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+:global(.dark) .glass-nav__surface {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(44, 44, 46, 0.85);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 .glass-nav__inner {
   display: flex;
   align-items: center;
@@ -318,6 +330,10 @@ onMounted(() => {
   color: #1d1d1f;
   text-decoration: none;
   letter-spacing: -0.03em;
+}
+
+:global(.dark) .glass-nav__logo {
+  color: #f5f5f7;
 }
 
 .glass-nav__logo-mark {
@@ -359,10 +375,19 @@ onMounted(() => {
   cursor: pointer;
 }
 
+:global(.dark) .glass-nav__link {
+  color: #a1a1a6;
+}
+
 .glass-nav__link:hover {
   color: #1d1d1f;
   background: rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
+}
+
+:global(.dark) .glass-nav__link:hover {
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .glass-nav__link--icon {
@@ -413,6 +438,12 @@ onMounted(() => {
   animation: hero-enter 820ms cubic-bezier(0.16, 1, 0.3, 1) 120ms both;
 }
 
+:global(.dark) .glass-hero__surface {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(44, 44, 46, 0.85);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 .glass-hero {
   position: relative;
   width: 100%;
@@ -460,6 +491,13 @@ onMounted(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
+:global(.dark) .glass-hero__badge {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(58, 58, 60, 0.5);
+  color: #f5f5f7;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
 .glass-hero__badge-icon {
   display: inline-flex;
   align-items: center;
@@ -477,9 +515,17 @@ onMounted(() => {
   background: rgba(0, 0, 0, 0.1);
 }
 
+:global(.dark) .glass-hero__badge-divider {
+  background: rgba(255, 255, 255, 0.12);
+}
+
 .glass-hero__badge-copy {
   color: #aeaeb2;
   white-space: nowrap;
+}
+
+:global(.dark) .glass-hero__badge-copy {
+  color: #636366;
 }
 
 @media (max-width: 640px) {
@@ -506,6 +552,10 @@ onMounted(() => {
   margin-bottom: 18px;
 }
 
+:global(.dark) .glass-hero__title {
+  color: #f5f5f7;
+}
+
 .glass-hero__title-row {
   display: flex;
   flex-wrap: wrap;
@@ -530,6 +580,10 @@ onMounted(() => {
   color: #007aff;
 }
 
+:global(.dark) .glass-hero__title-row--accent {
+  color: #0a84ff;
+}
+
 .glass-hero__desc {
   max-width: 560px;
   margin: 0 auto 32px;
@@ -537,6 +591,10 @@ onMounted(() => {
   font-weight: 400;
   line-height: 1.7;
   color: #6e6e73;
+}
+
+:global(.dark) .glass-hero__desc {
+  color: #a1a1a6;
 }
 
 @media (max-width: 480px) {
@@ -591,12 +649,24 @@ onMounted(() => {
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
 }
 
+:global(.dark) .glass-hero__btn--primary {
+  color: #1c1c1e;
+  background: #f5f5f7;
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
 .glass-hero__btn--primary:hover {
   background: #3a3a3c;
   transform: translateY(-1px);
   box-shadow:
     0 14px 34px rgba(0, 0, 0, 0.2),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+:global(.dark) .glass-hero__btn--primary:hover {
+  background: #ffffff;
 }
 
 .glass-hero__btn--secondary {
@@ -606,11 +676,23 @@ onMounted(() => {
   backdrop-filter: blur(16px);
 }
 
+:global(.dark) .glass-hero__btn--secondary {
+  color: #a1a1a6;
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
 .glass-hero__btn--secondary:hover {
   color: #1d1d1f;
   background: rgba(255, 255, 255, 0.5);
   border-color: rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
+}
+
+:global(.dark) .glass-hero__btn--secondary:hover {
+  color: #f5f5f7;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.15);
 }
 
 .glass-hero__proof {
@@ -634,6 +716,12 @@ onMounted(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
+:global(.dark) .glass-hero__code {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
 @media (max-width: 480px) {
   .glass-hero__code {
     font-size: 11px;
@@ -650,6 +738,13 @@ onMounted(() => {
 .glass-hero__code-arrow { font-size: 10px; color: #aeaeb2; }
 .glass-hero__code-ok { font-weight: 600; color: #34c759; }
 
+:global(.dark) .glass-hero__code-prompt { color: #636366; }
+:global(.dark) .glass-hero__code-cmd { color: #f5f5f7; }
+:global(.dark) .glass-hero__code-flag { color: #0a84ff; }
+:global(.dark) .glass-hero__code-url { color: #0a84ff; }
+:global(.dark) .glass-hero__code-arrow { color: #636366; }
+:global(.dark) .glass-hero__code-ok { color: #30d158; }
+
 .glass-hero__metrics {
   display: flex;
   align-items: center;
@@ -659,6 +754,10 @@ onMounted(() => {
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: #aeaeb2;
+}
+
+:global(.dark) .glass-hero__metrics {
+  color: #636366;
 }
 
 @media (max-width: 480px) {
@@ -683,11 +782,19 @@ onMounted(() => {
   animation: footer-enter 760ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
 }
 
+:global(.dark) .glass-footer {
+  color: #636366;
+}
+
 .glass-footer__dot {
   width: 3px;
   height: 3px;
   border-radius: 999px;
   background: #aeaeb2;
+}
+
+:global(.dark) .glass-footer__dot {
+  background: #636366;
 }
 
 /* --- Nav button base overrides --- */
@@ -703,28 +810,45 @@ onMounted(() => {
     transform 0.18s ease;
 }
 
+:global(.dark) .glass-nav :deep(button) {
+  color: #a1a1a6 !important;
+}
+
 .glass-nav :deep(button:hover) {
   color: #1d1d1f !important;
   background: rgba(0, 0, 0, 0.04) !important;
   transform: translateY(-1px);
 }
 
-/* --- LocaleSwitcher toggle --- */
-.glass-nav :deep(.relative > button) {
+:global(.dark) .glass-nav :deep(button:hover) {
+  color: #f5f5f7 !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
+/* --- LocaleSwitcher overrides via wrapper class --- */
+.glass-nav__locale :deep(button) {
   color: #6e6e73 !important;
   font-weight: 600;
 }
 
-.glass-nav :deep(.relative > button span) {
+.glass-nav__locale :deep(button span) {
   color: #6e6e73 !important;
 }
 
-.glass-nav :deep(.relative > button svg) {
+:global(.dark) .glass-nav__locale :deep(button span) {
+  color: #a1a1a6 !important;
+}
+
+.glass-nav__locale :deep(button svg) {
   color: #aeaeb2 !important;
 }
 
+:global(.dark) .glass-nav__locale :deep(button svg) {
+  color: #636366 !important;
+}
+
 /* --- LocaleSwitcher dropdown panel --- */
-.glass-nav :deep(.relative > div[class*="absolute"]) {
+.glass-nav__locale :deep(div[class*="absolute"]) {
   border: 1px solid rgba(0, 0, 0, 0.08) !important;
   background: rgba(255, 255, 255, 0.92) !important;
   backdrop-filter: blur(28px) saturate(150%) !important;
@@ -736,8 +860,16 @@ onMounted(() => {
   overflow: hidden !important;
 }
 
+:global(.dark) .glass-nav__locale :deep(div[class*="absolute"]) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(44, 44, 46, 0.92) !important;
+  box-shadow:
+    0 20px 50px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06) !important;
+}
+
 /* --- LocaleSwitcher dropdown items --- */
-.glass-nav :deep(.relative > div[class*="absolute"] button) {
+.glass-nav__locale :deep(div[class*="absolute"] button) {
   color: #1d1d1f !important;
   background: transparent !important;
   border-radius: 0 !important;
@@ -746,22 +878,41 @@ onMounted(() => {
   border: none !important;
 }
 
-.glass-nav :deep(.relative > div[class*="absolute"] button:hover) {
+:global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button) {
+  color: #f5f5f7 !important;
+}
+
+.glass-nav__locale :deep(div[class*="absolute"] button:hover) {
   color: #1d1d1f !important;
   background: rgba(0, 0, 0, 0.04) !important;
   transform: none !important;
 }
 
+:global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button:hover) {
+  color: #f5f5f7 !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+}
+
 /* Active locale highlight */
-.glass-nav :deep(.relative > div[class*="absolute"] button.bg-primary-50),
-.glass-nav :deep(.relative > div[class*="absolute"] button[class*="bg-primary"]) {
+.glass-nav__locale :deep(div[class*="absolute"] button.bg-primary-50),
+.glass-nav__locale :deep(div[class*="absolute"] button[class*="bg-primary"]) {
   background: rgba(0, 122, 255, 0.08) !important;
   color: #007aff !important;
 }
 
+:global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button.bg-primary-50),
+:global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button[class*="bg-primary"]) {
+  background: rgba(10, 132, 255, 0.12) !important;
+  color: #0a84ff !important;
+}
+
 /* Check icon in active item */
-.glass-nav :deep(.relative > div[class*="absolute"] button svg) {
+.glass-nav__locale :deep(div[class*="absolute"] button svg) {
   color: #007aff !important;
+}
+
+:global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button svg) {
+  color: #0a84ff !important;
 }
 
 @media (max-width: 768px) {

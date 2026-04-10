@@ -102,7 +102,7 @@
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="key" size="md" :class="invitationValidation.valid ? 'text-status-green dark:text-status-green-dark' : 'text-mica-text-tertiary dark:text-dark-500'" />
+              <Icon name="key" size="md" :class="invitationValidation.valid ? 'text-status-green dark:text-status-green-dark' : 'text-mica-text-tertiary dark:text-mica-text-tertiary-dark'" />
             </div>
             <input
               id="invitation_code"
@@ -152,11 +152,11 @@
         <div v-if="promoCodeEnabled">
           <label for="promo_code" class="input-label">
             {{ t('auth.promoCodeLabel') }}
-            <span class="ml-1 text-xs font-normal text-mica-text-tertiary dark:text-dark-500">({{ t('common.optional') }})</span>
+            <span class="ml-1 text-xs font-normal text-mica-text-tertiary dark:text-mica-text-tertiary-dark">({{ t('common.optional') }})</span>
           </label>
           <div class="relative">
             <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3.5">
-              <Icon name="gift" size="md" :class="promoValidation.valid ? 'text-status-green dark:text-status-green-dark' : 'text-mica-text-tertiary dark:text-dark-500'" />
+              <Icon name="gift" size="md" :class="promoValidation.valid ? 'text-status-green dark:text-status-green-dark' : 'text-mica-text-tertiary dark:text-mica-text-tertiary-dark'" />
             </div>
             <input
               id="promo_code"
