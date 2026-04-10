@@ -1,7 +1,7 @@
 //go:build wireinject
 // +build wireinject
 
-package main
+package control
 
 import (
 	"context"
@@ -11,40 +11,41 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/handler"
-	"github.com/Wei-Shaw/sub2api/internal/health"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	"github.com/Wei-Shaw/sub2api/internal/controlplane"
+	platformconfig "github.com/Wei-Shaw/sub2api/internal/platform/config"
+	platformdatabase "github.com/Wei-Shaw/sub2api/internal/platform/database"
+	platformhealth "github.com/Wei-Shaw/sub2api/internal/platform/health"
+	platformhttp "github.com/Wei-Shaw/sub2api/internal/platform/httpserver"
+	platformotel "github.com/Wei-Shaw/sub2api/internal/platform/otel"
+	platformredis "github.com/Wei-Shaw/sub2api/internal/platform/redis"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
-	"github.com/Wei-Shaw/sub2api/internal/server"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
 	"github.com/google/wire"
 	"github.com/redis/go-redis/v9"
 )
 
-type ControlApplication struct {
+type Application struct {
 	Server        *http.Server
-	MetricsServer *appelotel.MetricsServer
-	Health        *health.Checker
+	MetricsServer *platformotel.MetricsServer
+	Health        *platformhealth.Checker
 	Cleanup       func()
 }
 
-func initializeControlApplication(buildInfo handler.BuildInfo) (*ControlApplication, error) {
+func initialize(buildInfo BuildInfo) (*Application, error) {
 	wire.Build(
-		config.ControlProviderSet,
-		appelotel.ProviderSet,
-		repository.ProviderSet,
-		service.APIProviderSet,
-		middleware.ControlProviderSet,
-		handler.ControlProviderSet,
-		server.ControlProviderSet,
-		health.NewChecker,
+		platformconfig.ControlProviderSet,
+		platformotel.ProviderSet,
+		platformdatabase.ProviderSet,
+		platformredis.ProviderSet,
+		repository.AdapterProviderSet,
+		controlplane.ProviderSet,
+		platformhealth.ProviderSet,
+		platformhttp.ProviderSet,
 		providePrivacyClientFactory,
 		provideServiceBuildInfo,
-		provideControlCleanup,
-		wire.Struct(new(ControlApplication), "Server", "MetricsServer", "Health", "Cleanup"),
+		provideCleanup,
+		wire.Struct(new(Application), "Server", "MetricsServer", "Health", "Cleanup"),
 	)
 	return nil, nil
 }
@@ -53,18 +54,18 @@ func providePrivacyClientFactory() service.PrivacyClientFactory {
 	return repository.CreatePrivacyReqClient
 }
 
-func provideServiceBuildInfo(buildInfo handler.BuildInfo) service.BuildInfo {
+func provideServiceBuildInfo(buildInfo BuildInfo) service.BuildInfo {
 	return service.BuildInfo{
 		Version:   buildInfo.Version,
 		BuildType: buildInfo.BuildType,
 	}
 }
 
-func provideControlCleanup(
+func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
-	otelProvider *appelotel.Provider,
-	metricsServer *appelotel.MetricsServer,
+	otelProvider *platformotel.Provider,
+	metricsServer *platformotel.MetricsServer,
 	emailQueue *service.EmailQueueService,
 	billingCache *service.BillingCacheService,
 	subscriptionService *service.SubscriptionService,

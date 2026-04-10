@@ -1,5 +1,5 @@
 {{- $ing := .Values.ingress -}}
-{{- if and $ing.enabled ($ing.control.enabled) }}
+{{- if and .Values.control.enabled .Values.frontend.enabled $ing.enabled ($ing.control.enabled) }}
 {{- $controlHost := required "ingress.control.host or public.baseDomain must be set when ingress.enabled and ingress.control.enabled are true" (include "sub2api.controlHost" . | trim) -}}
 {{- $controlMaxBodySize := default $ing.maxBodySize $ing.control.maxBodySize -}}
 {{- $annotations := dict
@@ -39,7 +39,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "sub2api.fullname" . }}-control
+                name: {{ include "sub2api.frontendServiceName" . }}
                 port:
                   name: http
     {{- range $ing.control.extraHosts }}
@@ -50,7 +50,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "sub2api.fullname" $ }}-control
+                name: {{ include "sub2api.frontendServiceName" $ }}
                 port:
                   name: http
     {{- end }}

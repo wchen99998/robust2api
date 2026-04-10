@@ -4,7 +4,7 @@
 //go:build !wireinject
 // +build !wireinject
 
-package main
+package gateway
 
 import (
 	"context"
@@ -13,6 +13,9 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/health"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	health2 "github.com/Wei-Shaw/sub2api/internal/platform/health"
+	"github.com/Wei-Shaw/sub2api/internal/platform/httpserver"
+	otel2 "github.com/Wei-Shaw/sub2api/internal/platform/otel"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/server"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -24,14 +27,9 @@ import (
 	"time"
 )
 
-import (
-	_ "embed"
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-)
-
 // Injectors from wire.go:
 
-func initializeGatewayApplication() (*GatewayApplication, error) {
+func initialize() (*Application, error) {
 	configConfig, err := config.ProvideGatewayConfig()
 	if err != nil {
 		return nil, err
@@ -87,7 +85,8 @@ func initializeGatewayApplication() (*GatewayApplication, error) {
 	proxyRepository := repository.NewProxyRepository(client, db)
 	claudeOAuthClient := repository.NewClaudeOAuthClient()
 	oAuthService := service.NewOAuthService(proxyRepository, claudeOAuthClient)
-	oAuthRefreshAPI := service.NewOAuthRefreshAPI(accountRepository, geminiTokenCache)
+	v := service.ProvideOAuthRefreshLockTTL()
+	oAuthRefreshAPI := service.NewOAuthRefreshAPI(accountRepository, geminiTokenCache, v...)
 	claudeTokenProvider := service.ProvideClaudeTokenProvider(accountRepository, geminiTokenCache, oAuthService, oAuthRefreshAPI)
 	sessionLimitCache := repository.ProvideSessionLimitCache(redisClient, configConfig)
 	rpmCache := repository.NewRPMCache(redisClient)
@@ -132,36 +131,36 @@ func initializeGatewayApplication() (*GatewayApplication, error) {
 	apiKeyAuthMiddleware := middleware.NewAPIKeyAuthMiddleware(apiKeyService, subscriptionService, configConfig)
 	checker := health.NewChecker(db, redisClient)
 	engine := server.ProvideGatewayRouter(configConfig, gatewayHandlers, apiKeyAuthMiddleware, apiKeyService, subscriptionService, settingService, checker)
-	httpServer := server.ProvideHTTPServer(configConfig, engine)
+	httpServer := httpserver.ProvideHTTPServer(configConfig, engine)
 	provider, err := otel.ProvideOtel(configConfig)
 	if err != nil {
 		return nil, err
 	}
-	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
-	v := provideGatewayCleanup(client, redisClient, provider, metricsServer, billingCacheService, usageRecordWorkerPool, subscriptionService, pricingService, deferredService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
-	gatewayApplication := &GatewayApplication{
+	v2 := otel.ProvideMetricsServer(configConfig, provider)
+	v3 := provideCleanup(client, redisClient, provider, v2, billingCacheService, usageRecordWorkerPool, subscriptionService, pricingService, deferredService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, openAIGatewayService)
+	application := &Application{
 		Server:        httpServer,
-		MetricsServer: metricsServer,
+		MetricsServer: v2,
 		Health:        checker,
-		Cleanup:       v,
+		Cleanup:       v3,
 	}
-	return gatewayApplication, nil
+	return application, nil
 }
 
 // wire.go:
 
-type GatewayApplication struct {
+type Application struct {
 	Server        *http.Server
-	MetricsServer *otel.MetricsServer
-	Health        *health.Checker
+	MetricsServer *otel2.MetricsServer
+	Health        *health2.Checker
 	Cleanup       func()
 }
 
-func provideGatewayCleanup(
+func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
-	otelProvider *otel.Provider,
-	metricsServer *otel.MetricsServer,
+	otelProvider *otel2.Provider,
+	metricsServer *otel2.MetricsServer,
 	billingCache *service.BillingCacheService,
 	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,

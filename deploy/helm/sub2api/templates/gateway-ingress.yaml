@@ -1,5 +1,5 @@
 {{- $ing := .Values.ingress -}}
-{{- if and $ing.enabled ($ing.gateway.enabled) }}
+{{- if and .Values.gateway.enabled $ing.enabled ($ing.gateway.enabled) }}
 {{- $gatewayHost := required "ingress.gateway.host or public.baseDomain must be set when ingress.enabled and ingress.gateway.enabled are true" (include "sub2api.gatewayHost" . | trim) -}}
 {{- $gatewayMaxBodySize := default $ing.maxBodySize $ing.gateway.maxBodySize -}}
 {{- $annotations := dict

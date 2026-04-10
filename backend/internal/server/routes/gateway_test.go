@@ -19,7 +19,7 @@ func newGatewayRoutesTestRouter() *gin.Engine {
 
 	RegisterGatewayRoutes(
 		router,
-		&handler.Handlers{
+		&handler.GatewayHandlers{
 			Gateway:       &handler.GatewayHandler{},
 			OpenAIGateway: &handler.OpenAIGatewayHandler{},
 		},

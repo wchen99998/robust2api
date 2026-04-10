@@ -4,7 +4,7 @@
 //go:build !wireinject
 // +build !wireinject
 
-package main
+package worker
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/health"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	health2 "github.com/Wei-Shaw/sub2api/internal/platform/health"
+	otel2 "github.com/Wei-Shaw/sub2api/internal/platform/otel"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
@@ -20,14 +22,9 @@ import (
 	"time"
 )
 
-import (
-	_ "embed"
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-)
-
 // Injectors from wire.go:
 
-func initializeWorkerApplication() (*WorkerApplication, error) {
+func initialize() (*Application, error) {
 	configConfig, err := config.ProvideWorkerConfig()
 	if err != nil {
 		return nil, err
@@ -41,12 +38,12 @@ func initializeWorkerApplication() (*WorkerApplication, error) {
 		return nil, err
 	}
 	redisClient := repository.ProvideRedis(configConfig)
-	checker := health.NewChecker(db, redisClient)
-	provider, err := otel.ProvideOtel(configConfig)
+	v := health.NewChecker(db, redisClient)
+	v2, err := otel.ProvideOtel(configConfig)
 	if err != nil {
 		return nil, err
 	}
-	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
+	v3 := otel.ProvideMetricsServer(configConfig, v2)
 	concurrencyCache := repository.ProvideConcurrencyCache(redisClient, configConfig)
 	schedulerCache := repository.NewSchedulerCache(redisClient)
 	accountRepository := repository.NewAccountRepository(client, db, schedulerCache)
@@ -68,7 +65,8 @@ func initializeWorkerApplication() (*WorkerApplication, error) {
 	compositeTokenCacheInvalidator := service.NewCompositeTokenCacheInvalidator(geminiTokenCache)
 	tempUnschedCache := repository.NewTempUnschedCache(redisClient)
 	privacyClientFactory := providePrivacyClientFactory()
-	oAuthRefreshAPI := service.NewOAuthRefreshAPI(accountRepository, geminiTokenCache)
+	v4 := service.ProvideOAuthRefreshLockTTL()
+	oAuthRefreshAPI := service.NewOAuthRefreshAPI(accountRepository, geminiTokenCache, v4...)
 	tokenRefreshService := service.ProvideTokenRefreshService(accountRepository, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService, compositeTokenCacheInvalidator, schedulerCache, configConfig, tempUnschedCache, privacyClientFactory, proxyRepository, oAuthRefreshAPI)
 	accountExpiryService := service.ProvideAccountExpiryService(accountRepository)
 	userSubscriptionRepository := repository.NewUserSubscriptionRepository(client)
@@ -109,31 +107,21 @@ func initializeWorkerApplication() (*WorkerApplication, error) {
 	tlsFingerprintProfileService := service.NewTLSFingerprintProfileService(tlsFingerprintProfileRepository, tlsFingerprintProfileCache)
 	accountTestService := service.NewAccountTestService(accountRepository, geminiTokenProvider, antigravityGatewayService, httpUpstream, configConfig, tlsFingerprintProfileService)
 	scheduledTestRunnerService := service.ProvideScheduledTestRunnerService(scheduledTestPlanRepository, scheduledTestService, accountTestService, rateLimitService, configConfig)
-	emailCache := repository.NewEmailCache(redisClient)
-	emailService := service.NewEmailService(settingRepository, emailCache)
-	emailQueueService := service.ProvideEmailQueueService(emailService)
-	billingCache := repository.NewBillingCache(redisClient)
-	userRepository := repository.NewUserRepository(client, db)
-	apiKeyRepository := repository.NewAPIKeyRepository(client, db)
-	billingCacheService := service.NewBillingCacheService(billingCache, userRepository, userSubscriptionRepository, apiKeyRepository, configConfig)
-	usageRecordWorkerPool := service.NewUsageRecordWorkerPool(configConfig)
-	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService, client, configConfig)
 	userMsgQueueCache := repository.NewUserMsgQueueCache(redisClient)
 	rpmCache := repository.NewRPMCache(redisClient)
 	userMessageQueueService := service.ProvideUserMessageQueueService(userMsgQueueCache, rpmCache, configConfig)
-	v := provideWorkerCleanup(client, redisClient, provider, metricsServer, concurrencyService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, scheduledTestRunnerService, emailQueueService, billingCacheService, usageRecordWorkerPool, subscriptionService, userMessageQueueService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
-	workerApplication := &WorkerApplication{
-		Health:  checker,
-		Cleanup: v,
+	v5 := provideCleanup(client, redisClient, v2, v3, concurrencyService, schedulerSnapshotService, tokenRefreshService, accountExpiryService, subscriptionExpiryService, usageCleanupService, idempotencyCleanupService, pricingService, scheduledTestRunnerService, userMessageQueueService, oAuthService, openAIOAuthService, geminiOAuthService, antigravityOAuthService)
+	application := &Application{
+		Health:  v,
+		Cleanup: v5,
 	}
-	return workerApplication, nil
+	return application, nil
 }
 
 // wire.go:
 
-// WorkerApplication is the top-level struct for the worker binary.
-type WorkerApplication struct {
-	Health  *health.Checker
+type Application struct {
+	Health  *health2.Checker
 	Cleanup func()
 }
 
@@ -141,11 +129,11 @@ func providePrivacyClientFactory() service.PrivacyClientFactory {
 	return repository.CreatePrivacyReqClient
 }
 
-func provideWorkerCleanup(
+func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
-	otelProvider *otel.Provider,
-	metricsServer *otel.MetricsServer,
+	otelProvider *otel2.Provider,
+	metricsServer *otel2.MetricsServer,
 	_ *service.ConcurrencyService,
 	schedulerSnapshot *service.SchedulerSnapshotService,
 	tokenRefresh *service.TokenRefreshService,
@@ -155,10 +143,6 @@ func provideWorkerCleanup(
 	idempotencyCleanup *service.IdempotencyCleanupService,
 	pricing *service.PricingService,
 	scheduledTestRunner *service.ScheduledTestRunnerService,
-	emailQueue *service.EmailQueueService,
-	billingCache *service.BillingCacheService,
-	usageRecordWorkerPool *service.UsageRecordWorkerPool,
-	subscriptionService *service.SubscriptionService,
 	userMsgQueue *service.UserMessageQueueService,
 	oauth *service.OAuthService,
 	openaiOAuth *service.OpenAIOAuthService,
@@ -212,26 +196,6 @@ func provideWorkerCleanup(
 			{"ScheduledTestRunnerService", func() error {
 				if scheduledTestRunner != nil {
 					scheduledTestRunner.Stop()
-				}
-				return nil
-			}},
-			{"EmailQueueService", func() error {
-				emailQueue.Stop()
-				return nil
-			}},
-			{"BillingCacheService", func() error {
-				billingCache.Stop()
-				return nil
-			}},
-			{"UsageRecordWorkerPool", func() error {
-				if usageRecordWorkerPool != nil {
-					usageRecordWorkerPool.Stop()
-				}
-				return nil
-			}},
-			{"SubscriptionService", func() error {
-				if subscriptionService != nil {
-					subscriptionService.Stop()
 				}
 				return nil
 			}},

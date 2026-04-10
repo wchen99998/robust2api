@@ -21,7 +21,7 @@ func newAuthRoutesTestRouter(redisClient *redis.Client) *gin.Engine {
 
 	RegisterAuthRoutes(
 		v1,
-		&handler.Handlers{
+		&handler.ControlHandlers{
 			Auth:    &handler.AuthHandler{},
 			Setting: &handler.SettingHandler{},
 		},

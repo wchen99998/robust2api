@@ -57,7 +57,7 @@ func ProvideAdminHandlers(
 }
 
 // ProvideSettingHandler creates SettingHandler with version from BuildInfo
-func ProvideSettingHandler(settingService *service.SettingService, buildInfo BuildInfo) *SettingHandler {
+func ProvideSettingHandler(settingService *service.SettingService, buildInfo service.BuildInfo) *SettingHandler {
 	return NewSettingHandler(settingService, buildInfo.Version)
 }
 
@@ -100,41 +100,6 @@ func ProvideControlHandlers(
 		Admin:        adminHandlers,
 		Setting:      settingHandler,
 		Totp:         totpHandler,
-	}
-}
-
-// ProvideHandlers creates the Handlers struct
-func ProvideHandlers(
-	authHandler *AuthHandler,
-	userHandler *UserHandler,
-	apiKeyHandler *APIKeyHandler,
-	usageHandler *UsageHandler,
-	redeemHandler *RedeemHandler,
-	subscriptionHandler *SubscriptionHandler,
-	announcementHandler *AnnouncementHandler,
-	adminHandlers *AdminHandlers,
-	gatewayHandler *GatewayHandler,
-	openaiGatewayHandler *OpenAIGatewayHandler,
-	settingHandler *SettingHandler,
-	totpHandler *TotpHandler,
-	_ *service.GatewayCacheInvalidationSubscribers,
-	_ *service.ControlCacheInvalidationSubscribers,
-	_ *service.IdempotencyCoordinator,
-	_ *service.IdempotencyCleanupService,
-) *Handlers {
-	return &Handlers{
-		Auth:          authHandler,
-		User:          userHandler,
-		APIKey:        apiKeyHandler,
-		Usage:         usageHandler,
-		Redeem:        redeemHandler,
-		Subscription:  subscriptionHandler,
-		Announcement:  announcementHandler,
-		Admin:         adminHandlers,
-		Gateway:       gatewayHandler,
-		OpenAIGateway: openaiGatewayHandler,
-		Setting:       settingHandler,
-		Totp:          totpHandler,
 	}
 }
 
@@ -183,49 +148,4 @@ var ControlProviderSet = wire.NewSet(
 
 	ProvideAdminHandlers,
 	ProvideControlHandlers,
-)
-
-// ProviderSet is the Wire provider set for all handlers
-var ProviderSet = wire.NewSet(
-	service.ProvideGatewayCacheInvalidationSubscribers,
-	service.ProvideControlCacheInvalidationSubscribers,
-	// Top-level handlers
-	NewAuthHandler,
-	NewUserHandler,
-	NewAPIKeyHandler,
-	NewUsageHandler,
-	NewRedeemHandler,
-	NewSubscriptionHandler,
-	NewAnnouncementHandler,
-	NewGatewayHandler,
-	NewOpenAIGatewayHandler,
-	NewTotpHandler,
-	ProvideSettingHandler,
-
-	// Admin handlers
-	admin.NewDashboardHandler,
-	admin.NewUserHandler,
-	admin.NewGroupHandler,
-	admin.NewAccountHandler,
-	admin.NewAnnouncementHandler,
-	admin.NewOAuthHandler,
-	admin.NewOpenAIOAuthHandler,
-	admin.NewGeminiOAuthHandler,
-	admin.NewAntigravityOAuthHandler,
-	admin.NewProxyHandler,
-	admin.NewRedeemHandler,
-	admin.NewPromoHandler,
-	admin.NewSettingHandler,
-	admin.NewSubscriptionHandler,
-	admin.NewUsageHandler,
-	admin.NewUserAttributeHandler,
-	admin.NewErrorPassthroughHandler,
-	admin.NewTLSFingerprintProfileHandler,
-	admin.NewAdminAPIKeyHandler,
-	admin.NewScheduledTestHandler,
-	admin.NewChannelHandler,
-
-	// AdminHandlers and Handlers constructors
-	ProvideAdminHandlers,
-	ProvideHandlers,
 )

@@ -1,3 +1,4 @@
+{{- if or .Values.gateway.enabled .Values.control.enabled .Values.worker.enabled .Values.bootstrap.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -48,3 +49,4 @@ data:
   OTEL_TRACE_SAMPLE_RATE: {{ .Values.observability.otel.traceSampleRate | quote }}
   OTEL_METRICS_PORT: {{ .Values.observability.otel.metricsPort | quote }}
   {{- end }}
+{{- end }}

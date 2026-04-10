@@ -1,10 +1,237 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: sub2api
+  name: sub2api-bootstrap
   namespace: sub2api
 spec:
   interval: 10m
+  chart:
+    spec:
+      chart: deploy/helm/sub2api
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    force: true
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 10m
+  valuesFrom:
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: secrets.jwtSecret
+      targetPath: secrets.jwtSecret
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: secrets.totpEncryptionKey
+      targetPath: secrets.totpEncryptionKey
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: secrets.adminPassword
+      targetPath: secrets.adminPassword
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalDatabase.password
+      targetPath: externalDatabase.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalRedis.password
+      targetPath: externalRedis.password
+  values:
+    image:
+      bootstrap:
+        tag: "0.3.3"
+
+    imagePullSecrets:
+      - name: ghcr-pull
+
+    gateway:
+      enabled: false
+    control:
+      enabled: false
+    worker:
+      enabled: false
+    frontend:
+      enabled: false
+    bootstrap:
+      enabled: true
+      manualRerunToken: ""
+
+    ingress:
+      enabled: false
+
+    config:
+      serverPort: "8080"
+      serverMode: release
+      runMode: standard
+      timezone: Asia/Shanghai
+
+    postgresql:
+      enabled: false
+    redis:
+      enabled: false
+    externalDatabase:
+      host: your-postgres-host.example.com
+      port: 5432
+      user: sub2api
+      database: sub2api
+      sslmode: require
+    externalRedis:
+      host: your-redis-host.example.com
+      port: 6379
+      enableTLS: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sub2api-gateway
+  namespace: sub2api
+spec:
+  interval: 10m
+  dependsOn:
+    - name: sub2api-bootstrap
+  chart:
+    spec:
+      chart: deploy/helm/sub2api
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 10m
+  valuesFrom:
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalDatabase.password
+      targetPath: externalDatabase.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalRedis.password
+      targetPath: externalRedis.password
+  values:
+    image:
+      gateway:
+        tag: "0.3.3"
+
+    imagePullSecrets:
+      - name: ghcr-pull
+
+    gateway:
+      enabled: true
+      autoscaling:
+        enabled: true
+        minReplicas: 2
+        maxReplicas: 10
+        targetCPUUtilization: 70
+      pdb:
+        enabled: true
+        minAvailable: 1
+      replicaCount: 1
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+      resources:
+        limits:
+          cpu: 1
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+    control:
+      enabled: false
+    worker:
+      enabled: false
+    frontend:
+      enabled: false
+    bootstrap:
+      enabled: false
+
+    public:
+      baseDomain: wuhao99.com
+      gateway:
+        scheme: https
+
+    ingress:
+      enabled: true
+      className: nginx
+      cloudflareProxied: true
+      maxBodySize: "10m"
+      annotations:
+        cert-manager.io/cluster-issuer: letsencrypt-prod
+        nginx.ingress.kubernetes.io/ssl-redirect: "true"
+      gateway:
+        enabled: true
+        maxBodySize: "100m"
+        annotations:
+          nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+          nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+          nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+        tls:
+          enabled: true
+      control:
+        enabled: false
+
+    config:
+      serverPort: "8080"
+      serverMode: release
+      runMode: standard
+      timezone: Asia/Shanghai
+
+    observability:
+      enabled: true
+      otel:
+        serviceName: sub2api
+        environment: production
+        endpoint: "monitoring-alloy.monitoring.svc:4317"
+        traceSampleRate: "0.05"
+        metricsPort: 9090
+      serviceMonitor:
+        enabled: true
+        interval: 15s
+
+    postgresql:
+      enabled: false
+    redis:
+      enabled: false
+    externalDatabase:
+      host: your-postgres-host.example.com
+      port: 5432
+      user: sub2api
+      database: sub2api
+      sslmode: require
+    externalRedis:
+      host: your-redis-host.example.com
+      port: 6379
+      enableTLS: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sub2api-control
+  namespace: sub2api
+spec:
+  interval: 10m
+  dependsOn:
+    - name: sub2api-bootstrap
   chart:
     spec:
       chart: deploy/helm/sub2api
@@ -37,18 +264,6 @@ spec:
       targetPath: secrets.adminPassword
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: postgresql.auth.password
-      targetPath: postgresql.auth.password
-    - kind: Secret
-      name: sub2api-secrets
-      valuesKey: postgresql.auth.postgresPassword
-      targetPath: postgresql.auth.postgresPassword
-    - kind: Secret
-      name: sub2api-secrets
-      valuesKey: redis.auth.password
-      targetPath: redis.auth.password
-    - kind: Secret
-      name: sub2api-secrets
       valuesKey: externalDatabase.password
       targetPath: externalDatabase.password
     - kind: Secret
@@ -64,34 +279,47 @@ spec:
       valuesKey: grafanaProvisioning.reader.password
       targetPath: grafanaProvisioning.reader.password
   values:
-    # --- Image tags (update these to deploy new versions) ---
     image:
-      gateway:
-        tag: "0.3.3"
       control:
         tag: "0.3.3"
       frontend:
-        tag: "0.3.3"
-      worker:
-        tag: "0.3.3"
-      bootstrap:
         tag: "0.3.3"
 
     imagePullSecrets:
       - name: ghcr-pull
 
-    # --- Public Endpoint Convention ---
+    gateway:
+      enabled: false
+    control:
+      enabled: true
+      autoscaling:
+        enabled: false
+      pdb:
+        enabled: false
+      replicaCount: 1
+      resources:
+        limits:
+          cpu: 1
+          memory: 1Gi
+        requests:
+          cpu: 250m
+          memory: 512Mi
+    worker:
+      enabled: false
+    frontend:
+      enabled: true
+      gatewayServiceName: sub2api-gateway-gateway
+    bootstrap:
+      enabled: false
+
     public:
       baseDomain: wuhao99.com
-      gateway:
-        scheme: https
       control:
         scheme: https
       grafana:
         enabled: true
         scheme: https
 
-    # --- Ingress ---
     ingress:
       enabled: true
       className: nginx
@@ -101,20 +329,12 @@ spec:
         cert-manager.io/cluster-issuer: letsencrypt-prod
         nginx.ingress.kubernetes.io/ssl-redirect: "true"
       gateway:
-        enabled: true
-        maxBodySize: "100m"
-        annotations:
-          nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
-          nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
-          nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
-        tls:
-          enabled: true
+        enabled: false
       control:
         enabled: true
         tls:
           enabled: true
 
-    # --- Config ---
     config:
       serverPort: "8080"
       serverMode: release
@@ -129,7 +349,6 @@ spec:
         uid: sub2api-pg
         postgresVersion: 1700
 
-    # --- Observability ---
     observability:
       enabled: true
       otel:
@@ -139,48 +358,73 @@ spec:
         traceSampleRate: "0.05"
         metricsPort: 9090
       serviceMonitor:
-        enabled: true
+        enabled: false
         interval: 15s
 
-    # --- Resources ---
+    postgresql:
+      enabled: false
+    redis:
+      enabled: false
+    externalDatabase:
+      host: your-postgres-host.example.com
+      port: 5432
+      user: sub2api
+      database: sub2api
+      sslmode: require
+    externalRedis:
+      host: your-redis-host.example.com
+      port: 6379
+      enableTLS: true
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
+  name: sub2api-worker
+  namespace: sub2api
+spec:
+  interval: 10m
+  dependsOn:
+    - name: sub2api-bootstrap
+  chart:
+    spec:
+      chart: deploy/helm/sub2api
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 10m
+  valuesFrom:
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalDatabase.password
+      targetPath: externalDatabase.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: externalRedis.password
+      targetPath: externalRedis.password
+  values:
+    image:
+      worker:
+        tag: "0.3.3"
+
+    imagePullSecrets:
+      - name: ghcr-pull
+
     gateway:
-      autoscaling:
-        enabled: true
-        minReplicas: 2
-        maxReplicas: 10
-        targetCPUUtilization: 70
-      pdb:
-        enabled: true
-        minAvailable: 1
-      replicaCount: 1
-      topologySpreadConstraints:
-        - maxSkew: 1
-          topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: ScheduleAnyway
-        - maxSkew: 1
-          topologyKey: topology.kubernetes.io/zone
-          whenUnsatisfiable: ScheduleAnyway
-      resources:
-        limits:
-          cpu: 1
-          memory: 1Gi
-        requests:
-          cpu: 250m
-          memory: 512Mi
+      enabled: false
     control:
-      autoscaling:
-        enabled: false
-      pdb:
-        enabled: false
-      replicaCount: 1
-      resources:
-        limits:
-          cpu: 1
-          memory: 1Gi
-        requests:
-          cpu: 250m
-          memory: 512Mi
+      enabled: false
     worker:
+      enabled: true
       healthPort: 8081
       replicaCount: 1
       resources:
@@ -190,45 +434,43 @@ spec:
         requests:
           cpu: 100m
           memory: 256Mi
+    frontend:
+      enabled: false
+    bootstrap:
+      enabled: false
 
-    # --- Database ---
+    ingress:
+      enabled: false
+
+    config:
+      serverPort: "8080"
+      serverMode: release
+      runMode: standard
+      timezone: Asia/Shanghai
+
+    observability:
+      enabled: true
+      otel:
+        serviceName: sub2api
+        environment: production
+        endpoint: "monitoring-alloy.monitoring.svc:4317"
+        traceSampleRate: "0.05"
+        metricsPort: 9090
+      serviceMonitor:
+        enabled: false
+        interval: 15s
+
     postgresql:
-      image:
-        tag: latest
-      auth: {}
-      primary:
-        persistence:
-          size: 1Gi
-        resources:
-          limits:
-            cpu: 2
-            memory: 2Gi
-          requests:
-            cpu: 500m
-            memory: 512Mi
+      enabled: false
     redis:
-      image:
-        tag: latest
-      master:
-        persistence:
-          size: 1Gi
-        resources:
-          limits:
-            cpu: 500m
-            memory: 256Mi
-          requests:
-            cpu: 100m
-            memory: 128Mi
-
-    affinity:
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchExpressions:
-                  - key: app.kubernetes.io/name
-                    operator: In
-                    values:
-                      - postgresql
-              topologyKey: kubernetes.io/hostname
+      enabled: false
+    externalDatabase:
+      host: your-postgres-host.example.com
+      port: 5432
+      user: sub2api
+      database: sub2api
+      sslmode: require
+    externalRedis:
+      host: your-redis-host.example.com
+      port: 6379
+      enableTLS: true

@@ -309,11 +309,79 @@ Control-plane secret name: existing control secret or chart-managed control secr
 {{- end }}
 
 {{/*
-Bootstrap Job name. Include the release revision so Helm creates a fresh Job
-on each upgrade instead of trying to patch an immutable Job spec.
+Bootstrap Job name.
 */}}
 {{- define "sub2api.bootstrapJobName" -}}
-{{- printf "%s-bootstrap-r%d" (include "sub2api.fullname" .) .Release.Revision | trunc 63 | trimSuffix "-" }}
+{{- printf "%s-bootstrap" (include "sub2api.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- end }}
+
+{{/*
+Bootstrap rerun checksum keyed only to bootstrap-relevant inputs.
+*/}}
+{{- define "sub2api.bootstrapInputsChecksum" -}}
+{{- $databasePassword := ternary .Values.postgresql.auth.password .Values.externalDatabase.password .Values.postgresql.enabled -}}
+{{- $inputs := dict
+  "bootstrapImage" (dict
+    "repository" .Values.image.bootstrap.repository
+    "tag" (.Values.image.bootstrap.tag | default .Chart.AppVersion)
+    "pullPolicy" .Values.image.bootstrap.pullPolicy
+  )
+  "database" (dict
+    "host" (include "sub2api.databaseHost" . | trim)
+    "port" (include "sub2api.databasePort" . | trim)
+    "user" (include "sub2api.databaseUser" . | trim)
+    "name" (include "sub2api.databaseName" . | trim)
+    "sslmode" (include "sub2api.databaseSSLMode" . | trim)
+    "password" $databasePassword
+  )
+  "controlSeed" (dict
+    "jwtSecret" .Values.secrets.jwtSecret
+    "jwtExpireHour" .Values.secrets.jwtExpireHour
+    "totpEncryptionKey" .Values.secrets.totpEncryptionKey
+    "adminEmail" .Values.secrets.adminEmail
+    "adminPassword" .Values.secrets.adminPassword
+  )
+  "manualRerunToken" .Values.bootstrap.manualRerunToken
+-}}
+{{- toJson $inputs | sha256sum -}}
+{{- end }}
+
+{{/*
+Frontend edge service name used by ingress.
+*/}}
+{{- define "sub2api.frontendServiceName" -}}
+{{- printf "%s-control" (include "sub2api.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{/*
+Control API service name used by frontend proxy.
+*/}}
+{{- define "sub2api.controlAPIServiceName" -}}
+{{- printf "%s-control-api" (include "sub2api.fullname" .) | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{/*
+Resolved control service target for frontend proxying.
+*/}}
+{{- define "sub2api.frontendControlServiceName" -}}
+{{- $explicit := trim (default "" .Values.frontend.controlServiceName) -}}
+{{- if $explicit -}}
+{{- $explicit -}}
+{{- else -}}
+{{ include "sub2api.controlAPIServiceName" . }}
+{{- end -}}
+{{- end }}
+
+{{/*
+Resolved gateway service target for frontend proxying.
+*/}}
+{{- define "sub2api.frontendGatewayServiceName" -}}
+{{- $explicit := trim (default "" .Values.frontend.gatewayServiceName) -}}
+{{- if $explicit -}}
+{{- $explicit -}}
+{{- else -}}
+{{ printf "%s-gateway" (include "sub2api.fullname" .) }}
+{{- end -}}
 {{- end }}
 
 {{/*
@@ -344,6 +412,14 @@ Control component labels.
 {{- define "sub2api.control.selectorLabels" -}}
 {{ include "sub2api.selectorLabels" . }}
 app.kubernetes.io/component: control
+{{- end }}
+
+{{/*
+Frontend component labels.
+*/}}
+{{- define "sub2api.frontend.selectorLabels" -}}
+{{ include "sub2api.selectorLabels" . }}
+app.kubernetes.io/component: frontend
 {{- end }}
 
 {{/*
