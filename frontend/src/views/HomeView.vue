@@ -5,6 +5,7 @@
       v-if="isHomeContentUrl"
       :src="homeContent.trim()"
       class="h-screen w-full border-0"
+      title="Custom content"
       allowfullscreen
     ></iframe>
     <!-- SECURITY: homeContent is admin-only setting, XSS risk is acceptable -->
@@ -56,7 +57,7 @@
               <div class="glass-nav__locale">
                 <LocaleSwitcher />
               </div>
-              <button @click="toggleTheme" class="glass-nav__link glass-nav__link--icon" :title="isDark ? t('home.switchToLight') : t('home.switchToDark')">
+              <button @click="toggleTheme" class="glass-nav__link glass-nav__link--icon" :title="isDark ? t('home.switchToLight') : t('home.switchToDark')" :aria-label="isDark ? t('home.switchToLight') : t('home.switchToDark')">
                 <Icon v-if="isDark" name="sun" size="sm" />
                 <Icon v-else name="moon" size="sm" />
               </button>
@@ -206,11 +207,11 @@ onMounted(() => {
   min-height: 100svh;
   overflow: clip;
   font-family: inherit;
-  color: #1d1d1f;
+  color: theme('colors.mica-text.primary');
 }
 
 :global(.dark) .home-glitch {
-  color: #f5f5f7;
+  color: theme('colors.mica-text.primary-dark');
 }
 
 @media (max-width: 768px) {
@@ -324,13 +325,13 @@ onMounted(() => {
   gap: 10px;
   font-size: 15px;
   font-weight: 700;
-  color: #1d1d1f;
+  color: theme('colors.mica-text.primary');
   text-decoration: none;
   letter-spacing: -0.03em;
 }
 
 :global(.dark) .glass-nav__logo {
-  color: #f5f5f7;
+  color: theme('colors.mica-text.primary-dark');
 }
 
 .glass-nav__logo-mark {
@@ -341,7 +342,7 @@ onMounted(() => {
   height: 32px;
   border-radius: 999px;
   background: linear-gradient(180deg, rgba(0, 122, 255, 0.12), rgba(0, 122, 255, 0.04));
-  color: #007aff;
+  color: theme('colors.status-blue.DEFAULT');
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
@@ -355,11 +356,11 @@ onMounted(() => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 38px;
+  min-height: 44px;
   padding: 0 15px;
   font-size: 13px;
   font-weight: 600;
-  color: #6e6e73;
+  color: theme('colors.mica-text.secondary');
   text-decoration: none;
   border-radius: 999px;
   transition:
@@ -373,22 +374,22 @@ onMounted(() => {
 }
 
 :global(.dark) .glass-nav__link {
-  color: #a1a1a6;
+  color: theme('colors.mica-text.secondary-dark');
 }
 
 .glass-nav__link:hover {
-  color: #1d1d1f;
+  color: theme('colors.mica-text.primary');
   background: rgba(0, 0, 0, 0.04);
   transform: translateY(-1px);
 }
 
 :global(.dark) .glass-nav__link:hover {
-  color: #f5f5f7;
+  color: theme('colors.mica-text.primary-dark');
   background: rgba(255, 255, 255, 0.06);
 }
 
 .glass-nav__link--icon {
-  min-width: 38px;
+  min-width: 44px;
   padding: 0;
 }
 
@@ -426,6 +427,7 @@ onMounted(() => {
 
 .glass-hero__surface {
   width: min(100%, 820px);
+  margin: 0 auto;
   border-radius: 34px;
   border: 1px solid rgba(0, 0, 0, 0.06);
   background: rgba(255, 255, 255, 0.92);
@@ -481,7 +483,7 @@ onMounted(() => {
   background: rgba(255, 255, 255, 0.55);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  color: #1d1d1f;
+  color: theme('colors.mica-text.primary');
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -491,7 +493,7 @@ onMounted(() => {
 :global(.dark) .glass-hero__badge {
   border-color: rgba(255, 255, 255, 0.08);
   background: rgba(58, 58, 60, 0.5);
-  color: #f5f5f7;
+  color: theme('colors.mica-text.primary-dark');
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -503,7 +505,7 @@ onMounted(() => {
   height: 20px;
   border-radius: 999px;
   background: rgba(0, 122, 255, 0.1);
-  color: #007aff;
+  color: theme('colors.status-blue.DEFAULT');
 }
 
 .glass-hero__badge-divider {
@@ -517,12 +519,12 @@ onMounted(() => {
 }
 
 .glass-hero__badge-copy {
-  color: #aeaeb2;
+  color: theme('colors.mica-text.tertiary');
   white-space: nowrap;
 }
 
 :global(.dark) .glass-hero__badge-copy {
-  color: #636366;
+  color: theme('colors.mica-text.tertiary-dark');
 }
 
 @media (max-width: 640px) {
@@ -545,12 +547,12 @@ onMounted(() => {
   font-weight: 800;
   line-height: 0.94;
   letter-spacing: -0.075em;
-  color: #1d1d1f;
+  color: theme('colors.mica-text.primary');
   margin-bottom: 18px;
 }
 
 :global(.dark) .glass-hero__title {
-  color: #f5f5f7;
+  color: theme('colors.mica-text.primary-dark');
 }
 
 .glass-hero__title-row {
@@ -574,11 +576,11 @@ onMounted(() => {
 }
 
 .glass-hero__title-row--accent {
-  color: #007aff;
+  color: theme('colors.status-blue.DEFAULT');
 }
 
 :global(.dark) .glass-hero__title-row--accent {
-  color: #0a84ff;
+  color: theme('colors.status-blue.dark');
 }
 
 .glass-hero__desc {
@@ -587,11 +589,11 @@ onMounted(() => {
   font-size: 16px;
   font-weight: 400;
   line-height: 1.7;
-  color: #6e6e73;
+  color: theme('colors.mica-text.secondary');
 }
 
 :global(.dark) .glass-hero__desc {
-  color: #a1a1a6;
+  color: theme('colors.mica-text.secondary-dark');
 }
 
 @media (max-width: 480px) {
@@ -640,7 +642,7 @@ onMounted(() => {
 
 .glass-hero__btn--primary {
   color: #ffffff;
-  background: #1d1d1f;
+  background: theme('colors.accent.DEFAULT');
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.15),
     inset 0 1px 0 rgba(255, 255, 255, 0.08);
@@ -648,7 +650,7 @@ onMounted(() => {
 
 :global(.dark) .glass-hero__btn--primary {
   color: #1c1c1e;
-  background: #f5f5f7;
+  background: theme('colors.accent.dark');
   box-shadow:
     0 10px 28px rgba(0, 0, 0, 0.3),
     inset 0 1px 0 rgba(255, 255, 255, 0.1);
@@ -667,27 +669,27 @@ onMounted(() => {
 }
 
 .glass-hero__btn--secondary {
-  color: #6e6e73;
+  color: theme('colors.mica-text.secondary');
   background: rgba(255, 255, 255, 0.35);
   border-color: rgba(0, 0, 0, 0.08);
   backdrop-filter: blur(16px);
 }
 
 :global(.dark) .glass-hero__btn--secondary {
-  color: #a1a1a6;
+  color: theme('colors.mica-text.secondary-dark');
   background: rgba(255, 255, 255, 0.06);
   border-color: rgba(255, 255, 255, 0.1);
 }
 
 .glass-hero__btn--secondary:hover {
-  color: #1d1d1f;
+  color: theme('colors.mica-text.primary');
   background: rgba(255, 255, 255, 0.5);
   border-color: rgba(0, 0, 0, 0.12);
   transform: translateY(-1px);
 }
 
 :global(.dark) .glass-hero__btn--secondary:hover {
-  color: #f5f5f7;
+  color: theme('colors.mica-text.primary-dark');
   background: rgba(255, 255, 255, 0.1);
   border-color: rgba(255, 255, 255, 0.15);
 }
@@ -727,20 +729,20 @@ onMounted(() => {
   }
 }
 
-.glass-hero__code-prompt { color: #aeaeb2; }
-.glass-hero__code-cmd { font-weight: 600; color: #1d1d1f; }
-.glass-hero__code-flag { color: #007aff; }
-.glass-hero__code-url { color: #007aff; }
+.glass-hero__code-prompt { color: theme('colors.mica-text.tertiary'); }
+.glass-hero__code-cmd { font-weight: 600; color: theme('colors.mica-text.primary'); }
+.glass-hero__code-flag { color: theme('colors.status-blue.DEFAULT'); }
+.glass-hero__code-url { color: theme('colors.status-blue.DEFAULT'); }
 .glass-hero__code-spacer { flex: 1; }
-.glass-hero__code-arrow { font-size: 10px; color: #aeaeb2; }
-.glass-hero__code-ok { font-weight: 600; color: #34c759; }
+.glass-hero__code-arrow { font-size: 10px; color: theme('colors.mica-text.tertiary'); }
+.glass-hero__code-ok { font-weight: 600; color: theme('colors.status-green.DEFAULT'); }
 
-:global(.dark) .glass-hero__code-prompt { color: #636366; }
-:global(.dark) .glass-hero__code-cmd { color: #f5f5f7; }
-:global(.dark) .glass-hero__code-flag { color: #0a84ff; }
-:global(.dark) .glass-hero__code-url { color: #0a84ff; }
-:global(.dark) .glass-hero__code-arrow { color: #636366; }
-:global(.dark) .glass-hero__code-ok { color: #30d158; }
+:global(.dark) .glass-hero__code-prompt { color: theme('colors.mica-text.tertiary-dark'); }
+:global(.dark) .glass-hero__code-cmd { color: theme('colors.mica-text.primary-dark'); }
+:global(.dark) .glass-hero__code-flag { color: theme('colors.status-blue.dark'); }
+:global(.dark) .glass-hero__code-url { color: theme('colors.status-blue.dark'); }
+:global(.dark) .glass-hero__code-arrow { color: theme('colors.mica-text.tertiary-dark'); }
+:global(.dark) .glass-hero__code-ok { color: theme('colors.status-green.dark'); }
 
 .glass-hero__metrics {
   display: flex;
@@ -750,11 +752,11 @@ onMounted(() => {
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #aeaeb2;
+  color: theme('colors.mica-text.tertiary');
 }
 
 :global(.dark) .glass-hero__metrics {
-  color: #636366;
+  color: theme('colors.mica-text.tertiary-dark');
 }
 
 @media (max-width: 480px) {
@@ -764,7 +766,7 @@ onMounted(() => {
 }
 
 .glass-hero__metrics-dot {
-  color: #aeaeb2;
+  color: theme('colors.mica-text.tertiary');
 }
 
 .glass-footer {
@@ -774,31 +776,31 @@ onMounted(() => {
   gap: 10px;
   padding-top: 12px;
   font-size: 12px;
-  color: #aeaeb2;
+  color: theme('colors.mica-text.tertiary');
   text-align: center;
   animation: footer-enter 760ms cubic-bezier(0.16, 1, 0.3, 1) 200ms both;
 }
 
 :global(.dark) .glass-footer {
-  color: #636366;
+  color: theme('colors.mica-text.tertiary-dark');
 }
 
 .glass-footer__dot {
   width: 3px;
   height: 3px;
   border-radius: 999px;
-  background: #aeaeb2;
+  background: theme('colors.mica-text.tertiary');
 }
 
 :global(.dark) .glass-footer__dot {
-  background: #636366;
+  background: theme('colors.mica-text.tertiary-dark');
 }
 
 /* --- Nav button base overrides --- */
 .glass-nav :deep(button) {
-  min-height: 38px;
+  min-height: 44px;
   border-radius: 999px;
-  color: #6e6e73 !important;
+  color: theme('colors.mica-text.secondary') !important;
   background: transparent !important;
   border: 1px solid transparent !important;
   transition:
@@ -808,40 +810,40 @@ onMounted(() => {
 }
 
 :global(.dark) .glass-nav :deep(button) {
-  color: #a1a1a6 !important;
+  color: theme('colors.mica-text.secondary-dark') !important;
 }
 
 .glass-nav :deep(button:hover) {
-  color: #1d1d1f !important;
+  color: theme('colors.mica-text.primary') !important;
   background: rgba(0, 0, 0, 0.04) !important;
   transform: translateY(-1px);
 }
 
 :global(.dark) .glass-nav :deep(button:hover) {
-  color: #f5f5f7 !important;
+  color: theme('colors.mica-text.primary-dark') !important;
   background: rgba(255, 255, 255, 0.06) !important;
 }
 
 /* --- LocaleSwitcher overrides via wrapper class --- */
 .glass-nav__locale :deep(button) {
-  color: #6e6e73 !important;
+  color: theme('colors.mica-text.secondary') !important;
   font-weight: 600;
 }
 
 .glass-nav__locale :deep(button span) {
-  color: #6e6e73 !important;
+  color: theme('colors.mica-text.secondary') !important;
 }
 
 :global(.dark) .glass-nav__locale :deep(button span) {
-  color: #a1a1a6 !important;
+  color: theme('colors.mica-text.secondary-dark') !important;
 }
 
 .glass-nav__locale :deep(button svg) {
-  color: #aeaeb2 !important;
+  color: theme('colors.mica-text.tertiary') !important;
 }
 
 :global(.dark) .glass-nav__locale :deep(button svg) {
-  color: #636366 !important;
+  color: theme('colors.mica-text.tertiary-dark') !important;
 }
 
 /* --- LocaleSwitcher dropdown panel --- */
@@ -867,7 +869,7 @@ onMounted(() => {
 
 /* --- LocaleSwitcher dropdown items --- */
 .glass-nav__locale :deep(div[class*="absolute"] button) {
-  color: #1d1d1f !important;
+  color: theme('colors.mica-text.primary') !important;
   background: transparent !important;
   border-radius: 0 !important;
   min-height: auto !important;
@@ -876,17 +878,17 @@ onMounted(() => {
 }
 
 :global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button) {
-  color: #f5f5f7 !important;
+  color: theme('colors.mica-text.primary-dark') !important;
 }
 
 .glass-nav__locale :deep(div[class*="absolute"] button:hover) {
-  color: #1d1d1f !important;
+  color: theme('colors.mica-text.primary') !important;
   background: rgba(0, 0, 0, 0.04) !important;
   transform: none !important;
 }
 
 :global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button:hover) {
-  color: #f5f5f7 !important;
+  color: theme('colors.mica-text.primary-dark') !important;
   background: rgba(255, 255, 255, 0.06) !important;
 }
 
@@ -894,22 +896,22 @@ onMounted(() => {
 .glass-nav__locale :deep(div[class*="absolute"] button.bg-primary-50),
 .glass-nav__locale :deep(div[class*="absolute"] button[class*="bg-primary"]) {
   background: rgba(0, 122, 255, 0.08) !important;
-  color: #007aff !important;
+  color: theme('colors.status-blue.DEFAULT') !important;
 }
 
 :global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button.bg-primary-50),
 :global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button[class*="bg-primary"]) {
   background: rgba(10, 132, 255, 0.12) !important;
-  color: #0a84ff !important;
+  color: theme('colors.status-blue.dark') !important;
 }
 
 /* Check icon in active item */
 .glass-nav__locale :deep(div[class*="absolute"] button svg) {
-  color: #007aff !important;
+  color: theme('colors.status-blue.DEFAULT') !important;
 }
 
 :global(.dark) .glass-nav__locale :deep(div[class*="absolute"] button svg) {
-  color: #0a84ff !important;
+  color: theme('colors.status-blue.dark') !important;
 }
 
 @media (max-width: 768px) {
@@ -942,7 +944,7 @@ onMounted(() => {
   }
 
   .glass-nav__link {
-    min-height: 34px;
+    min-height: 44px;
     padding: 0 12px;
     font-size: 12px;
   }
@@ -992,6 +994,14 @@ onMounted(() => {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .glass-nav,
+  .glass-hero__surface,
+  .glass-footer {
+    animation: none;
   }
 }
 </style>

@@ -19,8 +19,7 @@
           :class="[
             'pointer-events-auto min-w-[320px] max-w-md overflow-hidden rounded-lg shadow-lg',
             'bg-white dark:bg-dark-800',
-            'border-l-4',
-            getBorderColor(toast.type)
+            getBgTint(toast.type)
           ]"
         >
           <div class="p-4">
@@ -37,15 +36,15 @@
 
               <!-- Content -->
               <div class="min-w-0 flex-1">
-                <p v-if="toast.title" class="text-sm font-semibold text-gray-900 dark:text-white">
+                <p v-if="toast.title" class="text-sm font-semibold text-mica-text-primary dark:text-mica-text-primary-dark">
                   {{ toast.title }}
                 </p>
                 <p
                   :class="[
                     'text-sm leading-relaxed',
                     toast.title
-                      ? 'mt-1 text-gray-600 dark:text-gray-300'
-                      : 'text-gray-900 dark:text-white'
+                      ? 'mt-1 text-mica-text-secondary dark:text-mica-text-secondary-dark'
+                      : 'text-mica-text-primary dark:text-mica-text-primary-dark'
                   ]"
                 >
                   {{ toast.message }}
@@ -55,7 +54,7 @@
               <!-- Close button -->
               <button
                 @click="removeToast(toast.id)"
-                class="-m-1 flex-shrink-0 rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600 dark:text-gray-500 dark:hover:bg-dark-700 dark:hover:text-gray-300"
+                class="-m-1 flex-shrink-0 rounded p-1 text-mica-text-tertiary transition-colors hover:bg-black/[0.03] hover:text-mica-text-secondary dark:text-mica-text-tertiary-dark dark:hover:bg-white/[0.06] dark:hover:text-mica-text-secondary-dark"
                 aria-label="Close notification"
               >
                 <Icon name="x" size="sm" />
@@ -64,7 +63,7 @@
           </div>
 
           <!-- Progress bar -->
-          <div v-if="toast.duration" class="h-1 bg-gray-100 dark:bg-dark-700">
+          <div v-if="toast.duration" class="h-1 bg-black/[0.04] dark:bg-white/[0.06]">
             <div
               :class="['h-full toast-progress', getProgressBarColor(toast.type)]"
               :style="{ animationDuration: `${toast.duration}ms` }"
@@ -101,30 +100,30 @@ const getToastIconName = (type: string): 'checkCircle' | 'xCircle' | 'exclamatio
 
 const getIconColor = (type: string): string => {
   const colors: Record<string, string> = {
-    success: 'text-green-500',
-    error: 'text-red-500',
-    warning: 'text-yellow-500',
-    info: 'text-blue-500'
+    success: 'text-status-green dark:text-status-green-dark',
+    error: 'text-status-red dark:text-status-red-dark',
+    warning: 'text-status-amber dark:text-status-amber-dark',
+    info: 'text-status-blue dark:text-status-blue-dark'
   }
   return colors[type] || colors.info
 }
 
-const getBorderColor = (type: string): string => {
-  const colors: Record<string, string> = {
-    success: 'border-green-500',
-    error: 'border-red-500',
-    warning: 'border-yellow-500',
-    info: 'border-blue-500'
+const getBgTint = (type: string): string => {
+  const tints: Record<string, string> = {
+    success: 'bg-status-green/[0.06] dark:bg-status-green-dark/[0.08]',
+    error: 'bg-status-red/[0.06] dark:bg-status-red-dark/[0.08]',
+    warning: 'bg-status-amber/[0.06] dark:bg-status-amber-dark/[0.08]',
+    info: 'bg-status-blue/[0.06] dark:bg-status-blue-dark/[0.08]'
   }
-  return colors[type] || colors.info
+  return tints[type] || tints.info
 }
 
 const getProgressBarColor = (type: string): string => {
   const colors: Record<string, string> = {
-    success: 'bg-green-500',
-    error: 'bg-red-500',
-    warning: 'bg-yellow-500',
-    info: 'bg-blue-500'
+    success: 'bg-status-green',
+    error: 'bg-status-red',
+    warning: 'bg-status-amber',
+    info: 'bg-status-blue'
   }
   return colors[type] || colors.info
 }
