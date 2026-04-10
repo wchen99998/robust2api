@@ -1,4 +1,4 @@
-{{- if or .Values.gateway.enabled .Values.control.enabled .Values.worker.enabled .Values.bootstrap.enabled }}
+{{- if or .Values.gateway.enabled .Values.control.enabled .Values.worker.enabled .Values.bootstrap.enabled .Values.billing.enabled }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
