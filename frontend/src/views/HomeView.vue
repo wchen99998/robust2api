@@ -33,9 +33,6 @@
         <div class="glass-nav__surface">
           <div class="glass-nav__inner">
             <router-link to="/home" class="glass-nav__logo">
-              <span class="glass-nav__logo-mark">
-                <Icon name="sparkles" size="sm" />
-              </span>
               {{ siteName }}
             </router-link>
 
