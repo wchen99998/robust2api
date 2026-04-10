@@ -87,8 +87,6 @@ func TestOpenAIResponses_RootSpanIncludesRetryEventsAndChildSpans(t *testing.T) 
 		nil,
 		nil,
 		nil,
-		nil,
-		nil,
 		&handlerStubGatewayCache{},
 		cfg,
 		nil,

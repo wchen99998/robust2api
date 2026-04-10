@@ -118,6 +118,7 @@ worker:
 
 # -- Billing Configuration
 billing:
+  enabled: false
   replicaCount: 2
   healthPort: 8082
   terminationGracePeriodSeconds: 30
