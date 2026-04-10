@@ -19,6 +19,9 @@ type helmRelease struct {
 		Name string `yaml:"name"`
 	} `yaml:"metadata"`
 	Spec struct {
+		DependsOn []struct {
+			Name string `yaml:"name"`
+		} `yaml:"dependsOn"`
 		Values map[string]any `yaml:"values"`
 	} `yaml:"spec"`
 }
@@ -294,6 +297,30 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 		expectedObject string
 	}{
 		{
+			releaseName: "sub2api",
+			secrets: map[string]any{
+				"postgresql": map[string]any{
+					"auth": map[string]any{
+						"password":         "db-password",
+						"postgresPassword": "postgres-password",
+					},
+				},
+				"redis": map[string]any{
+					"auth": map[string]any{
+						"password": "redis-password",
+					},
+				},
+				"grafanaProvisioning": map[string]any{
+					"reader": map[string]any{
+						"username": "grafana-reader",
+						"password": "grafana-password",
+					},
+				},
+			},
+			expectedKind:   "Service",
+			expectedObject: "sub2api-postgresql",
+		},
+		{
 			releaseName: "sub2api-bootstrap",
 			secrets: map[string]any{
 				"secrets": map[string]any{
@@ -374,6 +401,47 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 	}
 }
 
+func TestProductionReleaseValues_PreserveSharedDataServicesAndOrdering(t *testing.T) {
+	releases := productionHelmReleases(t)
+
+	provisioning, ok := releases["sub2api"]
+	require.True(t, ok)
+	bootstrap, ok := releases["sub2api-bootstrap"]
+	require.True(t, ok)
+	gateway, ok := releases["sub2api-gateway"]
+	require.True(t, ok)
+	control, ok := releases["sub2api-control"]
+	require.True(t, ok)
+	worker, ok := releases["sub2api-worker"]
+	require.True(t, ok)
+
+	postgresqlValues, ok := provisioning.Spec.Values["postgresql"].(map[string]any)
+	require.True(t, ok)
+	require.True(t, boolValue(postgresqlValues["enabled"]))
+
+	redisValues, ok := provisioning.Spec.Values["redis"].(map[string]any)
+	require.True(t, ok)
+	require.True(t, boolValue(redisValues["enabled"]))
+
+	require.Contains(t, dependencyNames(bootstrap), "sub2api")
+	require.Contains(t, dependencyNames(gateway), "sub2api-bootstrap")
+	require.Contains(t, dependencyNames(control), "sub2api-bootstrap")
+	require.Contains(t, dependencyNames(control), "sub2api-gateway")
+	require.Contains(t, dependencyNames(worker), "sub2api-bootstrap")
+
+	for _, releaseName := range []string{"sub2api-bootstrap", "sub2api-gateway", "sub2api-control", "sub2api-worker"} {
+		release := releases[releaseName]
+
+		externalDatabase, ok := release.Spec.Values["externalDatabase"].(map[string]any)
+		require.True(t, ok, "release %s missing externalDatabase values", releaseName)
+		require.Equal(t, "sub2api-postgresql", stringValue(externalDatabase["host"]))
+
+		externalRedis, ok := release.Spec.Values["externalRedis"].(map[string]any)
+		require.True(t, ok, "release %s missing externalRedis values", releaseName)
+		require.Equal(t, "sub2api-redis-master", stringValue(externalRedis["host"]))
+	}
+}
+
 func renderChart(t *testing.T, valuesFiles ...string) []map[string]any {
 	t.Helper()
 	return renderChartWithReleaseName(t, "sub2api", valuesFiles...)
@@ -409,12 +477,23 @@ func productionValuesPath(t *testing.T, releaseName string) string {
 func productionReleaseValues(t *testing.T) map[string]map[string]any {
 	t.Helper()
 
+	releases := productionHelmReleases(t)
+	values := map[string]map[string]any{}
+	for name, release := range releases {
+		values[name] = release.Spec.Values
+	}
+	return values
+}
+
+func productionHelmReleases(t *testing.T) map[string]helmRelease {
+	t.Helper()
+
 	releasePath := filepath.Join(repoRoot(t), "clusters", "production", "apps", "sub2api.yaml")
 	raw, err := os.ReadFile(releasePath)
 	require.NoError(t, err)
 
 	decoder := yaml.NewDecoder(bytes.NewReader(raw))
-	releases := map[string]map[string]any{}
+	releases := map[string]helmRelease{}
 	for {
 		var release helmRelease
 		err := decoder.Decode(&release)
@@ -427,7 +506,7 @@ func productionReleaseValues(t *testing.T) map[string]map[string]any {
 		if release.Kind != "HelmRelease" || release.Metadata.Name == "" {
 			continue
 		}
-		releases[release.Metadata.Name] = release.Spec.Values
+		releases[release.Metadata.Name] = release
 	}
 
 	return releases
@@ -601,4 +680,25 @@ func stringValue(value any) string {
 		return s
 	}
 	return ""
+}
+
+func boolValue(value any) bool {
+	if value == nil {
+		return false
+	}
+	if b, ok := value.(bool); ok {
+		return b
+	}
+	return false
+}
+
+func dependencyNames(release helmRelease) []string {
+	names := make([]string, 0, len(release.Spec.DependsOn))
+	for _, dependency := range release.Spec.DependsOn {
+		if dependency.Name == "" {
+			continue
+		}
+		names = append(names, dependency.Name)
+	}
+	return names
 }

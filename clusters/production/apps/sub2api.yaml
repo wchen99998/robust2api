@@ -1,10 +1,128 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
+  name: sub2api
+  namespace: sub2api
+spec:
+  interval: 10m
+  chart:
+    spec:
+      chart: deploy/helm/sub2api
+      reconcileStrategy: Revision
+      sourceRef:
+        kind: GitRepository
+        name: flux-system
+        namespace: flux-system
+  install:
+    createNamespace: true
+    remediation:
+      retries: 3
+  upgrade:
+    remediation:
+      retries: 3
+      remediateLastFailure: true
+  timeout: 10m
+  valuesFrom:
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: postgresql.auth.password
+      targetPath: postgresql.auth.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: postgresql.auth.postgresPassword
+      targetPath: postgresql.auth.postgresPassword
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: redis.auth.password
+      targetPath: redis.auth.password
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: grafanaProvisioning.reader.username
+      targetPath: grafanaProvisioning.reader.username
+    - kind: Secret
+      name: sub2api-secrets
+      valuesKey: grafanaProvisioning.reader.password
+      targetPath: grafanaProvisioning.reader.password
+  values:
+    gateway:
+      enabled: false
+    control:
+      enabled: false
+    worker:
+      enabled: false
+    frontend:
+      enabled: false
+    bootstrap:
+      enabled: false
+
+    ingress:
+      enabled: false
+
+    public:
+      baseDomain: wuhao99.com
+      grafana:
+        enabled: true
+        scheme: https
+
+    grafanaProvisioning:
+      enabled: true
+      monitoringNamespace: monitoring
+      datasource:
+        name: Sub2API PostgreSQL
+        uid: sub2api-pg
+        postgresVersion: 1700
+
+    postgresql:
+      enabled: true
+      auth: {}
+      primary:
+        persistence:
+          size: 1Gi
+        resources:
+          limits:
+            cpu: 2
+            memory: 2Gi
+          requests:
+            cpu: 500m
+            memory: 512Mi
+    redis:
+      enabled: true
+      auth:
+        enabled: true
+      architecture: standalone
+      master:
+        persistence:
+          size: 1Gi
+        resources:
+          limits:
+            cpu: 500m
+            memory: 256Mi
+          requests:
+            cpu: 100m
+            memory: 128Mi
+
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                  - key: app.kubernetes.io/name
+                    operator: In
+                    values:
+                      - postgresql
+              topologyKey: kubernetes.io/hostname
+---
+apiVersion: helm.toolkit.fluxcd.io/v2
+kind: HelmRelease
+metadata:
   name: sub2api-bootstrap
   namespace: sub2api
 spec:
   interval: 10m
+  dependsOn:
+    - name: sub2api
   chart:
     spec:
       chart: deploy/helm/sub2api
@@ -78,13 +196,13 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: your-postgres-host.example.com
+      host: sub2api-postgresql
       port: 5432
       user: sub2api
       database: sub2api
       sslmode: require
     externalRedis:
-      host: your-redis-host.example.com
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
 ---
@@ -213,13 +331,13 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: your-postgres-host.example.com
+      host: sub2api-postgresql
       port: 5432
       user: sub2api
       database: sub2api
       sslmode: require
     externalRedis:
-      host: your-redis-host.example.com
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
 ---
@@ -232,6 +350,7 @@ spec:
   interval: 10m
   dependsOn:
     - name: sub2api-bootstrap
+    - name: sub2api-gateway
   chart:
     spec:
       chart: deploy/helm/sub2api
@@ -270,14 +389,6 @@ spec:
       name: sub2api-secrets
       valuesKey: externalRedis.password
       targetPath: externalRedis.password
-    - kind: Secret
-      name: sub2api-secrets
-      valuesKey: grafanaProvisioning.reader.username
-      targetPath: grafanaProvisioning.reader.username
-    - kind: Secret
-      name: sub2api-secrets
-      valuesKey: grafanaProvisioning.reader.password
-      targetPath: grafanaProvisioning.reader.password
   values:
     image:
       control:
@@ -341,14 +452,6 @@ spec:
       runMode: standard
       timezone: Asia/Shanghai
 
-    grafanaProvisioning:
-      enabled: true
-      monitoringNamespace: monitoring
-      datasource:
-        name: Sub2API PostgreSQL
-        uid: sub2api-pg
-        postgresVersion: 1700
-
     observability:
       enabled: true
       otel:
@@ -366,13 +469,13 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: your-postgres-host.example.com
+      host: sub2api-postgresql
       port: 5432
       user: sub2api
       database: sub2api
       sslmode: require
     externalRedis:
-      host: your-redis-host.example.com
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
 ---
@@ -465,12 +568,12 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: your-postgres-host.example.com
+      host: sub2api-postgresql
       port: 5432
       user: sub2api
       database: sub2api
       sslmode: require
     externalRedis:
-      host: your-redis-host.example.com
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
