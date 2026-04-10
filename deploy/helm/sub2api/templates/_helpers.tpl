@@ -237,7 +237,11 @@ Database SSL mode.
 */}}
 {{- define "sub2api.databaseSSLMode" -}}
 {{- if .Values.postgresql.enabled }}
+{{- if (dig "tls" "enabled" false .Values.postgresql) }}
+{{- "require" }}
+{{- else }}
 {{- "disable" }}
+{{- end }}
 {{- else }}
 {{- default "require" .Values.externalDatabase.sslmode }}
 {{- end }}
