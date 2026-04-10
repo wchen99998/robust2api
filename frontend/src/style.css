@@ -210,7 +210,7 @@
 
   /* ============ 卡片样式 ============ */
   .card {
-    @apply bg-white/70 dark:bg-white/[0.05] backdrop-blur-xl;
+    @apply bg-white dark:bg-dark-800;
     @apply rounded-mica-lg;
     @apply border border-black/[0.06] dark:border-white/[0.08];
     @apply transition-all duration-300;
@@ -242,7 +242,7 @@
 
   /* ============ 统计卡片 ============ */
   .stat-card {
-    @apply bg-white/70 dark:bg-white/[0.05] backdrop-blur-xl;
+    @apply bg-white dark:bg-dark-800;
     @apply rounded-mica-lg;
     @apply border border-black/[0.06] dark:border-white/[0.08];
     @apply p-4;
@@ -476,25 +476,24 @@
     @apply min-w-[320px] max-w-md;
     @apply bg-white dark:bg-dark-800;
     @apply rounded-mica-lg shadow-mica-popover;
-    @apply border-l-4;
     @apply p-4;
     @apply animate-slide-in-right;
   }
 
   .toast-success {
-    @apply border-l-status-green;
+    @apply bg-status-green/[0.06] dark:bg-status-green-dark/[0.08];
   }
 
   .toast-error {
-    @apply border-l-status-red;
+    @apply bg-status-red/[0.06] dark:bg-status-red-dark/[0.08];
   }
 
   .toast-warning {
-    @apply border-l-status-amber;
+    @apply bg-status-amber/[0.06] dark:bg-status-amber-dark/[0.08];
   }
 
   .toast-info {
-    @apply border-l-status-blue;
+    @apply bg-status-blue/[0.06] dark:bg-status-blue-dark/[0.08];
   }
 
   /* ============ 侧边栏 ============ */
@@ -590,7 +589,7 @@
   }
 
   .grouped-surface {
-    @apply overflow-hidden rounded-mica-lg border border-black/[0.06] bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05];
+    @apply overflow-hidden rounded-mica-lg border border-black/[0.06] bg-white dark:border-white/[0.08] dark:bg-dark-800;
   }
 
   .grouped-surface-header {
@@ -611,7 +610,7 @@
   }
 
   .grouped-list {
-    @apply overflow-hidden rounded-mica-lg border border-black/[0.06] bg-white/70 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05];
+    @apply overflow-hidden rounded-mica-lg border border-black/[0.06] bg-white dark:border-white/[0.08] dark:bg-dark-800;
   }
 
   .grouped-list-row {
@@ -637,7 +636,7 @@
   }
 
   .metric-panel {
-    @apply rounded-mica-lg border border-black/[0.06] bg-white/65 px-4 py-4 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05];
+    @apply rounded-mica-lg border border-black/[0.06] bg-white px-4 py-4 dark:border-white/[0.08] dark:bg-dark-800;
   }
 
   .metric-panel-label {
@@ -653,11 +652,11 @@
   }
 
   .segmented-surface {
-    @apply flex flex-wrap items-center gap-2 rounded-mica-lg border border-black/[0.06] bg-white/60 px-3 py-3 backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.04];
+    @apply flex flex-wrap items-center gap-2 rounded-mica-lg border border-black/[0.06] bg-white px-3 py-3 dark:border-white/[0.08] dark:bg-dark-800;
   }
 
   .muted-pill {
-    @apply inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white/70 px-3 py-1.5 text-mica-subhead text-mica-text-secondary backdrop-blur-xl dark:border-white/[0.08] dark:bg-white/[0.05] dark:text-mica-text-secondary-dark;
+    @apply inline-flex items-center gap-2 rounded-full border border-black/[0.06] bg-white px-3 py-1.5 text-mica-subhead text-mica-text-secondary dark:border-white/[0.08] dark:bg-dark-800 dark:text-mica-text-secondary-dark;
   }
 
   .section-kicker {
@@ -779,27 +778,35 @@
   }
 
   .tour-info-box {
-    @apply rounded-md border-l-4 border-status-blue bg-status-blue/[0.06] px-3 py-2 text-xs;
+    @apply rounded-md border border-status-blue/30 bg-status-blue/[0.06] px-3 py-2 text-xs;
     @apply text-mica-text-primary dark:text-mica-text-primary-dark;
-    @apply dark:border-status-blue-dark dark:bg-status-blue-dark/[0.08];
+    @apply dark:border-status-blue-dark/30 dark:bg-status-blue-dark/[0.08];
   }
 
   .tour-success-box {
-    @apply rounded-md border-l-4 border-status-green bg-status-green/[0.06] px-3 py-2 text-xs;
+    @apply rounded-md border border-status-green/30 bg-status-green/[0.06] px-3 py-2 text-xs;
     @apply text-mica-text-primary dark:text-mica-text-primary-dark;
-    @apply dark:border-status-green-dark dark:bg-status-green-dark/[0.08];
+    @apply dark:border-status-green-dark/30 dark:bg-status-green-dark/[0.08];
   }
 
   .tour-warning-box {
-    @apply rounded-md border-l-4 border-status-amber bg-status-amber/[0.06] px-3 py-2 text-xs;
+    @apply rounded-md border border-status-amber/30 bg-status-amber/[0.06] px-3 py-2 text-xs;
     @apply text-mica-text-primary dark:text-mica-text-primary-dark;
-    @apply dark:border-status-amber-dark dark:bg-status-amber-dark/[0.08];
+    @apply dark:border-status-amber-dark/30 dark:bg-status-amber-dark/[0.08];
   }
 
   .tour-error-box {
-    @apply rounded-md border-l-4 border-status-red bg-status-red/[0.06] px-3 py-2 text-xs;
+    @apply rounded-md border border-status-red/30 bg-status-red/[0.06] px-3 py-2 text-xs;
     @apply text-mica-text-primary dark:text-mica-text-primary-dark;
-    @apply dark:border-status-red-dark dark:bg-status-red-dark/[0.08];
+    @apply dark:border-status-red-dark/30 dark:bg-status-red-dark/[0.08];
+  }
+
+  .tour-cta {
+    @apply font-semibold text-status-green dark:text-status-green-dark;
+  }
+
+  .tour-muted {
+    @apply text-xs text-mica-text-tertiary dark:text-mica-text-tertiary-dark;
   }
 
   /* ============ 表格页面布局优化 ============ */
