@@ -130,14 +130,14 @@ stringData:
   postgresql.auth.postgresPassword: "<postgres-admin-password or empty if postgresql.enabled=false>"
   postgresql.auth.password: "<db-password>"
   redis.auth.password: "<redis-password>"
-  externalDatabase.password: ""
-  externalRedis.password: ""
   grafanaProvisioning.reader.username: "grafana_reader"
   grafanaProvisioning.reader.password: "<grafana-read-only-db-password>"
 EOF
 ```
 
-If using external PostgreSQL/Redis, set `postgresql.enabled=false` / `redis.enabled=false` in `clusters/production/apps/sub2api.yaml` and put the real passwords in `externalDatabase.password` / `externalRedis.password`. Keep `postgresql.auth.postgresPassword` empty in that mode.
+The default GitOps manifests in [clusters/production/apps/sub2api.yaml](/Users/chenwuhao/Dev/sub2api/clusters/production/apps/sub2api.yaml) run PostgreSQL and Redis in-cluster, and the bootstrap, gateway, control, and worker releases reuse `postgresql.auth.password` and `redis.auth.password` when connecting to those services. You do not need duplicate `externalDatabase.password` or `externalRedis.password` entries for that path.
+
+If you switch the manifests to external PostgreSQL or Redis, update the affected `valuesFrom` entries in [clusters/production/apps/sub2api.yaml](/Users/chenwuhao/Dev/sub2api/clusters/production/apps/sub2api.yaml) to source the external credentials, and keep `postgresql.auth.postgresPassword` empty when `postgresql.enabled=false`.
 
 If you provision DigitalOcean Managed PostgreSQL via Terraform, copy the `grafana_reader_user` / `grafana_reader_password` outputs into `grafanaProvisioning.reader.username` / `grafanaProvisioning.reader.password`.
 

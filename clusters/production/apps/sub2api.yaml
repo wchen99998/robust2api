@@ -159,11 +159,11 @@ spec:
       targetPath: secrets.adminPassword
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalDatabase.password
+      valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalRedis.password
+      valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
     image:
@@ -238,11 +238,11 @@ spec:
   valuesFrom:
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalDatabase.password
+      valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalRedis.password
+      valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
     image:
@@ -386,11 +386,11 @@ spec:
       targetPath: secrets.adminPassword
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalDatabase.password
+      valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalRedis.password
+      valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
     image:
@@ -511,11 +511,11 @@ spec:
   valuesFrom:
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalDatabase.password
+      valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
       name: sub2api-secrets
-      valuesKey: externalRedis.password
+      valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
     image:
