@@ -14,31 +14,31 @@ var ErrUsageBillingRequestConflict = errors.New("usage billing request fingerpri
 
 // UsageBillingCommand describes one billable request that must be applied at most once.
 type UsageBillingCommand struct {
-	RequestID          string
-	APIKeyID           int64
-	RequestFingerprint string
-	RequestPayloadHash string
+	RequestID          string `json:"request_id"`
+	APIKeyID           int64  `json:"api_key_id"`
+	RequestFingerprint string `json:"request_fingerprint"`
+	RequestPayloadHash string `json:"request_payload_hash"`
 
-	UserID              int64
-	AccountID           int64
-	SubscriptionID      *int64
-	AccountType         string
-	Model               string
-	ServiceTier         string
-	ReasoningEffort     string
-	BillingType         int8
-	InputTokens         int
-	OutputTokens        int
-	CacheCreationTokens int
-	CacheReadTokens     int
-	ImageCount          int
-	MediaType           string
+	UserID              int64  `json:"user_id"`
+	AccountID           int64  `json:"account_id"`
+	SubscriptionID      *int64 `json:"subscription_id,omitempty"`
+	AccountType         string `json:"account_type"`
+	Model               string `json:"model"`
+	ServiceTier         string `json:"service_tier,omitempty"`
+	ReasoningEffort     string `json:"reasoning_effort,omitempty"`
+	BillingType         int8   `json:"billing_type"`
+	InputTokens         int    `json:"input_tokens"`
+	OutputTokens        int    `json:"output_tokens"`
+	CacheCreationTokens int    `json:"cache_creation_tokens"`
+	CacheReadTokens     int    `json:"cache_read_tokens"`
+	ImageCount          int    `json:"image_count"`
+	MediaType           string `json:"media_type,omitempty"`
 
-	BalanceCost         float64
-	SubscriptionCost    float64
-	APIKeyQuotaCost     float64
-	APIKeyRateLimitCost float64
-	AccountQuotaCost    float64
+	BalanceCost         float64 `json:"balance_cost"`
+	SubscriptionCost    float64 `json:"subscription_cost"`
+	APIKeyQuotaCost     float64 `json:"api_key_quota_cost"`
+	APIKeyRateLimitCost float64 `json:"api_key_rate_limit_cost"`
+	AccountQuotaCost    float64 `json:"account_quota_cost"`
 }
 
 func (c *UsageBillingCommand) Normalize() {

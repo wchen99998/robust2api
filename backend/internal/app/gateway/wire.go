@@ -54,7 +54,6 @@ func provideCleanup(
 	otelProvider *platformotel.Provider,
 	metricsServer *platformotel.MetricsServer,
 	billingCache *service.BillingCacheService,
-	usageRecordWorkerPool *service.UsageRecordWorkerPool,
 	subscriptionService *service.SubscriptionService,
 	pricing *service.PricingService,
 	deferred *service.DeferredService,
@@ -77,12 +76,6 @@ func provideCleanup(
 			{"BillingCacheService", func() error {
 				if billingCache != nil {
 					billingCache.Stop()
-				}
-				return nil
-			}},
-			{"UsageRecordWorkerPool", func() error {
-				if usageRecordWorkerPool != nil {
-					usageRecordWorkerPool.Stop()
 				}
 				return nil
 			}},

@@ -557,6 +557,31 @@ func TestOpenAIGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloa
 	require.Equal(t, payloadHash, publisher.events[0].Command.RequestPayloadHash)
 }
 
+func TestOpenAIGatewayServiceRecordUsage_ReturnsErrorWhenBillingPublisherMissing(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
+	svc := newOpenAIRecordUsageServiceWithPublisherForTest(usageRepo, nil, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "openai_publish_missing",
+			Usage: OpenAIUsage{
+				InputTokens:  12,
+				OutputTokens: 4,
+			},
+			Model:    "gpt-5.1",
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:    1001,
+			Quota: 100,
+		},
+		User:    &User{ID: 2001},
+		Account: &Account{ID: 3001},
+	})
+
+	require.ErrorIs(t, err, ErrBillingEventPublisherUnavailable)
+}
+
 func TestOpenAIGatewayServiceRecordUsage_UsesFallbackRequestIDForBillingAndUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	publisher := &testOpenAIBillingPublisher{}

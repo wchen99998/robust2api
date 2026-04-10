@@ -92,85 +92,85 @@ func ApplyLegacyRequestFields(requestType RequestType, fallbackStream bool, fall
 }
 
 type UsageLog struct {
-	ID        int64
-	UserID    int64
-	APIKeyID  int64
-	AccountID int64
-	RequestID string
-	Model     string
+	ID        int64  `json:"id,omitempty"`
+	UserID    int64  `json:"user_id"`
+	APIKeyID  int64  `json:"api_key_id"`
+	AccountID int64  `json:"account_id"`
+	RequestID string `json:"request_id"`
+	Model     string `json:"model"`
 	// RequestedModel is the client-requested model name recorded for stable user/admin display.
 	// Empty should be treated as Model for backward compatibility with historical rows.
-	RequestedModel string
+	RequestedModel string `json:"requested_model,omitempty"`
 	// UpstreamModel is the actual model sent to the upstream provider after mapping.
 	// Nil means no mapping was applied (requested model was used as-is).
-	UpstreamModel *string
+	UpstreamModel *string `json:"upstream_model,omitempty"`
 	// ChannelID 渠道 ID
-	ChannelID *int64
+	ChannelID *int64 `json:"channel_id,omitempty"`
 	// ModelMappingChain 模型映射链，如 "a→b→c"
-	ModelMappingChain *string
+	ModelMappingChain *string `json:"model_mapping_chain,omitempty"`
 	// BillingTier 计费层级标签（per_request/image 模式）
-	BillingTier *string
+	BillingTier *string `json:"billing_tier,omitempty"`
 	// BillingMode 计费模式：token/image
-	BillingMode *string
+	BillingMode *string `json:"billing_mode,omitempty"`
 	// ServiceTier records the OpenAI service tier used for billing, e.g. "priority" / "flex".
-	ServiceTier *string
+	ServiceTier *string `json:"service_tier,omitempty"`
 	// ReasoningEffort is the request's reasoning effort level.
 	// OpenAI: "low" / "medium" / "high" / "xhigh"; Claude: "low" / "medium" / "high" / "max".
 	// Nil means not provided / not applicable.
-	ReasoningEffort *string
+	ReasoningEffort *string `json:"reasoning_effort,omitempty"`
 	// InboundEndpoint is the client-facing API endpoint path, e.g. /v1/chat/completions.
-	InboundEndpoint *string
+	InboundEndpoint *string `json:"inbound_endpoint,omitempty"`
 	// UpstreamEndpoint is the normalized upstream endpoint path, e.g. /v1/responses.
-	UpstreamEndpoint *string
+	UpstreamEndpoint *string `json:"upstream_endpoint,omitempty"`
 
-	GroupID        *int64
-	SubscriptionID *int64
+	GroupID        *int64 `json:"group_id,omitempty"`
+	SubscriptionID *int64 `json:"subscription_id,omitempty"`
 
-	InputTokens         int
-	OutputTokens        int
-	CacheCreationTokens int
-	CacheReadTokens     int
+	InputTokens         int `json:"input_tokens"`
+	OutputTokens        int `json:"output_tokens"`
+	CacheCreationTokens int `json:"cache_creation_tokens"`
+	CacheReadTokens     int `json:"cache_read_tokens"`
 
-	CacheCreation5mTokens int `gorm:"column:cache_creation_5m_tokens"`
-	CacheCreation1hTokens int `gorm:"column:cache_creation_1h_tokens"`
+	CacheCreation5mTokens int `json:"cache_creation_5m_tokens" gorm:"column:cache_creation_5m_tokens"`
+	CacheCreation1hTokens int `json:"cache_creation_1h_tokens" gorm:"column:cache_creation_1h_tokens"`
 
-	ImageOutputTokens int
-	ImageOutputCost   float64
+	ImageOutputTokens int     `json:"image_output_tokens"`
+	ImageOutputCost   float64 `json:"image_output_cost"`
 
-	InputCost         float64
-	OutputCost        float64
-	CacheCreationCost float64
-	CacheReadCost     float64
-	TotalCost         float64
-	ActualCost        float64
-	RateMultiplier    float64
+	InputCost         float64 `json:"input_cost"`
+	OutputCost        float64 `json:"output_cost"`
+	CacheCreationCost float64 `json:"cache_creation_cost"`
+	CacheReadCost     float64 `json:"cache_read_cost"`
+	TotalCost         float64 `json:"total_cost"`
+	ActualCost        float64 `json:"actual_cost"`
+	RateMultiplier    float64 `json:"rate_multiplier"`
 	// AccountRateMultiplier 账号计费倍率快照（nil 表示历史数据，按 1.0 处理）
-	AccountRateMultiplier *float64
+	AccountRateMultiplier *float64 `json:"account_rate_multiplier,omitempty"`
 
-	BillingType  int8
-	RequestType  RequestType
-	Stream       bool
-	OpenAIWSMode bool
-	DurationMs   *int
-	FirstTokenMs *int
-	UserAgent    *string
-	IPAddress    *string
+	BillingType  int8        `json:"billing_type"`
+	RequestType  RequestType `json:"request_type"`
+	Stream       bool        `json:"stream"`
+	OpenAIWSMode bool        `json:"openai_ws_mode"`
+	DurationMs   *int        `json:"duration_ms,omitempty"`
+	FirstTokenMs *int        `json:"first_token_ms,omitempty"`
+	UserAgent    *string     `json:"user_agent,omitempty"`
+	IPAddress    *string     `json:"ip_address,omitempty"`
 
 	// Cache TTL Override 标记（管理员强制替换了缓存 TTL 计费）
-	CacheTTLOverridden bool
+	CacheTTLOverridden bool `json:"cache_ttl_overridden"`
 
 	// 图片生成字段
-	ImageCount int
-	ImageSize  *string
-	MediaType  *string
+	ImageCount int     `json:"image_count"`
+	ImageSize  *string `json:"image_size,omitempty"`
+	MediaType  *string `json:"media_type,omitempty"`
 
-	CreatedAt time.Time
+	CreatedAt time.Time `json:"created_at"`
 
-	User         *User
-	APIKey       *APIKey
-	Account      *Account
-	Group        *Group
-	Subscription *UserSubscription
+	User         *User             `json:"-"`
+	APIKey       *APIKey           `json:"-"`
+	Account      *Account          `json:"-"`
+	Group        *Group            `json:"-"`
+	Subscription *UserSubscription `json:"-"`
 }
 
 func (u *UsageLog) TotalTokens() int {

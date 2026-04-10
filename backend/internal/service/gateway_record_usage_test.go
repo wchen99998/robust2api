@@ -141,6 +141,31 @@ func TestGatewayServiceRecordUsage_PublishesBillingEvent(t *testing.T) {
 	require.Equal(t, int64(601), publisher.events[0].Command.UserID)
 }
 
+func TestGatewayServiceRecordUsage_ReturnsErrorWhenBillingPublisherMissing(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	svc := newGatewayRecordUsageServiceWithPublisherForTest(usageRepo, nil)
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_publish_missing",
+			Usage: ClaudeUsage{
+				InputTokens:  10,
+				OutputTokens: 6,
+			},
+			Model:    "claude-sonnet-4",
+			Duration: time.Second,
+		},
+		APIKey: &APIKey{
+			ID:    501,
+			Quota: 100,
+		},
+		User:    &User{ID: 601},
+		Account: &Account{ID: 701},
+	})
+
+	require.ErrorIs(t, err, ErrBillingEventPublisherUnavailable)
+}
+
 func TestGatewayServiceRecordUsage_BillingFingerprintIncludesRequestPayloadHash(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	publisher := &testBillingPublisher{}

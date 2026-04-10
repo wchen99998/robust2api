@@ -7728,6 +7728,14 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 		groupID = *apiKey.GroupID
 	}
 	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.HasRateLimits())
+	if s.billingPublisher == nil {
+		slog.Error("billing event publisher unavailable",
+			"component", "service.gateway",
+			"request_id", requestID,
+			"user_id", user.ID,
+		)
+		return ErrBillingEventPublisherUnavailable
+	}
 	if err := s.billingPublisher.Publish(ctx, event); err != nil {
 		slog.Error("billing event publish failed",
 			"component", "service.gateway",

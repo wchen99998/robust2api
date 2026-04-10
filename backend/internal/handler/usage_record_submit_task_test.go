@@ -6,30 +6,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 
-func newUsageRecordTestPool(t *testing.T) *service.UsageRecordWorkerPool {
-	t.Helper()
-	pool := service.NewUsageRecordWorkerPoolWithOptions(service.UsageRecordWorkerPoolOptions{
-		WorkerCount:           1,
-		QueueSize:             8,
-		TaskTimeout:           time.Second,
-		OverflowPolicy:        "drop",
-		OverflowSamplePercent: 0,
-		AutoScaleEnabled:      false,
-	})
-	t.Cleanup(pool.Stop)
-	return pool
-}
-
-func TestGatewayHandlerSubmitUsageRecordTask_WithPool(t *testing.T) {
-	pool := newUsageRecordTestPool(t)
-	h := &GatewayHandler{usageRecordWorkerPool: pool}
+func TestGatewayHandlerSubmitUsageRecordTask_ExecutesInline(t *testing.T) {
+	h := &GatewayHandler{}
 
 	done := make(chan struct{})
 	h.submitUsageRecordTask(func(ctx context.Context) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("expected deadline in task context")
+		}
 		close(done)
 	})
 
@@ -40,7 +27,7 @@ func TestGatewayHandlerSubmitUsageRecordTask_WithPool(t *testing.T) {
 	}
 }
 
-func TestGatewayHandlerSubmitUsageRecordTask_WithoutPoolSyncFallback(t *testing.T) {
+func TestGatewayHandlerSubmitUsageRecordTask_UsesTimeoutContext(t *testing.T) {
 	h := &GatewayHandler{}
 	var called atomic.Bool
 
@@ -77,12 +64,14 @@ func TestGatewayHandlerSubmitUsageRecordTask_WithoutPool_TaskPanicRecovered(t *t
 	require.True(t, called.Load(), "panic 后后续任务应仍可执行")
 }
 
-func TestOpenAIGatewayHandlerSubmitUsageRecordTask_WithPool(t *testing.T) {
-	pool := newUsageRecordTestPool(t)
-	h := &OpenAIGatewayHandler{usageRecordWorkerPool: pool}
+func TestOpenAIGatewayHandlerSubmitUsageRecordTask_ExecutesInline(t *testing.T) {
+	h := &OpenAIGatewayHandler{}
 
 	done := make(chan struct{})
 	h.submitUsageRecordTask(func(ctx context.Context) {
+		if _, ok := ctx.Deadline(); !ok {
+			t.Fatal("expected deadline in task context")
+		}
 		close(done)
 	})
 
@@ -93,7 +82,7 @@ func TestOpenAIGatewayHandlerSubmitUsageRecordTask_WithPool(t *testing.T) {
 	}
 }
 
-func TestOpenAIGatewayHandlerSubmitUsageRecordTask_WithoutPoolSyncFallback(t *testing.T) {
+func TestOpenAIGatewayHandlerSubmitUsageRecordTask_UsesTimeoutContext(t *testing.T) {
 	h := &OpenAIGatewayHandler{}
 	var called atomic.Bool
 

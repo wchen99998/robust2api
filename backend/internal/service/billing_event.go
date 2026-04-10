@@ -2,12 +2,15 @@ package service
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 )
 
 const usageChargeEventVersion = 1
+
+var ErrBillingEventPublisherUnavailable = errors.New("billing event publisher is unavailable")
 
 // UsageChargeEvent is the versioned message published to the billing stream.
 // It contains immutable usage facts and computed charge amounts for one request.
