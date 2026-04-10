@@ -13,7 +13,7 @@
         <div class="ml-auto flex items-center gap-2">
           <span class="text-sm font-medium text-mica-text-secondary dark:text-mica-text-secondary-dark">{{ t('dashboard.granularity') }}:</span>
           <div class="w-28">
-            <Select :model-value="granularity" :options="[{value:'day', label:t('dashboard.day')}, {value:'hour', label:t('dashboard.hour')}]" aria-label="Granularity" @update:model-value="$emit('update:granularity', $event)" @change="$emit('granularityChange')" />
+            <Select :model-value="granularity" :options="[{value:'day', label:t('dashboard.day')}, {value:'hour', label:t('dashboard.hour')}]" :aria-label="t('dashboard.granularity')" @update:model-value="$emit('update:granularity', $event)" @change="$emit('granularityChange')" />
           </div>
         </div>
       </div>
