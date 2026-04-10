@@ -532,6 +532,16 @@ func (s *AuthService) LoginOrRegisterOAuth(ctx context.Context, email, username 
 // 与 LoginOrRegisterOAuth 功能相同，但返回 TokenPair 而非单个 token。
 // invitationCode 仅在邀请码注册模式下新用户注册时使用；已有账号登录时忽略。
 func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, email, username, invitationCode string) (*TokenPair, *User, error) {
+	return s.loginOrRegisterOAuthWithTokenPair(ctx, email, "", username, invitationCode, false)
+}
+
+// LoginOrRegisterOAuthWithRegistrationEmail behaves like LoginOrRegisterOAuthWithTokenPair,
+// but validates first-time OAuth registration against the provided registration email.
+func (s *AuthService) LoginOrRegisterOAuthWithRegistrationEmail(ctx context.Context, email, registrationEmail, username, invitationCode string) (*TokenPair, *User, error) {
+	return s.loginOrRegisterOAuthWithTokenPair(ctx, email, registrationEmail, username, invitationCode, true)
+}
+
+func (s *AuthService) loginOrRegisterOAuthWithTokenPair(ctx context.Context, email, registrationEmail, username, invitationCode string, enforceRegistrationEmailPolicy bool) (*TokenPair, *User, error) {
 	// 检查 refreshTokenCache 是否可用
 	if s.refreshTokenCache == nil {
 		return nil, nil, errors.New("refresh token cache not configured")
@@ -556,6 +566,11 @@ func (s *AuthService) LoginOrRegisterOAuthWithTokenPair(ctx context.Context, ema
 			// OAuth 首次登录视为注册
 			if s.settingService == nil || !s.settingService.IsRegistrationEnabled(ctx) {
 				return nil, nil, ErrRegDisabled
+			}
+			if enforceRegistrationEmailPolicy {
+				if err := s.validateOAuthRegistrationEmailPolicy(ctx, registrationEmail); err != nil {
+					return nil, nil, err
+				}
 			}
 
 			// 检查是否需要邀请码
@@ -685,20 +700,28 @@ const pendingOAuthTokenTTL = 10 * time.Minute
 const pendingOAuthPurpose = "pending_oauth_registration"
 
 type pendingOAuthClaims struct {
-	Email    string `json:"email"`
-	Username string `json:"username"`
-	Purpose  string `json:"purpose"`
+	Email             string `json:"email"`
+	RegistrationEmail string `json:"registration_email,omitempty"`
+	Username          string `json:"username"`
+	Purpose           string `json:"purpose"`
 	jwt.RegisteredClaims
 }
 
 // CreatePendingOAuthToken generates a short-lived JWT that carries the OAuth identity
 // while waiting for the user to supply an invitation code.
 func (s *AuthService) CreatePendingOAuthToken(email, username string) (string, error) {
+	return s.CreatePendingOAuthTokenWithRegistrationEmail(email, "", username)
+}
+
+// CreatePendingOAuthTokenWithRegistrationEmail behaves like CreatePendingOAuthToken,
+// but also carries the external email used for first-time registration policy checks.
+func (s *AuthService) CreatePendingOAuthTokenWithRegistrationEmail(email, registrationEmail, username string) (string, error) {
 	now := time.Now()
 	claims := &pendingOAuthClaims{
-		Email:    email,
-		Username: username,
-		Purpose:  pendingOAuthPurpose,
+		Email:             email,
+		RegistrationEmail: strings.TrimSpace(registrationEmail),
+		Username:          username,
+		Purpose:           pendingOAuthPurpose,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(now.Add(pendingOAuthTokenTTL)),
 			IssuedAt:  jwt.NewNumericDate(now),
@@ -711,9 +734,9 @@ func (s *AuthService) CreatePendingOAuthToken(email, username string) (string, e
 
 // VerifyPendingOAuthToken validates a pending OAuth token and returns the embedded identity.
 // Returns ErrInvalidToken when the token is invalid or expired.
-func (s *AuthService) VerifyPendingOAuthToken(tokenStr string) (email, username string, err error) {
+func (s *AuthService) VerifyPendingOAuthToken(tokenStr string) (email, registrationEmail, username string, err error) {
 	if len(tokenStr) > maxTokenLength {
-		return "", "", ErrInvalidToken
+		return "", "", "", ErrInvalidToken
 	}
 	parser := jwt.NewParser(jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Name}))
 	token, parseErr := parser.ParseWithClaims(tokenStr, &pendingOAuthClaims{}, func(t *jwt.Token) (any, error) {
@@ -723,16 +746,16 @@ func (s *AuthService) VerifyPendingOAuthToken(tokenStr string) (email, username 
 		return []byte(s.cfg.JWT.Secret), nil
 	})
 	if parseErr != nil {
-		return "", "", ErrInvalidToken
+		return "", "", "", ErrInvalidToken
 	}
 	claims, ok := token.Claims.(*pendingOAuthClaims)
 	if !ok || !token.Valid {
-		return "", "", ErrInvalidToken
+		return "", "", "", ErrInvalidToken
 	}
 	if claims.Purpose != pendingOAuthPurpose {
-		return "", "", ErrInvalidToken
+		return "", "", "", ErrInvalidToken
 	}
-	return claims.Email, claims.Username, nil
+	return claims.Email, claims.RegistrationEmail, claims.Username, nil
 }
 
 func (s *AuthService) assignDefaultSubscriptions(ctx context.Context, userID int64) {
@@ -761,6 +784,21 @@ func (s *AuthService) validateRegistrationEmailPolicy(ctx context.Context, email
 		return buildEmailSuffixNotAllowedError(whitelist)
 	}
 	return nil
+}
+
+func (s *AuthService) validateOAuthRegistrationEmailPolicy(ctx context.Context, email string) error {
+	email = strings.TrimSpace(email)
+	if email != "" {
+		return s.validateRegistrationEmailPolicy(ctx, email)
+	}
+	if s.settingService == nil {
+		return nil
+	}
+	whitelist := s.settingService.GetRegistrationEmailSuffixWhitelist(ctx)
+	if len(whitelist) == 0 {
+		return nil
+	}
+	return buildEmailSuffixNotAllowedError(whitelist)
 }
 
 func buildEmailSuffixNotAllowedError(whitelist []string) error {

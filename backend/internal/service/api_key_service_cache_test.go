@@ -210,6 +210,9 @@ func TestAPIKeyService_GetByKey_UsesL2Cache(t *testing.T) {
 				ModelRouting: map[string][]int64{
 					"claude-opus-*": {1, 2},
 				},
+				MessagesDispatchModelConfig: OpenAIMessagesDispatchModelConfig{
+					SonnetMappedModel: "gpt-5.3-codex",
+				},
 			},
 		},
 	}
@@ -224,6 +227,9 @@ func TestAPIKeyService_GetByKey_UsesL2Cache(t *testing.T) {
 	require.Equal(t, groupID, apiKey.Group.ID)
 	require.True(t, apiKey.Group.ModelRoutingEnabled)
 	require.Equal(t, map[string][]int64{"claude-opus-*": {1, 2}}, apiKey.Group.ModelRouting)
+	require.Equal(t, OpenAIMessagesDispatchModelConfig{
+		SonnetMappedModel: "gpt-5.3-codex",
+	}, apiKey.Group.MessagesDispatchModelConfig)
 }
 
 func TestAPIKeyService_GetByKey_NegativeCache(t *testing.T) {

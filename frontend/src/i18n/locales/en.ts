@@ -344,6 +344,7 @@ export default {
     invitationCodeInvalid: 'Invalid or used invitation code',
     invitationCodeValidating: 'Validating invitation code...',
     invitationCodeInvalidCannotRegister: 'Invalid invitation code. Please check and try again',
+    oauthOrContinue: 'or continue with email',
     linuxdo: {
       signIn: 'Continue with Linux.do',
       orContinue: 'or continue with email',
@@ -354,6 +355,19 @@ export default {
       backToLogin: 'Back to Login',
       invitationRequired: 'This Linux.do account is not yet registered. The site requires an invitation code — please enter one to complete registration.',
       invalidPendingToken: 'The registration token has expired. Please sign in with Linux.do again.',
+      completeRegistration: 'Complete Registration',
+      completing: 'Completing registration…',
+      completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
+    },
+    oidc: {
+      signIn: 'Continue with {providerName}',
+      callbackTitle: 'Signing you in with {providerName}',
+      callbackProcessing: 'Completing {providerName} login, please wait...',
+      callbackHint: 'If you are not redirected automatically, go back to the login page and try again.',
+      callbackMissingToken: 'Missing login token, please try again.',
+      backToLogin: 'Back to Login',
+      invitationRequired: 'This {providerName} account is not yet registered. The site requires an invitation code. Please enter one to complete registration.',
+      invalidPendingToken: 'The registration token has expired. Please sign in again.',
       completeRegistration: 'Complete Registration',
       completing: 'Completing registration…',
       completeRegistrationFailed: 'Registration failed. Please check your invitation code and try again.'
@@ -1282,7 +1296,24 @@ export default {
         allowDispatchHint: 'When enabled, API keys in this OpenAI group can dispatch requests through /v1/messages endpoint',
         defaultModel: 'Default mapped model',
         defaultModelPlaceholder: 'e.g., gpt-4.1',
-        defaultModelHint: 'When account has no model mapping configured, all request models will be mapped to this model'
+        defaultModelHint: 'When account has no model mapping configured, all request models will be mapped to this model',
+        familyMappingTitle: 'Claude Family Mappings',
+        familyMappingHint: 'Override the default OpenAI target model for Opus, Sonnet, and Haiku requests.',
+        opusModel: 'Opus target model',
+        opusModelPlaceholder: 'e.g., gpt-5.4',
+        sonnetModel: 'Sonnet target model',
+        sonnetModelPlaceholder: 'e.g., gpt-5.3-codex',
+        haikuModel: 'Haiku target model',
+        haikuModelPlaceholder: 'e.g., gpt-5.4-mini',
+        exactMappingTitle: 'Exact Model Overrides',
+        exactMappingHint: 'Use exact Claude model IDs when a single release needs a different OpenAI target.',
+        noExactMappings: 'No exact mappings configured',
+        addExactMapping: 'Add Exact Mapping',
+        claudeModel: 'Claude model',
+        claudeModelPlaceholder: 'claude-sonnet-4-5-20250929',
+        targetModel: 'Target OpenAI model',
+        targetModelPlaceholder: 'gpt-5.2',
+        removeExactMapping: 'Remove'
       },
       invalidRequestFallback: {
         title: 'Invalid Request Fallback Group',

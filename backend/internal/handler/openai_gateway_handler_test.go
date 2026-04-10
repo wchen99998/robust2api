@@ -376,6 +376,71 @@ func TestResolveOpenAIForwardDefaultMappedModel(t *testing.T) {
 	})
 }
 
+func TestResolveOpenAIMessagesDispatchMappedModel(t *testing.T) {
+	t.Run("exact_claude_model_override_wins", func(t *testing.T) {
+		apiKey := &service.APIKey{
+			Group: &service.Group{
+				AllowMessagesDispatch: true,
+				MessagesDispatchModelConfig: service.OpenAIMessagesDispatchModelConfig{
+					SonnetMappedModel: "gpt-5.2",
+					ExactModelMappings: map[string]string{
+						"claude-sonnet-4-5-20250929": "gpt-5.4-mini-high",
+					},
+				},
+			},
+		}
+		require.Equal(t, "gpt-5.4-mini", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
+	})
+
+	t.Run("uses_family_default_when_no_override", func(t *testing.T) {
+		apiKey := &service.APIKey{Group: &service.Group{AllowMessagesDispatch: true}}
+		require.Equal(t, "gpt-5.4", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-opus-4-6"))
+		require.Equal(t, "gpt-5.3-codex", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
+		require.Equal(t, "gpt-5.4-mini", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-haiku-4-5-20251001"))
+	})
+
+	t.Run("returns_empty_for_disabled_dispatch_non_claude_or_missing_group", func(t *testing.T) {
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(nil, "claude-sonnet-4-5-20250929"))
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(&service.APIKey{}, "claude-sonnet-4-5-20250929"))
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(&service.APIKey{Group: &service.Group{}}, "gpt-5.4"))
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(&service.APIKey{Group: &service.Group{}}, "claude-sonnet-4-5-20250929"))
+	})
+
+	t.Run("does_not_fall_back_to_group_default_mapped_model", func(t *testing.T) {
+		apiKey := &service.APIKey{
+			Group: &service.Group{
+				AllowMessagesDispatch: true,
+				DefaultMappedModel:    "gpt-5.4",
+			},
+		}
+		require.Empty(t, resolveOpenAIMessagesDispatchMappedModel(apiKey, "gpt-5.4"))
+		require.Equal(t, "gpt-5.3-codex", resolveOpenAIMessagesDispatchMappedModel(apiKey, "claude-sonnet-4-5-20250929"))
+	})
+}
+
+func TestResolveOpenAIMessagesLegacyFallbackModel(t *testing.T) {
+	t.Run("uses_group_default_when_dispatch_not_active", func(t *testing.T) {
+		apiKey := &service.APIKey{
+			Group: &service.Group{DefaultMappedModel: "gpt-5.4"},
+		}
+		require.Equal(t, "gpt-5.4", resolveOpenAIMessagesLegacyFallbackModel(apiKey, "claude-sonnet-4-5-20250929", ""))
+	})
+
+	t.Run("skips_group_default_when_messages_dispatch_already_resolved", func(t *testing.T) {
+		apiKey := &service.APIKey{
+			Group: &service.Group{DefaultMappedModel: "gpt-5.4"},
+		}
+		require.Empty(t, resolveOpenAIMessagesLegacyFallbackModel(apiKey, "claude-sonnet-4-5-20250929", "gpt-5.3-codex"))
+	})
+
+	t.Run("skips_when_default_matches_current_routing_model", func(t *testing.T) {
+		apiKey := &service.APIKey{
+			Group: &service.Group{DefaultMappedModel: "gpt-5.4"},
+		}
+		require.Empty(t, resolveOpenAIMessagesLegacyFallbackModel(apiKey, "gpt-5.4", ""))
+	})
+}
+
 func TestOpenAIResponses_MissingDependencies_ReturnsServiceUnavailable(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

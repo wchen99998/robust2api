@@ -50,6 +50,24 @@ func resolveOpenAIForwardDefaultMappedModel(apiKey *service.APIKey, fallbackMode
 	return strings.TrimSpace(apiKey.Group.DefaultMappedModel)
 }
 
+func resolveOpenAIMessagesDispatchMappedModel(apiKey *service.APIKey, requestedModel string) string {
+	if apiKey == nil || apiKey.Group == nil {
+		return ""
+	}
+	return strings.TrimSpace(apiKey.Group.ResolveMessagesDispatchModel(requestedModel))
+}
+
+func resolveOpenAIMessagesLegacyFallbackModel(apiKey *service.APIKey, routingModel, preferredMappedModel string) string {
+	if strings.TrimSpace(preferredMappedModel) != "" {
+		return ""
+	}
+	fallbackModel := resolveOpenAIForwardDefaultMappedModel(apiKey, "")
+	if fallbackModel == "" || fallbackModel == strings.TrimSpace(routingModel) {
+		return ""
+	}
+	return fallbackModel
+}
+
 // NewOpenAIGatewayHandler creates a new OpenAIGatewayHandler
 func NewOpenAIGatewayHandler(
 	gatewayService *service.OpenAIGatewayService,
@@ -627,6 +645,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	}
 	reqModel := modelResult.String()
 	routingModel := service.NormalizeOpenAICompatRequestedModel(reqModel)
+	preferredMappedModel := resolveOpenAIMessagesDispatchMappedModel(apiKey, reqModel)
 	reqStream := gjson.GetBytes(body, "stream").Bool()
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
@@ -688,53 +707,71 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	effectiveMappedModel := preferredMappedModel
 
 	for {
-		// 清除上一次迭代的降级模型标记，避免残留影响本次迭代
-		c.Set("openai_messages_fallback_model", "")
+		currentRoutingModel := routingModel
+		if effectiveMappedModel != "" {
+			currentRoutingModel = effectiveMappedModel
+		}
 		reqLog.Debug("openai_messages.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
 		selectCtx, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
+		selectSpanEnded := false
+		endSelectSpan := func() {
+			if !selectSpanEnded {
+				selectSpan.End()
+				selectSpanEnded = true
+			}
+		}
 		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
 			selectCtx,
 			apiKey.GroupID,
 			"", // no previous_response_id
 			sessionHash,
-			routingModel,
+			currentRoutingModel,
 			failedAccountIDs,
 			service.OpenAIUpstreamTransportAny,
 		)
 		if err != nil {
 			appelotel.RecordSpanError(selectSpan, err, err.Error())
-			selectSpan.End()
+			endSelectSpan()
 			appelotel.RecordSpanError(span, err, err.Error())
 			reqLog.Warn("openai_messages.account_select_failed",
 				zap.Error(err),
 				zap.Int("excluded_account_count", len(failedAccountIDs)),
 			)
-			// 首次调度失败 + 有默认映射模型 → 用默认模型重试
 			if len(failedAccountIDs) == 0 {
-				defaultModel := ""
-				if apiKey.Group != nil {
-					defaultModel = apiKey.Group.DefaultMappedModel
-				}
-				if defaultModel != "" && defaultModel != routingModel {
+				fallbackMappedModel := resolveOpenAIMessagesLegacyFallbackModel(apiKey, routingModel, preferredMappedModel)
+				if fallbackMappedModel != "" {
 					reqLog.Info("openai_messages.fallback_to_default_model",
-						zap.String("default_mapped_model", defaultModel),
+						zap.String("default_mapped_model", fallbackMappedModel),
 					)
-					selection, scheduleDecision, err = h.gatewayService.SelectAccountWithScheduler(
-						c.Request.Context(),
+					fallbackSelectCtx, fallbackSelectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
+					fallbackSelection, fallbackDecision, fallbackErr := h.gatewayService.SelectAccountWithScheduler(
+						fallbackSelectCtx,
 						apiKey.GroupID,
 						"",
 						sessionHash,
-						defaultModel,
+						fallbackMappedModel,
 						failedAccountIDs,
 						service.OpenAIUpstreamTransportAny,
 					)
-					if err == nil && selection != nil {
-						c.Set("openai_messages_fallback_model", defaultModel)
+					if fallbackErr != nil {
+						appelotel.RecordSpanError(fallbackSelectSpan, fallbackErr, fallbackErr.Error())
+						fallbackSelectSpan.End()
+					} else if fallbackSelection == nil || fallbackSelection.Account == nil {
+						appelotel.RecordSpanError(fallbackSelectSpan, nil, "no available accounts")
+						fallbackSelectSpan.End()
+					} else {
+						setOpenAIAccountSpanIdentity(fallbackSelectSpan, fallbackSelection.Account, "")
+						fallbackSelectSpan.End()
+						selection = fallbackSelection
+						scheduleDecision = fallbackDecision
+						err = nil
+						effectiveMappedModel = fallbackMappedModel
 					}
 				}
-				if err != nil {
+				if err != nil || selection == nil || selection.Account == nil {
 					h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "Service temporarily unavailable", streamStarted)
 					return
 				}
@@ -748,14 +785,18 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			}
 		}
 		if selection == nil || selection.Account == nil {
-			appelotel.RecordSpanError(selectSpan, nil, "no available accounts")
-			selectSpan.End()
+			if !selectSpanEnded {
+				appelotel.RecordSpanError(selectSpan, nil, "no available accounts")
+			}
+			endSelectSpan()
 			appelotel.RecordSpanError(span, nil, "no available accounts")
 			h.anthropicStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
 			return
 		}
-		setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
-		selectSpan.End()
+		if !selectSpanEnded {
+			setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
+		}
+		endSelectSpan()
 		account := selection.Account
 		sessionHash = ensureOpenAIPoolModeSessionHash(sessionHash, account)
 		reqLog.Debug("openai_messages.account_selected", zap.Int64("account_id", account.ID), zap.String("account_name", account.Name))
@@ -770,9 +811,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
 
-		// Forward 层需要始终拿到 group 默认映射模型，这样未命中账号级映射的
-		// Claude 兼容模型才不会在后续 Codex 规范化中意外退化到 gpt-5.1。
-		defaultMappedModel := resolveOpenAIForwardDefaultMappedModel(apiKey, c.GetString("openai_messages_fallback_model"))
+		defaultMappedModel := strings.TrimSpace(effectiveMappedModel)
 		// 应用渠道模型映射到请求体
 		forwardBody := body
 		if channelMappingMsg.Mapped {

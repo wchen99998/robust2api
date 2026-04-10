@@ -4,6 +4,9 @@ package service
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -93,4 +96,43 @@ func TestSettingService_GetPublicSettings_PrefersDatabaseGrafanaURL(t *testing.T
 	settings, err := svc.GetPublicSettings(context.Background())
 	require.NoError(t, err)
 	require.Equal(t, "https://grafana-db.example.com", settings.GrafanaURL)
+}
+
+func TestSettingService_GetPublicSettings_DoesNotTriggerOIDCDiscovery(t *testing.T) {
+	var discoveryHits atomic.Int32
+	discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		discoveryHits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"authorization_endpoint":"https://issuer.example.com/auth","token_endpoint":"https://issuer.example.com/token","userinfo_endpoint":"https://issuer.example.com/userinfo","jwks_uri":"https://issuer.example.com/jwks"}`))
+	}))
+	defer discoveryServer.Close()
+
+	repo := &settingPublicRepoStub{
+		values: map[string]string{
+			SettingKeyRegistrationEnabled: "true",
+		},
+	}
+	svc := NewSettingService(repo, &config.Config{
+		OIDC: config.OIDCConnectConfig{
+			Enabled:             true,
+			ProviderName:        "OIDC SSO",
+			ClientID:            "client-id",
+			ClientSecret:        "client-secret",
+			IssuerURL:           discoveryServer.URL,
+			DiscoveryURL:        discoveryServer.URL + "/.well-known/openid-configuration",
+			RedirectURL:         "https://control.example.com/api/v1/auth/oauth/oidc/callback",
+			FrontendRedirectURL: "/auth/oidc/callback",
+			Scopes:              "openid email profile",
+			TokenAuthMethod:     "client_secret_post",
+			ValidateIDToken:     true,
+			AllowedSigningAlgs:  "RS256",
+			ClockSkewSeconds:    120,
+		},
+	})
+
+	settings, err := svc.GetPublicSettings(context.Background())
+	require.NoError(t, err)
+	require.True(t, settings.OIDCOAuthEnabled)
+	require.Equal(t, "OIDC SSO", settings.OIDCOAuthProviderName)
+	require.Zero(t, discoveryHits.Load())
 }

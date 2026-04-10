@@ -15,6 +15,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/imroc/req/v3"
 	"golang.org/x/sync/singleflight"
 )
 
@@ -231,6 +232,16 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 	} else {
 		linuxDoEnabled = s.cfg != nil && s.cfg.LinuxDo.Enabled
 	}
+	oidcEnabled := false
+	oidcProviderName := "OIDC"
+	if s.cfg != nil {
+		if name := strings.TrimSpace(s.cfg.OIDC.ProviderName); name != "" {
+			oidcProviderName = name
+		}
+		// Keep /api/public/settings local-only: exposing the OIDC button must not
+		// depend on live provider discovery or the current reachability of the IdP.
+		oidcEnabled = oidcPublicLoginEnabled(s.cfg.OIDC)
+	}
 
 	// Password reset requires email verification to be enabled
 	emailVerifyEnabled := settings[SettingKeyEmailVerifyEnabled] == "true"
@@ -263,7 +274,10 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		CustomMenuItems:                  settings[SettingKeyCustomMenuItems],
 		CustomEndpoints:                  settings[SettingKeyCustomEndpoints],
 		LinuxDoOAuthEnabled:              linuxDoEnabled,
+		OIDCOAuthEnabled:                 oidcEnabled,
+		OIDCOAuthProviderName:            oidcProviderName,
 		BackendModeEnabled:               settings[SettingKeyBackendModeEnabled] == "true",
+		Version:                          s.version,
 	}, nil
 }
 
@@ -1366,6 +1380,236 @@ func (s *SettingService) GetLinuxDoConnectOAuthConfig(ctx context.Context) (conf
 	}
 
 	return effective, nil
+}
+
+// GetOIDCConnectOAuthConfig returns the effective OIDC login configuration.
+func (s *SettingService) GetOIDCConnectOAuthConfig(ctx context.Context) (config.OIDCConnectConfig, error) {
+	if s == nil || s.cfg == nil {
+		return config.OIDCConnectConfig{}, infraerrors.ServiceUnavailable("CONFIG_NOT_READY", "config not loaded")
+	}
+
+	effective := s.cfg.OIDC
+	if !effective.Enabled {
+		return config.OIDCConnectConfig{}, infraerrors.NotFound("OAUTH_DISABLED", "oauth login is disabled")
+	}
+	if strings.TrimSpace(effective.ProviderName) == "" {
+		effective.ProviderName = "OIDC"
+	}
+	if strings.TrimSpace(effective.ClientID) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth client id not configured")
+	}
+	if strings.TrimSpace(effective.IssuerURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth issuer url not configured")
+	}
+	if strings.TrimSpace(effective.RedirectURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth redirect url not configured")
+	}
+	if strings.TrimSpace(effective.FrontendRedirectURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth frontend redirect url not configured")
+	}
+	if !scopesContainOpenID(effective.Scopes) {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth scopes must contain openid")
+	}
+	if effective.ClockSkewSeconds < 0 || effective.ClockSkewSeconds > 600 {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth clock skew must be between 0 and 600")
+	}
+
+	if err := config.ValidateAbsoluteHTTPURL(effective.IssuerURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth issuer url invalid")
+	}
+
+	discoveryURL := strings.TrimSpace(effective.DiscoveryURL)
+	if discoveryURL == "" {
+		discoveryURL = oidcDefaultDiscoveryURL(effective.IssuerURL)
+		effective.DiscoveryURL = discoveryURL
+	}
+	if discoveryURL != "" {
+		if err := config.ValidateAbsoluteHTTPURL(discoveryURL); err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth discovery url invalid")
+		}
+	}
+
+	needsDiscovery := strings.TrimSpace(effective.AuthorizeURL) == "" ||
+		strings.TrimSpace(effective.TokenURL) == "" ||
+		(effective.ValidateIDToken && strings.TrimSpace(effective.JWKSURL) == "")
+	if needsDiscovery && discoveryURL != "" {
+		metadata, err := oidcResolveProviderMetadata(ctx, discoveryURL)
+		if err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth discovery resolve failed").WithCause(err)
+		}
+		if strings.TrimSpace(effective.AuthorizeURL) == "" {
+			effective.AuthorizeURL = strings.TrimSpace(metadata.AuthorizationEndpoint)
+		}
+		if strings.TrimSpace(effective.TokenURL) == "" {
+			effective.TokenURL = strings.TrimSpace(metadata.TokenEndpoint)
+		}
+		if strings.TrimSpace(effective.UserInfoURL) == "" {
+			effective.UserInfoURL = strings.TrimSpace(metadata.UserInfoEndpoint)
+		}
+		if strings.TrimSpace(effective.JWKSURL) == "" {
+			effective.JWKSURL = strings.TrimSpace(metadata.JWKSURI)
+		}
+	}
+
+	if strings.TrimSpace(effective.AuthorizeURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth authorize url not configured")
+	}
+	if strings.TrimSpace(effective.TokenURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth token url not configured")
+	}
+	if err := config.ValidateAbsoluteHTTPURL(effective.AuthorizeURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth authorize url invalid")
+	}
+	if err := config.ValidateAbsoluteHTTPURL(effective.TokenURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth token url invalid")
+	}
+	if v := strings.TrimSpace(effective.UserInfoURL); v != "" {
+		if err := config.ValidateAbsoluteHTTPURL(v); err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth userinfo url invalid")
+		}
+	}
+	if !effective.ValidateIDToken && strings.TrimSpace(effective.UserInfoURL) == "" {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth userinfo url not configured")
+	}
+	if effective.ValidateIDToken {
+		if strings.TrimSpace(effective.JWKSURL) == "" {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth jwks url not configured")
+		}
+		if strings.TrimSpace(effective.AllowedSigningAlgs) == "" {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth signing algs not configured")
+		}
+	}
+	if v := strings.TrimSpace(effective.JWKSURL); v != "" {
+		if err := config.ValidateAbsoluteHTTPURL(v); err != nil {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth jwks url invalid")
+		}
+	}
+	if err := config.ValidateAbsoluteHTTPURL(effective.RedirectURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth redirect url invalid")
+	}
+	if err := config.ValidateFrontendRedirectURL(effective.FrontendRedirectURL); err != nil {
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth frontend redirect url invalid")
+	}
+
+	method := strings.ToLower(strings.TrimSpace(effective.TokenAuthMethod))
+	switch method {
+	case "", "client_secret_post", "client_secret_basic":
+		if strings.TrimSpace(effective.ClientSecret) == "" {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth client secret not configured")
+		}
+	case "none":
+		if !effective.UsePKCE {
+			return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth pkce must be enabled when token_auth_method=none")
+		}
+	default:
+		return config.OIDCConnectConfig{}, infraerrors.InternalServer("OAUTH_CONFIG_INVALID", "oauth token_auth_method invalid")
+	}
+
+	return effective, nil
+}
+
+func scopesContainOpenID(scopes string) bool {
+	for _, scope := range strings.Fields(strings.ToLower(strings.TrimSpace(scopes))) {
+		if scope == "openid" {
+			return true
+		}
+	}
+	return false
+}
+
+func oidcPublicLoginEnabled(cfg config.OIDCConnectConfig) bool {
+	if !cfg.Enabled {
+		return false
+	}
+	if strings.TrimSpace(cfg.ClientID) == "" ||
+		strings.TrimSpace(cfg.IssuerURL) == "" ||
+		strings.TrimSpace(cfg.RedirectURL) == "" ||
+		strings.TrimSpace(cfg.FrontendRedirectURL) == "" {
+		return false
+	}
+	if !scopesContainOpenID(cfg.Scopes) {
+		return false
+	}
+	if cfg.ClockSkewSeconds < 0 || cfg.ClockSkewSeconds > 600 {
+		return false
+	}
+	if err := config.ValidateAbsoluteHTTPURL(cfg.IssuerURL); err != nil {
+		return false
+	}
+	if err := config.ValidateAbsoluteHTTPURL(cfg.RedirectURL); err != nil {
+		return false
+	}
+	if err := config.ValidateFrontendRedirectURL(cfg.FrontendRedirectURL); err != nil {
+		return false
+	}
+	for _, rawURL := range []string{cfg.DiscoveryURL, cfg.AuthorizeURL, cfg.TokenURL, cfg.UserInfoURL, cfg.JWKSURL} {
+		if strings.TrimSpace(rawURL) == "" {
+			continue
+		}
+		if err := config.ValidateAbsoluteHTTPURL(rawURL); err != nil {
+			return false
+		}
+	}
+
+	switch method := strings.ToLower(strings.TrimSpace(cfg.TokenAuthMethod)); method {
+	case "", "client_secret_post", "client_secret_basic":
+		if strings.TrimSpace(cfg.ClientSecret) == "" {
+			return false
+		}
+	case "none":
+		if !cfg.UsePKCE {
+			return false
+		}
+	default:
+		return false
+	}
+
+	if cfg.ValidateIDToken && strings.TrimSpace(cfg.AllowedSigningAlgs) == "" {
+		return false
+	}
+
+	return true
+}
+
+type oidcProviderMetadata struct {
+	AuthorizationEndpoint string `json:"authorization_endpoint"`
+	TokenEndpoint         string `json:"token_endpoint"`
+	UserInfoEndpoint      string `json:"userinfo_endpoint"`
+	JWKSURI               string `json:"jwks_uri"`
+}
+
+func oidcDefaultDiscoveryURL(issuerURL string) string {
+	issuerURL = strings.TrimSpace(issuerURL)
+	if issuerURL == "" {
+		return ""
+	}
+	return strings.TrimRight(issuerURL, "/") + "/.well-known/openid-configuration"
+}
+
+func oidcResolveProviderMetadata(ctx context.Context, discoveryURL string) (*oidcProviderMetadata, error) {
+	discoveryURL = strings.TrimSpace(discoveryURL)
+	if discoveryURL == "" {
+		return nil, fmt.Errorf("discovery url is empty")
+	}
+
+	resp, err := req.C().
+		SetTimeout(15*time.Second).
+		R().
+		SetContext(ctx).
+		SetHeader("Accept", "application/json").
+		Get(discoveryURL)
+	if err != nil {
+		return nil, fmt.Errorf("request discovery document: %w", err)
+	}
+	if !resp.IsSuccessState() {
+		return nil, fmt.Errorf("discovery request failed: status=%d", resp.StatusCode)
+	}
+
+	metadata := &oidcProviderMetadata{}
+	if err := json.Unmarshal(resp.Bytes(), metadata); err != nil {
+		return nil, fmt.Errorf("parse discovery document: %w", err)
+	}
+	return metadata, nil
 }
 
 // GetOverloadCooldownSettings 获取529过载冷却配置
