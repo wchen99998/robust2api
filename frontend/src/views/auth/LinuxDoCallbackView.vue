@@ -71,7 +71,7 @@ import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { completeLinuxDoOAuthRegistration } from '@/api/auth'
+import { completeOAuthRegistration } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -85,17 +85,10 @@ const errorMessage = ref('')
 
 // Invitation code flow state
 const needsInvitation = ref(false)
-const pendingOAuthToken = ref('')
 const invitationCode = ref('')
 const isSubmitting = ref(false)
 const invitationError = ref('')
 const redirectTo = ref('/dashboard')
-
-function parseFragmentParams(): URLSearchParams {
-  const raw = typeof window !== 'undefined' ? window.location.hash : ''
-  const hash = raw.startsWith('#') ? raw.slice(1) : raw
-  return new URLSearchParams(hash)
-}
 
 function sanitizeRedirectPath(path: string | null | undefined): string {
   if (!path) return '/dashboard'
@@ -112,17 +105,8 @@ async function handleSubmitInvitation() {
 
   isSubmitting.value = true
   try {
-    const tokenData = await completeLinuxDoOAuthRegistration(
-      pendingOAuthToken.value,
-      invitationCode.value.trim()
-    )
-    if (tokenData.refresh_token) {
-      localStorage.setItem('refresh_token', tokenData.refresh_token)
-    }
-    if (tokenData.expires_in) {
-      localStorage.setItem('token_expires_at', String(Date.now() + tokenData.expires_in * 1000))
-    }
-    await authStore.setToken(tokenData.access_token)
+    await completeOAuthRegistration(invitationCode.value.trim())
+    await authStore.initialize(true)
     appStore.showSuccess(t('auth.loginSuccess'))
     await router.replace(redirectTo.value)
   } catch (e: unknown) {
@@ -135,59 +119,40 @@ async function handleSubmitInvitation() {
 }
 
 onMounted(async () => {
-  const params = parseFragmentParams()
-
-  const token = params.get('access_token') || ''
-  const refreshToken = params.get('refresh_token') || ''
-  const expiresInStr = params.get('expires_in') || ''
   const redirect = sanitizeRedirectPath(
-    params.get('redirect') || (route.query.redirect as string | undefined) || '/dashboard'
+    (route.query.redirect as string | undefined) || '/dashboard'
   )
-  const error = params.get('error')
-  const errorDesc = params.get('error_description') || params.get('error_message') || ''
+  const error = (route.query.error as string | undefined) || ''
+  const errorDesc =
+    (route.query.error_description as string | undefined) ||
+    (route.query.error_message as string | undefined) ||
+    ''
 
   if (error) {
-    if (error === 'invitation_required') {
-      pendingOAuthToken.value = params.get('pending_oauth_token') || ''
-      redirectTo.value = sanitizeRedirectPath(params.get('redirect'))
-      if (!pendingOAuthToken.value) {
-        errorMessage.value = t('auth.linuxdo.invalidPendingToken')
-        appStore.showError(errorMessage.value)
-        isProcessing.value = false
-        return
-      }
-      needsInvitation.value = true
-      isProcessing.value = false
-      return
-    }
     errorMessage.value = errorDesc || error
     appStore.showError(errorMessage.value)
     isProcessing.value = false
     return
   }
 
-  if (!token) {
-    errorMessage.value = t('auth.linuxdo.callbackMissingToken')
+  try {
+    await authStore.initialize(true)
+    if (authStore.isAuthenticated) {
+      appStore.showSuccess(t('auth.loginSuccess'))
+      await router.replace(redirect)
+      return
+    }
+
+    if (authStore.pendingRegistration) {
+      redirectTo.value = sanitizeRedirectPath(authStore.pendingRegistration.redirect_to || redirect)
+      needsInvitation.value = true
+      isProcessing.value = false
+      return
+    }
+
+    errorMessage.value = t('auth.loginFailed')
     appStore.showError(errorMessage.value)
     isProcessing.value = false
-    return
-  }
-
-  try {
-    // Store refresh token and expires_at (convert to timestamp) if provided
-    if (refreshToken) {
-      localStorage.setItem('refresh_token', refreshToken)
-    }
-    if (expiresInStr) {
-      const expiresIn = parseInt(expiresInStr, 10)
-      if (!isNaN(expiresIn)) {
-        localStorage.setItem('token_expires_at', String(Date.now() + expiresIn * 1000))
-      }
-    }
-
-    await authStore.setToken(token)
-    appStore.showSuccess(t('auth.loginSuccess'))
-    await router.replace(redirect)
   } catch (e: unknown) {
     const err = e as { message?: string; response?: { data?: { detail?: string } } }
     errorMessage.value = err.response?.data?.detail || err.message || t('auth.loginFailed')
@@ -209,4 +174,3 @@ onMounted(async () => {
   transform: translateY(-8px);
 }
 </style>
-

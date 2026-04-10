@@ -463,6 +463,7 @@ var SharedProviderSet = wire.NewSet(
 	NewSubscriptionService,
 	wire.Bind(new(DefaultSubscriptionAssigner), new(*SubscriptionService)),
 	NewIdentityService,
+	NewControlAuthService,
 	NewCRSSyncService,
 	NewAntigravityQuotaFetcher,
 	NewUserAttributeService,
