@@ -1,11 +1,30 @@
 package service
 
 import (
+	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/stretchr/testify/require"
 )
+
+type stubPricingRemoteClient struct {
+	pricingBody []byte
+	pricingErr  error
+	hashText    string
+	hashErr     error
+}
+
+func (c stubPricingRemoteClient) FetchPricingJSON(_ context.Context, _ string) ([]byte, error) {
+	return c.pricingBody, c.pricingErr
+}
+
+func (c stubPricingRemoteClient) FetchHashText(_ context.Context, _ string) (string, error) {
+	return c.hashText, c.hashErr
+}
 
 func TestParsePricingData_ParsesPriorityAndServiceTierFields(t *testing.T) {
 	svc := &PricingService{}
@@ -187,4 +206,75 @@ func TestParsePricingData_PreservesServiceTierPriorityFields(t *testing.T) {
 	require.InDelta(t, 0.00000025, pricing.CacheReadInputTokenCost, 1e-12)
 	require.InDelta(t, 0.0000005, pricing.CacheReadInputTokenCostPriority, 1e-12)
 	require.True(t, pricing.SupportsServiceTier)
+}
+
+func TestDownloadPricingData_CreatesMissingLocalStorageDir(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dataDir := filepath.Join(tempDir, "pricing", "cache")
+	body := []byte(`{
+		"gpt-5.4": {
+			"input_cost_per_token": 0.0000025,
+			"output_cost_per_token": 0.000015,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		}
+	}`)
+
+	svc := NewPricingService(&config.Config{
+		Pricing: config.PricingConfig{
+			RemoteURL: "https://example.com/model_prices_and_context_window.json",
+			DataDir:   dataDir,
+		},
+		Security: config.SecurityConfig{
+			URLAllowlist: config.URLAllowlistConfig{Enabled: false},
+		},
+	}, stubPricingRemoteClient{pricingBody: body})
+
+	err := svc.downloadPricingData()
+	require.NoError(t, err)
+	require.FileExists(t, filepath.Join(dataDir, "model_pricing.json"))
+	require.FileExists(t, filepath.Join(dataDir, "model_pricing.sha256"))
+	require.NotEmpty(t, svc.localHash)
+
+	got := svc.GetModelPricing("gpt-5.4")
+	require.NotNil(t, got)
+	require.InDelta(t, 2.5e-6, got.InputCostPerToken, 1e-12)
+}
+
+func TestUseFallbackPricing_CreatesMissingLocalStorageDir(t *testing.T) {
+	t.Parallel()
+
+	tempDir := t.TempDir()
+	dataDir := filepath.Join(tempDir, "pricing", "cache")
+	fallbackFile := filepath.Join(tempDir, "fallback", "model_prices_and_context_window.json")
+	body := []byte(`{
+		"gpt-5.4-mini": {
+			"input_cost_per_token": 0.00000075,
+			"output_cost_per_token": 0.0000045,
+			"litellm_provider": "openai",
+			"mode": "chat"
+		}
+	}`)
+
+	err := os.MkdirAll(filepath.Dir(fallbackFile), 0o755)
+	require.NoError(t, err)
+	err = os.WriteFile(fallbackFile, body, 0o644)
+	require.NoError(t, err)
+
+	svc := NewPricingService(&config.Config{
+		Pricing: config.PricingConfig{
+			DataDir:      dataDir,
+			FallbackFile: fallbackFile,
+		},
+	}, stubPricingRemoteClient{})
+
+	err = svc.useFallbackPricing()
+	require.NoError(t, err)
+	require.FileExists(t, filepath.Join(dataDir, "model_pricing.json"))
+
+	got := svc.GetModelPricing("gpt-5.4-mini")
+	require.NotNil(t, got)
+	require.InDelta(t, 7.5e-7, got.InputCostPerToken, 1e-12)
 }

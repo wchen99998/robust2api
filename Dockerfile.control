@@ -45,8 +45,9 @@ RUN addgroup -g 1000 sub2api && \
 
 WORKDIR /app
 
-COPY --from=builder /app/sub2api-control /app/sub2api-control
-COPY --from=builder /app/backend/resources /app/resources
+COPY --from=builder --chown=sub2api:sub2api /app/sub2api-control /app/sub2api-control
+COPY --from=builder --chown=sub2api:sub2api /app/backend/resources /app/resources
+RUN mkdir -p /app/data && chown sub2api:sub2api /app/data
 
 USER sub2api
 
