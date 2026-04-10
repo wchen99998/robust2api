@@ -2449,7 +2449,7 @@ func (s *GatewayService) hydrateSelectedAccount(ctx context.Context, account *Ac
 		return nil, err
 	}
 	if hydrated == nil {
-		return nil, fmt.Errorf("selected gateway account %d not found during hydration", account.ID)
+		return account, nil
 	}
 	return hydrated, nil
 }

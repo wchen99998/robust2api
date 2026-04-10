@@ -1715,7 +1715,7 @@ func (s *OpenAIGatewayService) hydrateSelectedAccount(ctx context.Context, accou
 		return nil, err
 	}
 	if hydrated == nil {
-		return nil, fmt.Errorf("selected openai account %d not found during hydration", account.ID)
+		return account, nil
 	}
 	return hydrated, nil
 }

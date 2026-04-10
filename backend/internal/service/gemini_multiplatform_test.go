@@ -288,6 +288,39 @@ func (m *mockGatewayCacheForGemini) DeleteSessionAccountID(ctx context.Context, 
 	return nil
 }
 
+type geminiSnapshotCacheStub struct {
+	SchedulerCache
+	snapshotAccounts []*Account
+	accountsByID     map[int64]*Account
+}
+
+func (s *geminiSnapshotCacheStub) GetSnapshot(ctx context.Context, bucket SchedulerBucket) ([]*Account, bool, error) {
+	if len(s.snapshotAccounts) == 0 {
+		return nil, false, nil
+	}
+	out := make([]*Account, 0, len(s.snapshotAccounts))
+	for _, account := range s.snapshotAccounts {
+		if account == nil {
+			continue
+		}
+		cloned := *account
+		out = append(out, &cloned)
+	}
+	return out, true, nil
+}
+
+func (s *geminiSnapshotCacheStub) GetAccount(ctx context.Context, accountID int64) (*Account, error) {
+	if s.accountsByID == nil {
+		return nil, nil
+	}
+	account := s.accountsByID[accountID]
+	if account == nil {
+		return nil, nil
+	}
+	cloned := *account
+	return &cloned, nil
+}
+
 // TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_GeminiPlatform 测试 Gemini 单平台选择
 func TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_GeminiPlatform(t *testing.T) {
 	ctx := context.Background()
@@ -319,6 +352,97 @@ func TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_GeminiP
 	require.NotNil(t, acc)
 	require.Equal(t, int64(1), acc.ID, "应选择优先级最高的 gemini 账户")
 	require.Equal(t, PlatformGemini, acc.Platform, "无分组时应只返回 gemini 平台账户")
+}
+
+func TestGeminiMessagesCompatService_SelectAccountForModelWithExclusions_HydratesSelectedSnapshotAccount(t *testing.T) {
+	ctx := context.Background()
+
+	fullAccount := &Account{
+		ID:          41,
+		Platform:    PlatformGemini,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+		Credentials: map[string]any{
+			"access_token": "gemini-access-token",
+			"oauth_type":   "ai_studio",
+		},
+	}
+	snapshotAccount := &Account{
+		ID:          41,
+		Platform:    PlatformGemini,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+		Credentials: map[string]any{
+			"oauth_type": "ai_studio",
+		},
+	}
+
+	svc := &GeminiMessagesCompatService{
+		cache: &mockGatewayCacheForGemini{},
+		schedulerSnapshot: &SchedulerSnapshotService{
+			cache: &geminiSnapshotCacheStub{
+				snapshotAccounts: []*Account{snapshotAccount},
+				accountsByID:     map[int64]*Account{fullAccount.ID: fullAccount},
+			},
+		},
+	}
+
+	acc, err := svc.SelectAccountForModelWithExclusions(ctx, nil, "", "gemini-2.5-flash", nil)
+	require.NoError(t, err)
+	require.NotNil(t, acc)
+	require.Equal(t, fullAccount.ID, acc.ID)
+	require.Equal(t, "gemini-access-token", acc.GetCredential("access_token"))
+}
+
+func TestGeminiMessagesCompatService_SelectAccountForAIStudioEndpoints_HydratesSelectedSnapshotAccount(t *testing.T) {
+	ctx := context.Background()
+
+	fullAccount := &Account{
+		ID:          42,
+		Platform:    PlatformGemini,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+		Credentials: map[string]any{
+			"access_token": "gemini-access-token",
+			"oauth_type":   "ai_studio",
+		},
+	}
+	snapshotAccount := &Account{
+		ID:          42,
+		Platform:    PlatformGemini,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    1,
+		Credentials: map[string]any{
+			"oauth_type": "ai_studio",
+		},
+	}
+
+	svc := &GeminiMessagesCompatService{
+		schedulerSnapshot: &SchedulerSnapshotService{
+			cache: &geminiSnapshotCacheStub{
+				snapshotAccounts: []*Account{snapshotAccount},
+				accountsByID:     map[int64]*Account{fullAccount.ID: fullAccount},
+			},
+		},
+	}
+
+	acc, err := svc.SelectAccountForAIStudioEndpoints(ctx, nil)
+	require.NoError(t, err)
+	require.NotNil(t, acc)
+	require.Equal(t, fullAccount.ID, acc.ID)
+	require.Equal(t, "gemini-access-token", acc.GetCredential("access_token"))
 }
 
 func TestGeminiMessagesCompatService_GroupResolution_ReusesContextGroup(t *testing.T) {
