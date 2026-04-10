@@ -167,7 +167,7 @@ spec:
   values:
     image:
       bootstrap:
-        tag: "0.4.2"
+        tag: "0.4.3"
 
     imagePullSecrets:
       - name: ghcr-pull

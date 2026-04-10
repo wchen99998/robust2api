@@ -112,14 +112,14 @@ func persistJWTSecret(ctx context.Context, client *ent.Client, secret string) er
 	return nil
 }
 
-// seedAdmin creates an admin user if the database has no users.
+// seedAdmin creates an admin user if the database has no active users.
 func seedAdmin(ctx context.Context, db *sql.DB, env BootstrapEnv) error {
-	var totalUsers int64
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM users").Scan(&totalUsers); err != nil {
-		return fmt.Errorf("count users: %w", err)
+	var activeUsers int64
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(1) FROM users WHERE deleted_at IS NULL").Scan(&activeUsers); err != nil {
+		return fmt.Errorf("count active users: %w", err)
 	}
-	if totalUsers > 0 {
-		log.Println("[bootstrap] skipping admin creation: users already exist")
+	if activeUsers > 0 {
+		log.Println("[bootstrap] skipping admin creation: active users already exist")
 		return nil
 	}
 
@@ -139,7 +139,7 @@ func seedAdmin(ctx context.Context, db *sql.DB, env BootstrapEnv) error {
 	result, err := db.ExecContext(ctx,
 		`INSERT INTO users (email, password_hash, role, balance, concurrency, status, created_at, updated_at)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-		 ON CONFLICT (email) DO NOTHING`,
+		 ON CONFLICT (email) WHERE deleted_at IS NULL DO NOTHING`,
 		admin.Email, admin.PasswordHash, admin.Role, admin.Balance,
 		admin.Concurrency, admin.Status, admin.CreatedAt, admin.UpdatedAt,
 	)
