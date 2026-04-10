@@ -74,6 +74,16 @@ spec:
 
     postgresql:
       enabled: true
+      global:
+        security:
+          allowInsecureImages: true
+      image:
+        registry: docker.io
+        repository: bitnamilegacy/postgresql
+      volumePermissions:
+        image:
+          registry: docker.io
+          repository: bitnamilegacy/os-shell
       auth: {}
       tls:
         enabled: true
@@ -90,6 +100,12 @@ spec:
             memory: 512Mi
     redis:
       enabled: true
+      global:
+        security:
+          allowInsecureImages: true
+      image:
+        registry: docker.io
+        repository: bitnamilegacy/redis
       auth:
         enabled: true
       architecture: standalone
