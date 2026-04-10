@@ -127,8 +127,8 @@ func NewPricingService(cfg *config.Config, remoteClient PricingRemoteClient) *Pr
 // background update scheduler. Suitable for API-only instances that just need read access.
 func (s *PricingService) LoadPricingData() error {
 	// 确保数据目录存在
-	if err := os.MkdirAll(s.cfg.Pricing.DataDir, 0755); err != nil {
-		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to create data directory: %v", err)
+	if err := s.ensureLocalStorageDir(); err != nil {
+		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to prepare data directory: %v", err)
 	}
 
 	// 首次加载价格数据
@@ -330,21 +330,26 @@ func (s *PricingService) downloadPricingData() error {
 		return fmt.Errorf("parse pricing data: %w", err)
 	}
 
-	// 保存到本地文件
-	pricingFile := s.getPricingFilePath()
-	if err := os.WriteFile(pricingFile, body, 0644); err != nil {
-		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to save file: %v", err)
-	}
-
 	// 使用远程哈希作为同步锚点，防止重复下载
 	// 当远程哈希不可用时，回退到数据本身的哈希
 	syncHash := dataHashStr
 	if remoteHash != "" {
 		syncHash = remoteHash
 	}
-	hashFile := s.getHashFilePath()
-	if err := os.WriteFile(hashFile, []byte(syncHash+"\n"), 0644); err != nil {
-		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to save hash: %v", err)
+
+	// 持久化到本地文件；失败时保留内存中的最新数据，避免影响服务可用性
+	if err := s.ensureLocalStorageDir(); err != nil {
+		logger.LegacyPrintf("service.pricing", "[Pricing] Local cache directory unavailable, keeping download in memory only: %v", err)
+	} else {
+		pricingFile := s.getPricingFilePath()
+		if err := os.WriteFile(pricingFile, body, 0644); err != nil {
+			logger.LegacyPrintf("service.pricing", "[Pricing] Failed to save file: %v", err)
+		}
+
+		hashFile := s.getHashFilePath()
+		if err := os.WriteFile(hashFile, []byte(syncHash+"\n"), 0644); err != nil {
+			logger.LegacyPrintf("service.pricing", "[Pricing] Failed to save hash: %v", err)
+		}
 	}
 
 	// 更新内存数据
@@ -489,11 +494,31 @@ func (s *PricingService) useFallbackPricing() error {
 	}
 
 	pricingFile := s.getPricingFilePath()
-	if err := os.WriteFile(pricingFile, data, 0644); err != nil {
+	if err := s.ensureLocalStorageDir(); err != nil {
+		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to prepare local cache for fallback copy: %v", err)
+	} else if err := os.WriteFile(pricingFile, data, 0644); err != nil {
 		logger.LegacyPrintf("service.pricing", "[Pricing] Failed to copy fallback: %v", err)
 	}
 
 	return s.loadPricingData(fallbackFile)
+}
+
+func (s *PricingService) ensureLocalStorageDir() error {
+	if err := ensureParentDir(s.getPricingFilePath()); err != nil {
+		return err
+	}
+	if err := ensureParentDir(s.getHashFilePath()); err != nil {
+		return err
+	}
+	return nil
+}
+
+func ensureParentDir(filePath string) error {
+	dir := filepath.Dir(filePath)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return fmt.Errorf("create parent directory for %s: %w", filePath, err)
+	}
+	return nil
 }
 
 // fetchRemoteHash 从远程获取哈希值
