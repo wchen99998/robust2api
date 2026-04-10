@@ -326,7 +326,24 @@ func (s *ControlAuthService) AuthenticateAccessToken(ctx context.Context, tokenS
 		return nil, ErrTokenRevoked
 	}
 
-	user, err := s.userRepo.GetByID(ctx, snapshot.LegacyUserID)
+	bundle, err := s.authRepo.GetIdentityBundleBySubjectID(ctx, claims.Subject)
+	if err != nil {
+		if errors.Is(err, ErrSubjectNotFound) {
+			return nil, ErrTokenRevoked
+		}
+		return nil, fmt.Errorf("load subject bundle: %w", err)
+	}
+	if bundle == nil || bundle.Subject == nil {
+		return nil, ErrTokenRevoked
+	}
+	if bundle.Subject.SubjectID != claims.Subject || bundle.Subject.LegacyUserID != snapshot.LegacyUserID {
+		return nil, ErrTokenRevoked
+	}
+	if bundle.Subject.AuthVersion != claims.AuthVersion || !strings.EqualFold(bundle.Subject.Status, StatusActive) {
+		return nil, ErrTokenRevoked
+	}
+
+	user, err := s.userRepo.GetByID(ctx, bundle.Subject.LegacyUserID)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, ErrTokenRevoked
@@ -335,17 +352,6 @@ func (s *ControlAuthService) AuthenticateAccessToken(ctx context.Context, tokenS
 	}
 	if !user.IsActive() {
 		return nil, ErrUserNotActive
-	}
-
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
-	if err != nil {
-		return nil, fmt.Errorf("sync subject shadow: %w", err)
-	}
-	if bundle == nil || bundle.Subject == nil {
-		return nil, ErrTokenRevoked
-	}
-	if bundle.Subject.SubjectID != claims.Subject || bundle.Subject.AuthVersion != claims.AuthVersion || !strings.EqualFold(bundle.Subject.Status, StatusActive) {
-		return nil, ErrTokenRevoked
 	}
 
 	return buildAuthenticatedIdentity(bundle, snapshot, user), nil
