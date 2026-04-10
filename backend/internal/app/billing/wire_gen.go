@@ -4,7 +4,7 @@
 //go:build !wireinject
 // +build !wireinject
 
-package main
+package billing
 
 import (
 	"context"
@@ -12,6 +12,8 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/health"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	health2 "github.com/Wei-Shaw/sub2api/internal/platform/health"
+	otel2 "github.com/Wei-Shaw/sub2api/internal/platform/otel"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
@@ -20,14 +22,9 @@ import (
 	"time"
 )
 
-import (
-	_ "embed"
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-)
-
 // Injectors from wire.go:
 
-func initializeBillingApplication() (*BillingApplication, error) {
+func initialize() (*Application, error) {
 	configConfig, err := config.ProvideBillingConfig()
 	if err != nil {
 		return nil, err
@@ -41,12 +38,12 @@ func initializeBillingApplication() (*BillingApplication, error) {
 		return nil, err
 	}
 	redisClient := repository.ProvideRedis(configConfig)
-	checker := health.NewChecker(db, redisClient)
-	provider, err := otel.ProvideOtel(configConfig)
+	v := health.NewChecker(db, redisClient)
+	v2, err := otel.ProvideOtel(configConfig)
 	if err != nil {
 		return nil, err
 	}
-	metricsServer := otel.ProvideMetricsServer(configConfig, provider)
+	v3 := otel.ProvideMetricsServer(configConfig, v2)
 	billingDB, err := repository.ProvideBillingDB(configConfig)
 	if err != nil {
 		return nil, err
@@ -71,27 +68,26 @@ func initializeBillingApplication() (*BillingApplication, error) {
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, apiKeyCache, configConfig)
 	apiKeyAuthCacheInvalidator := service.ProvideBillingAPIKeyAuthCacheInvalidator(apiKeyService)
 	billingConsumerService := service.NewBillingConsumerService(billingEventConsumer, usageBillingRepository, billingCacheService, deferredService, apiKeyAuthCacheInvalidator)
-	v := provideBillingCleanup(client, redisClient, provider, metricsServer, billingDB, billingConsumerService, billingCacheService, deferredService)
-	billingApplication := &BillingApplication{
-		Health:  checker,
-		Cleanup: v,
+	v4 := provideCleanup(client, redisClient, v2, v3, billingDB, billingConsumerService, billingCacheService, deferredService)
+	application := &Application{
+		Health:  v,
+		Cleanup: v4,
 	}
-	return billingApplication, nil
+	return application, nil
 }
 
 // wire.go:
 
-// BillingApplication is the top-level struct for the billing binary.
-type BillingApplication struct {
-	Health  *health.Checker
+type Application struct {
+	Health  *health2.Checker
 	Cleanup func()
 }
 
-func provideBillingCleanup(
+func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
-	otelProvider *otel.Provider,
-	metricsServer *otel.MetricsServer,
+	otelProvider *otel2.Provider,
+	metricsServer *otel2.MetricsServer,
 	billingDB *repository.BillingDB,
 	billingConsumer *service.BillingConsumerService,
 	billingCache *service.BillingCacheService,

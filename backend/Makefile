@@ -25,7 +25,7 @@ generate:
 	go generate ./internal/app/gateway
 	go generate ./internal/app/control
 	go generate ./internal/app/worker
-	go generate ./cmd/billing
+	go generate ./internal/app/billing
 
 test:
 	go test ./...

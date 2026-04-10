@@ -1,7 +1,7 @@
 //go:build wireinject
 // +build wireinject
 
-package main
+package billing
 
 import (
 	"context"
@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/health"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	platformconfig "github.com/Wei-Shaw/sub2api/internal/platform/config"
+	platformdatabase "github.com/Wei-Shaw/sub2api/internal/platform/database"
+	platformhealth "github.com/Wei-Shaw/sub2api/internal/platform/health"
+	platformotel "github.com/Wei-Shaw/sub2api/internal/platform/otel"
+	platformredis "github.com/Wei-Shaw/sub2api/internal/platform/redis"
 	"github.com/Wei-Shaw/sub2api/internal/repository"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -20,39 +22,31 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// BillingApplication is the top-level struct for the billing binary.
-type BillingApplication struct {
-	Health  *health.Checker
+type Application struct {
+	Health  *platformhealth.Checker
 	Cleanup func()
 }
 
-func initializeBillingApplication() (*BillingApplication, error) {
+func initialize() (*Application, error) {
 	wire.Build(
-		// Infrastructure
-		config.BillingProviderSet,
-		appelotel.ProviderSet,
-		repository.ProviderSet,
-
-		// Business logic — Billing role
+		platformconfig.BillingProviderSet,
+		platformotel.ProviderSet,
+		platformdatabase.ProviderSet,
+		platformredis.ProviderSet,
+		repository.AdapterProviderSet,
 		service.BillingConsumerProviderSet,
-
-		// Health probes
-		health.NewChecker,
-
-		// Local helpers
-		provideBillingCleanup,
-
-		// Wire struct binding
-		wire.Struct(new(BillingApplication), "Health", "Cleanup"),
+		platformhealth.ProviderSet,
+		provideCleanup,
+		wire.Struct(new(Application), "Health", "Cleanup"),
 	)
 	return nil, nil
 }
 
-func provideBillingCleanup(
+func provideCleanup(
 	entClient *ent.Client,
 	rdb *redis.Client,
-	otelProvider *appelotel.Provider,
-	metricsServer *appelotel.MetricsServer,
+	otelProvider *platformotel.Provider,
+	metricsServer *platformotel.MetricsServer,
 	billingDB *repository.BillingDB,
 	billingConsumer *service.BillingConsumerService,
 	billingCache *service.BillingCacheService,
@@ -139,7 +133,6 @@ func provideBillingCleanup(
 
 		runParallel(parallelSteps)
 
-		// Shutdown OTel after services stop
 		if otelProvider != nil {
 			if err := otelProvider.Shutdown(ctx); err != nil {
 				log.Printf("OTel provider shutdown error: %v", err)

@@ -20,6 +20,10 @@ var WorkerProviderSet = wire.NewSet(
 	appconfig.ProvideWorkerConfig,
 )
 
+var BillingProviderSet = wire.NewSet(
+	appconfig.ProvideBillingConfig,
+)
+
 func LoadGateway() (*Config, error) {
 	return appconfig.LoadGateway()
 }
@@ -30,4 +34,8 @@ func LoadControl() (*Config, error) {
 
 func LoadWorker() (*Config, error) {
 	return appconfig.LoadWorker()
+}
+
+func LoadBilling() (*Config, error) {
+	return appconfig.LoadBilling()
 }
