@@ -7719,8 +7719,7 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil {
-		// No billable data — just write the usage log.
-		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.gateway")
+		// Non-simple mode usage persistence is authoritative in the billing consumer.
 		return nil
 	}
 

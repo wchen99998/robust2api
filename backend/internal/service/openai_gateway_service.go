@@ -309,7 +309,6 @@ var defaultOpenAICodexSnapshotPersistThrottle = newAccountWriteThrottle(openAICo
 // OpenAIGatewayService handles OpenAI API gateway operations
 type OpenAIGatewayService struct {
 	accountRepo           AccountRepository
-	usageLogRepo          UsageLogRepository
 	billingPublisher      BillingEventPublisher
 	cache                 GatewayCache
 	cfg                   *config.Config
@@ -347,7 +346,6 @@ type OpenAIGatewayService struct {
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
 func NewOpenAIGatewayService(
 	accountRepo AccountRepository,
-	usageLogRepo UsageLogRepository,
 	billingPublisher BillingEventPublisher,
 	userGroupRateRepo UserGroupRateRepository,
 	cache GatewayCache,
@@ -365,7 +363,6 @@ func NewOpenAIGatewayService(
 ) *OpenAIGatewayService {
 	svc := &OpenAIGatewayService{
 		accountRepo:         accountRepo,
-		usageLogRepo:        usageLogRepo,
 		billingPublisher:    billingPublisher,
 		cache:               cache,
 		cfg:                 cfg,
@@ -4574,12 +4571,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		appelotel.M().RecordTTFT(ctx, float64(*result.FirstTokenMs)/1000, platform, result.Model)
 	}
 
-	// 跳过所有 token 均为零的用量记录——上游未返回 usage 时不应写入数据库
-	if result.Usage.InputTokens == 0 && result.Usage.OutputTokens == 0 &&
-		result.Usage.CacheCreationInputTokens == 0 && result.Usage.CacheReadInputTokens == 0 {
-		return nil
-	}
-
 	if result.Usage.InputTokens > 0 {
 		appelotel.M().RecordTokens(ctx, int64(result.Usage.InputTokens), "input", platform, result.Model)
 	}
@@ -4742,13 +4733,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 		usageLog.SubscriptionID = &subscription.ID
 	}
 
-	if s.cfg != nil && s.cfg.RunMode == config.RunModeSimple {
-		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
-		logger.LegacyPrintf("service.openai_gateway", "[SIMPLE MODE] Usage recorded (not billed): user=%d, tokens=%d", usageLog.UserID, usageLog.TotalTokens())
-		s.deferredService.ScheduleLastUsedUpdate(account.ID)
-		return nil
-	}
-
 	// Build the billing command and publish to the billing stream.
 	p := &postUsageBillingParams{
 		Cost:                  cost,
@@ -4763,7 +4747,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	}
 	cmd := buildUsageBillingCommand(requestID, usageLog, p)
 	if cmd == nil {
-		writeUsageLogBestEffort(ctx, s.usageLogRepo, usageLog, "service.openai_gateway")
+		// Non-simple mode usage persistence is authoritative in the billing consumer.
 		return nil
 	}
 

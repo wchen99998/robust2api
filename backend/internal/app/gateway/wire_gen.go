@@ -123,7 +123,7 @@ func initialize() (*Application, error) {
 	openAIOAuthClient := repository.NewOpenAIOAuthClient()
 	openAIOAuthService := service.NewOpenAIOAuthService(proxyRepository, openAIOAuthClient)
 	openAITokenProvider := service.ProvideOpenAITokenProvider(accountRepository, geminiTokenCache, openAIOAuthService, oAuthRefreshAPI)
-	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, usageLogRepository, billingEventPublisher, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider, modelPricingResolver, channelService)
+	openAIGatewayService := service.NewOpenAIGatewayService(accountRepository, billingEventPublisher, userGroupRateRepository, gatewayCache, configConfig, schedulerSnapshotService, concurrencyService, billingService, rateLimitService, billingCacheService, httpUpstream, deferredService, openAITokenProvider, modelPricingResolver, channelService)
 	openAIGatewayHandler := handler.NewOpenAIGatewayHandler(openAIGatewayService, concurrencyService, billingCacheService, apiKeyService, usageRecordWorkerPool, errorPassthroughService, configConfig)
 	gatewayCacheInvalidationSubscribers := service.ProvideGatewayCacheInvalidationSubscribers(runtimeCacheInvalidationBus, settingService, channelService, schedulerSnapshotService, pricingService)
 	gatewayHandlers := handler.ProvideGatewayHandlers(gatewayHandler, openAIGatewayHandler, gatewayCacheInvalidationSubscribers)

@@ -600,7 +600,6 @@ func TestNewOpenAIGatewayService_InitializesOpenAIWSResolver(t *testing.T) {
 	cfg := &config.Config{}
 	svc := NewOpenAIGatewayService(
 		nil, // accountRepo
-		nil, // usageLogRepo
 		nil, // billingPublisher
 		nil, // userGroupRateRepo
 		nil, // cache

@@ -86,7 +86,6 @@ func TestOpenAIResponses_RootSpanIncludesRetryEventsAndChildSpans(t *testing.T) 
 		handlerStubOpenAIAccountRepo{accounts: []service.Account{account}},
 		nil,
 		nil,
-		nil,
 		&handlerStubGatewayCache{},
 		cfg,
 		nil,

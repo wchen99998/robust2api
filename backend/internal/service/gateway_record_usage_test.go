@@ -282,6 +282,31 @@ func TestGatewayServiceRecordUsageWithLongContext_BillingUsesDetachedContext(t *
 	require.Len(t, publisher.events, 1)
 }
 
+func TestGatewayServiceRecordUsage_ZeroCostStillPublishesBillingEvent(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	svc, publisher := newGatewayRecordUsageServiceForTest(usageRepo)
+
+	err := svc.RecordUsage(context.Background(), &RecordUsageInput{
+		Result: &ForwardResult{
+			RequestID: "gateway_zero_cost_event",
+			Usage: ClaudeUsage{
+				InputTokens:  0,
+				OutputTokens: 0,
+			},
+			Model:    "claude-sonnet-4",
+			Duration: time.Second,
+		},
+		APIKey:  &APIKey{ID: 520},
+		User:    &User{ID: 620},
+		Account: &Account{ID: 720},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, publisher.events, 1)
+	require.NotNil(t, publisher.events[0].Command)
+	require.Equal(t, 0, usageRepo.calls)
+}
+
 func TestGatewayServiceRecordUsage_UsesFallbackRequestIDForUsageLog(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{}
 	svc, publisher := newGatewayRecordUsageServiceForTest(usageRepo)

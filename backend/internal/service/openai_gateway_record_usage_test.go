@@ -116,9 +116,9 @@ func newOpenAIRecordUsageServiceForTest(usageRepo UsageLogRepository, rateRepo U
 	cfg := &config.Config{}
 	cfg.Default.RateMultiplier = 1.1
 	publisher := &testOpenAIBillingPublisher{}
+	_ = usageRepo
 	svc := NewOpenAIGatewayService(
 		nil,
-		usageRepo,
 		publisher,
 		rateRepo,
 		nil,
@@ -147,9 +147,9 @@ func newOpenAIRecordUsageServiceForTest(usageRepo UsageLogRepository, rateRepo U
 func newOpenAIRecordUsageServiceWithPublisherForTest(usageRepo UsageLogRepository, publisher BillingEventPublisher, rateRepo UserGroupRateRepository) *OpenAIGatewayService {
 	cfg := &config.Config{}
 	cfg.Default.RateMultiplier = 1.1
+	_ = usageRepo
 	svc := NewOpenAIGatewayService(
 		nil,
-		usageRepo,
 		publisher,
 		rateRepo,
 		nil,
@@ -476,6 +476,32 @@ func TestOpenAIGatewayServiceRecordUsage_BillingUsesDetachedContext(t *testing.T
 	require.NoError(t, err)
 	require.Len(t, publisher.events, 1)
 	require.NoError(t, quotaSvc.lastQuotaCtxErr)
+}
+
+func TestOpenAIGatewayServiceRecordUsage_ZeroCostStillPublishesBillingEvent(t *testing.T) {
+	usageRepo := &openAIRecordUsageLogRepoStub{}
+	publisher := &testOpenAIBillingPublisher{}
+	svc := newOpenAIRecordUsageServiceWithPublisherForTest(usageRepo, publisher, nil)
+
+	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
+		Result: &OpenAIForwardResult{
+			RequestID: "resp_zero_cost_event",
+			Usage: OpenAIUsage{
+				InputTokens:  0,
+				OutputTokens: 0,
+			},
+			Model:    "gpt-5.1",
+			Duration: time.Second,
+		},
+		APIKey:  &APIKey{ID: 100421},
+		User:    &User{ID: 200421},
+		Account: &Account{ID: 300421},
+	})
+
+	require.NoError(t, err)
+	require.Len(t, publisher.events, 1)
+	require.NotNil(t, publisher.events[0].Command)
+	require.Equal(t, 0, usageRepo.calls)
 }
 
 func TestOpenAIGatewayServiceRecordUsage_PublisherUsesDetachedContext(t *testing.T) {
@@ -1004,9 +1030,9 @@ func TestOpenAIGatewayServiceRecordUsage_SubscriptionBillingSetsSubscriptionFiel
 	require.Equal(t, subscription.ID, *publisher.events[0].UsageLog.SubscriptionID)
 }
 
-func TestOpenAIGatewayServiceRecordUsage_SimpleModeSkipsBillingAfterPersist(t *testing.T) {
+func TestOpenAIGatewayServiceRecordUsage_SimpleModeStillPublishesBillingEvent(t *testing.T) {
 	usageRepo := &openAIRecordUsageLogRepoStub{inserted: true}
-	svc, _ := newOpenAIRecordUsageServiceForTest(usageRepo, nil)
+	svc, publisher := newOpenAIRecordUsageServiceForTest(usageRepo, nil)
 	svc.cfg.RunMode = config.RunModeSimple
 
 	err := svc.RecordUsage(context.Background(), &OpenAIRecordUsageInput{
@@ -1022,5 +1048,6 @@ func TestOpenAIGatewayServiceRecordUsage_SimpleModeSkipsBillingAfterPersist(t *t
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, 1, usageRepo.calls)
+	require.Len(t, publisher.events, 1)
+	require.Equal(t, 0, usageRepo.calls)
 }
