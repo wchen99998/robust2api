@@ -119,14 +119,38 @@ See **[DEPLOY.md](DEPLOY.md)** for the full guide.
 
 Build and run from source code for development or customization.
 
-#### Prerequisites
+ #### Prerequisites
+ 
+ - Go 1.21+
+ - Node.js 18+
+ - PostgreSQL 15+
+ - Redis 7+
 
-- Go 1.21+
-- Node.js 18+
-- PostgreSQL 15+
-- Redis 7+
+#### Dev Container (Recommended for Development)
 
-#### Build Steps
+This repository includes a preconfigured VS Code Dev Container in `.devcontainer/` with:
+
+- Go 1.26
+- Node.js 20 + pnpm 9
+- `golangci-lint` v2.9
+- PostgreSQL 16 and Redis 7 sidecar services
+- Docker access for integration testing workflows
+
+Quick start:
+
+1. Install Docker Desktop (or Docker Engine) and VS Code with the Dev Containers extension.
+2. Open the repository in VS Code.
+3. Run **Dev Containers: Reopen in Container**.
+4. Wait for post-create setup to finish.
+
+After the container starts, run the usual commands from the workspace root:
+
+```bash
+make test
+make build
+```
+
+ #### Build Steps
 
 ```bash
 # 1. Clone the repository
