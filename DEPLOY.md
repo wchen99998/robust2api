@@ -162,18 +162,47 @@ stringData:
 EOF
 ```
 
+### Cluster Variables ConfigMap
+
+The Flux Kustomizations in `clusters/production/` use `postBuild.substituteFrom`
+to inject environment-specific values (domain, Let's Encrypt email, Cloudflare
+R2 account ID) that must not live in the public Git repo. Create this ConfigMap
+before bootstrapping Flux:
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cluster-vars
+  namespace: flux-system
+data:
+  BASE_DOMAIN: "<your-production-domain, e.g. example.com>"
+  ADMIN_EMAIL: "<lets-encrypt-contact-email>"
+  CF_R2_ACCOUNT_ID: "<cloudflare-account-id-for-r2-endpoint>"
+EOF
+```
+
+Flux substitutes `${BASE_DOMAIN}`, `${ADMIN_EMAIL}`, and `${CF_R2_ACCOUNT_ID}`
+in `apps/sub2api.yaml`, `infrastructure/external-dns.yaml`,
+`infrastructure/issuers/cluster-issuer.yaml`, and `monitoring/monitoring.yaml`
+at reconcile time. If you change any of these values later, update the
+ConfigMap and Flux will re-apply on the next reconcile.
+
 ## 3. Configure Flux Manifests
 
 Edit `clusters/production/` files with your production values before bootstrapping:
 
 | File | What to set |
 |------|-------------|
-| `infrastructure/issuers/cluster-issuer.yaml` | `email` (Let's Encrypt) |
-| `infrastructure/external-dns.yaml` | `domainFilters`, `txtOwnerId`; uncomment `extraArgs: [--cloudflare-proxied]` if using CF proxy |
-| `monitoring/monitoring.yaml` | `public.baseDomain`, `grafanaIngress.enabled`, optional `grafanaIngress.host`, R2 endpoints/buckets |
+| `infrastructure/external-dns.yaml` | `txtOwnerId`; uncomment `extraArgs: [--cloudflare-proxied]` if using CF proxy |
+| `monitoring/monitoring.yaml` | `grafanaIngress.enabled`, optional `grafanaIngress.host`, R2 bucket names |
 | `monitoring.yaml` | Set `spec.suspend: false` to enable monitoring |
-| `apps/sub2api.yaml` | Image tags, `public.baseDomain`, public URL scheme/host overrides, ingress TLS/override settings, resource limits, `observability` settings, `grafanaProvisioning` enablement |
+| `apps/sub2api.yaml` | Image tags, public URL scheme/host overrides, ingress TLS/override settings, resource limits, `observability` settings, `grafanaProvisioning` enablement |
 | `grafana-apps/grafana-apps.yaml` | Dashboard release values if you need to override the monitoring namespace |
+
+Domain, Let's Encrypt email, and Cloudflare R2 account ID come from the
+`cluster-vars` ConfigMap created in step 2 — no file edit needed for those.
 
 By default, public ingress hosts follow the shared `service-namespace.domain`
 convention. For example:

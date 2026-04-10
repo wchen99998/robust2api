@@ -5,7 +5,7 @@ metadata:
 spec:
   acme:
     server: https://acme-v02.api.letsencrypt.org/directory
-    email: admin@wuhao99.com
+    email: ${ADMIN_EMAIL}
     privateKeySecretRef:
       name: letsencrypt-prod
     solvers:

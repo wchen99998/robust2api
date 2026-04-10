@@ -59,7 +59,7 @@ spec:
       enabled: false
 
     public:
-      baseDomain: wuhao99.com
+      baseDomain: ${BASE_DOMAIN}
       grafana:
         enabled: true
         scheme: https
@@ -287,7 +287,7 @@ spec:
       enabled: false
 
     public:
-      baseDomain: wuhao99.com
+      baseDomain: ${BASE_DOMAIN}
       gateway:
         scheme: https
 
@@ -427,7 +427,7 @@ spec:
       enabled: false
 
     public:
-      baseDomain: wuhao99.com
+      baseDomain: ${BASE_DOMAIN}
       control:
         scheme: https
       grafana:

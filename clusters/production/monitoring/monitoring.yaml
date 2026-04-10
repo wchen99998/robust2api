@@ -45,7 +45,7 @@ spec:
       targetPath: loki.loki.storage.s3.secretAccessKey
   values:
     public:
-      baseDomain: wuhao99.com
+      baseDomain: ${BASE_DOMAIN}
 
     grafanaIngress:
       enabled: true
@@ -56,13 +56,13 @@ spec:
           trace:
             s3:
               bucket: sub2api-tempo
-              endpoint: 838c4cd9131d5dae0dfdf823ecd2e1ac.r2.cloudflarestorage.com
+              endpoint: ${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com
 
     loki:
       loki:
         storage:
           s3:
-            endpoint: 838c4cd9131d5dae0dfdf823ecd2e1ac.r2.cloudflarestorage.com
+            endpoint: ${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com
           bucketNames:
             chunks: sub2api-loki
             ruler: sub2api-loki

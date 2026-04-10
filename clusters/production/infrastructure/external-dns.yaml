@@ -34,7 +34,7 @@ spec:
     policy: sync
     txtOwnerId: sub2api
     domainFilters:
-      - wuhao99.com
+      - ${BASE_DOMAIN}
     sources:
       - ingress
     extraArgs:

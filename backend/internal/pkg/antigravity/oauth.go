@@ -52,7 +52,11 @@ const (
 // defaultUserAgentVersion 可通过环境变量 ANTIGRAVITY_USER_AGENT_VERSION 配置，默认 1.20.5
 var defaultUserAgentVersion = "1.21.9"
 
-// defaultClientSecret 可通过环境变量 ANTIGRAVITY_OAUTH_CLIENT_SECRET 配置
+// defaultClientSecret is the public OAuth client secret baked into Google's
+// own Antigravity CLI. It enables the "login without creating your own OAuth
+// client" experience and is not a secret in the traditional sense — the same
+// value ships in every copy of the upstream CLI. Override via the
+// ANTIGRAVITY_OAUTH_CLIENT_SECRET env var if needed.
 var defaultClientSecret = "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"
 
 func init() {

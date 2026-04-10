@@ -15,3 +15,7 @@ spec:
   dependsOn:
     - name: monitoring
     - name: cert-manager-issuers
+  postBuild:
+    substituteFrom:
+      - kind: ConfigMap
+        name: cluster-vars
