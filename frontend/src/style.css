@@ -366,25 +366,25 @@
   }
 
   .modal-header {
-    @apply border-b border-black/[0.06] dark:border-white/[0.08] px-4 py-3;
-    @apply sm:px-6 sm:py-4;
+    @apply border-b border-black/[0.06] dark:border-white/[0.08] px-5 py-4;
+    @apply sm:px-6;
     @apply flex items-center justify-between;
     @apply flex-shrink-0;
   }
 
   .modal-title {
-    @apply text-mica-headline text-mica-text-primary dark:text-mica-text-primary-dark;
+    @apply text-mica-title2 text-mica-text-primary dark:text-mica-text-primary-dark;
   }
 
   .modal-body {
-    @apply px-4 py-3;
-    @apply sm:px-6 sm:py-4;
+    @apply px-5 py-5;
+    @apply sm:px-6;
     @apply flex-1 overflow-y-auto;
   }
 
   .modal-footer {
-    @apply border-t border-black/[0.06] dark:border-white/[0.08] px-4 py-3;
-    @apply sm:px-6 sm:py-4;
+    @apply border-t border-black/[0.06] dark:border-white/[0.08] px-5 py-4;
+    @apply sm:px-6;
     @apply flex items-center justify-end gap-3;
     @apply flex-shrink-0;
   }
@@ -561,7 +561,7 @@
   }
 
   .account-page-header {
-    @apply flex flex-col gap-3;
+    @apply flex flex-col gap-3 pb-1;
   }
 
   .account-page-eyebrow {
@@ -573,11 +573,17 @@
   }
 
   .account-page-title {
-    @apply text-mica-large-title text-mica-text-primary dark:text-mica-text-primary-dark;
+    @apply text-mica-text-primary dark:text-mica-text-primary-dark;
+    font-size: clamp(28px, 4vw, 38px);
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
   }
 
   .account-page-subtitle {
-    @apply mt-1 max-w-2xl text-mica-body text-mica-text-secondary dark:text-mica-text-secondary-dark;
+    @apply mt-2 max-w-2xl text-mica-text-secondary dark:text-mica-text-secondary-dark;
+    font-size: 15px;
+    line-height: 1.5;
   }
 
   .account-page-actions {
@@ -848,5 +854,39 @@
 
   .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* ============ Page entrance choreography ============ */
+  .enter-stage {
+    animation: enterUp 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .enter-stage-delay-1 { animation-delay: 60ms; }
+  .enter-stage-delay-2 { animation-delay: 120ms; }
+  .enter-stage-delay-3 { animation-delay: 180ms; }
+  .enter-stage-delay-4 { animation-delay: 240ms; }
+  .enter-stage-delay-5 { animation-delay: 300ms; }
+}
+
+@keyframes enterUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-stage,
+  .enter-stage-delay-1,
+  .enter-stage-delay-2,
+  .enter-stage-delay-3,
+  .enter-stage-delay-4,
+  .enter-stage-delay-5 {
+    animation: none !important;
+    opacity: 1 !important;
   }
 }

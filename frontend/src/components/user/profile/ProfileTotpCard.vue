@@ -2,13 +2,12 @@
   <div class="grouped-surface">
     <div class="grouped-surface-header">
       <div>
-      <div class="section-kicker">Security</div>
-      <h2 class="grouped-surface-title">
-        {{ t('profile.totp.title') }}
-      </h2>
-      <p class="grouped-surface-description">
-        {{ t('profile.totp.description') }}
-      </p>
+        <h2 class="grouped-surface-title">
+          {{ t('profile.totp.title') }}
+        </h2>
+        <p class="grouped-surface-description">
+          {{ t('profile.totp.description') }}
+        </p>
       </div>
     </div>
     <div class="grouped-surface-body">

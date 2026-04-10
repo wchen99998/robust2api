@@ -1,8 +1,7 @@
 <template>
   <AppLayout>
     <div class="account-page account-page-wide">
-      <div class="account-page-header">
-        <div class="account-page-eyebrow">My Account</div>
+      <div class="account-page-header enter-stage">
         <div class="account-page-heading">
           <div>
             <h1 class="account-page-title">{{ t('usage.title') }}</h1>
@@ -17,64 +16,44 @@
 
       <TablePageLayout>
       <template #actions>
-        <div class="metric-strip">
-          <!-- Total Requests -->
-          <div class="metric-panel">
-            <p class="metric-panel-label">
-              {{ t('usage.totalRequests') }}
-            </p>
-            <p class="metric-panel-value">
-              {{ usageStats?.total_requests?.toLocaleString() || '0' }}
-            </p>
-            <p class="metric-panel-detail">
-              {{ t('usage.inSelectedRange') }}
-            </p>
-          </div>
-
-          <!-- Total Tokens -->
-          <div class="metric-panel">
-            <p class="metric-panel-label">
-              {{ t('usage.totalTokens') }}
-            </p>
-            <p class="metric-panel-value">
-              {{ formatTokens(usageStats?.total_tokens || 0) }}
-            </p>
-            <p class="metric-panel-detail">
-              {{ t('usage.in') }}: {{ formatTokens(usageStats?.total_input_tokens || 0) }} /
-              {{ t('usage.out') }}: {{ formatTokens(usageStats?.total_output_tokens || 0) }}
-            </p>
-          </div>
-
-          <!-- Total Cost -->
-          <div class="metric-panel">
-            <p class="metric-panel-label">
-              {{ t('usage.totalCost') }}
-            </p>
-            <p class="metric-panel-value">
-              ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
-            </p>
-            <p class="metric-panel-detail">
-              ${{ (usageStats?.total_cost || 0).toFixed(4) }} {{ t('usage.standardCost') }}
-            </p>
-          </div>
-
-          <!-- Average Duration -->
-          <div class="metric-panel">
-            <p class="metric-panel-label">
-              {{ t('usage.avgDuration') }}
-            </p>
-            <p class="metric-panel-value">
-              {{ formatDuration(usageStats?.average_duration_ms || 0) }}
-            </p>
-            <p class="metric-panel-detail">
-              {{ t('usage.perRequest') }}
-            </p>
+        <div class="grouped-surface enter-stage enter-stage-delay-1">
+          <div class="flex flex-wrap items-stretch divide-x divide-black/[0.06] dark:divide-white/[0.08]">
+            <div class="flex-1 min-w-[140px] px-5 py-4">
+              <p class="text-[11px] uppercase tracking-widest text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.totalRequests') }}</p>
+              <p class="mt-1.5 text-[24px] font-bold tabular-nums tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark leading-none">
+                {{ usageStats?.total_requests?.toLocaleString() || '0' }}
+              </p>
+            </div>
+            <div class="flex-1 min-w-[140px] px-5 py-4">
+              <p class="text-[11px] uppercase tracking-widest text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.totalTokens') }}</p>
+              <p class="mt-1.5 text-[24px] font-bold tabular-nums tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark leading-none">
+                {{ formatTokens(usageStats?.total_tokens || 0) }}
+              </p>
+              <p class="mt-1.5 text-[11px] tabular-nums text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+                {{ t('usage.in') }} {{ formatTokens(usageStats?.total_input_tokens || 0) }} · {{ t('usage.out') }} {{ formatTokens(usageStats?.total_output_tokens || 0) }}
+              </p>
+            </div>
+            <div class="flex-1 min-w-[140px] px-5 py-4">
+              <p class="text-[11px] uppercase tracking-widest text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.totalCost') }}</p>
+              <p class="mt-1.5 text-[24px] font-bold tabular-nums tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark leading-none">
+                ${{ (usageStats?.total_actual_cost || 0).toFixed(4) }}
+              </p>
+              <p class="mt-1.5 text-[11px] tabular-nums text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+                ${{ (usageStats?.total_cost || 0).toFixed(4) }} {{ t('usage.standardCost') }}
+              </p>
+            </div>
+            <div class="flex-1 min-w-[140px] px-5 py-4">
+              <p class="text-[11px] uppercase tracking-widest text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('usage.avgDuration') }}</p>
+              <p class="mt-1.5 text-[24px] font-bold tabular-nums tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark leading-none">
+                {{ formatDuration(usageStats?.average_duration_ms || 0) }}
+              </p>
+            </div>
           </div>
         </div>
       </template>
 
       <template #filters>
-        <div class="grouped-surface">
+        <div class="grouped-surface enter-stage enter-stage-delay-2">
           <div class="grouped-surface-body">
           <div class="flex flex-wrap items-end gap-4">
             <!-- API Key Filter -->

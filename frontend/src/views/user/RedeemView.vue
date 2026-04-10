@@ -1,37 +1,27 @@
 <template>
   <AppLayout>
     <div class="account-page">
-      <div class="account-page-header">
-        <div class="account-page-eyebrow">My Account</div>
+      <div class="account-page-header enter-stage">
         <div class="account-page-heading">
           <div>
             <h1 class="account-page-title">{{ t('redeem.title') }}</h1>
             <p class="account-page-subtitle">{{ t('redeem.description') }}</p>
           </div>
-        </div>
-      </div>
-
-      <div class="grid gap-3 sm:grid-cols-2">
-        <div class="metric-panel">
-          <p class="metric-panel-label">{{ t('redeem.currentBalance') }}</p>
-          <p class="metric-panel-value">${{ user?.balance?.toFixed(2) || '0.00' }}</p>
-        </div>
-        <div class="metric-panel">
-          <p class="metric-panel-label">{{ t('redeem.concurrency') }}</p>
-          <p class="metric-panel-value">{{ user?.concurrency || 0 }}</p>
-          <p class="metric-panel-detail">{{ t('redeem.requests') }}</p>
-        </div>
-      </div>
-
-      <!-- Redeem Form — frosted card -->
-      <div class="grouped-surface">
-        <div class="grouped-surface-header">
-          <div>
-            <div class="section-kicker">{{ t('redeem.redeemCodeLabel') }}</div>
-            <h2 class="grouped-surface-title">{{ t('redeem.redeemButton') }}</h2>
-            <p class="grouped-surface-description">{{ t('redeem.redeemCodeHint') }}</p>
+          <div class="flex items-end gap-8 tabular-nums">
+            <div class="text-right">
+              <span class="block text-[11px] uppercase tracking-widest text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('redeem.currentBalance') }}</span>
+              <span class="block mt-0.5 text-[28px] font-bold tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark leading-none">${{ user?.balance?.toFixed(2) || '0.00' }}</span>
+            </div>
+            <div class="text-right">
+              <span class="block text-[11px] uppercase tracking-widest text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('redeem.concurrency') }}</span>
+              <span class="block mt-0.5 text-[28px] font-bold tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark leading-none">{{ user?.concurrency || 0 }}</span>
+            </div>
           </div>
         </div>
+      </div>
+
+      <!-- Redeem Form -->
+      <div class="grouped-surface enter-stage enter-stage-delay-1">
         <div class="grouped-surface-body">
         <form @submit.prevent="handleRedeem" class="space-y-5">
           <div>
@@ -49,7 +39,7 @@
                 required
                 :placeholder="t('redeem.redeemCodePlaceholder')"
                 :disabled="submitting"
-                class="input py-3 pl-12 text-lg"
+                class="input py-4 pl-12 text-lg tracking-wide"
               />
             </div>
             <p class="input-hint">
@@ -60,7 +50,7 @@
           <button
             type="submit"
             :disabled="!redeemCode || submitting"
-            class="btn btn-primary w-full py-3"
+            class="btn btn-primary w-full py-3.5 text-[15px] font-semibold"
           >
             <svg
               v-if="submitting"
@@ -137,33 +127,28 @@
         </div>
       </transition>
 
-      <!-- Info — HIG grouped style, neutral -->
-      <div class="grouped-surface">
-        <div class="grouped-surface-body">
-        <h3 class="text-mica-headline text-mica-text-primary dark:text-mica-text-primary-dark">
+      <!-- Info -->
+      <div class="enter-stage enter-stage-delay-2 rounded-mica-lg bg-black/[0.02] dark:bg-white/[0.02] px-5 py-4">
+        <p class="text-mica-subhead font-medium text-mica-text-secondary dark:text-mica-text-secondary-dark">
           {{ t('redeem.aboutCodes') }}
-        </h3>
-        <ul class="mt-3 list-inside list-disc space-y-1.5 text-mica-subhead text-mica-text-secondary dark:text-mica-text-secondary-dark">
-          <li>{{ t('redeem.codeRule1') }}</li>
-          <li>{{ t('redeem.codeRule2') }}</li>
-          <li>
+        </p>
+        <div class="mt-2.5 space-y-1 text-mica-caption text-mica-text-tertiary dark:text-mica-text-tertiary-dark leading-relaxed">
+          <p>{{ t('redeem.codeRule1') }} {{ t('redeem.codeRule2') }}</p>
+          <p>
             {{ t('redeem.codeRule3') }}
             <span
               v-if="contactInfo"
-              class="ml-1.5 inline-flex items-center rounded-mica-sm bg-black/[0.04] dark:bg-white/[0.06] px-2 py-0.5 text-[11px] font-medium text-mica-text-primary dark:text-mica-text-primary-dark"
-            >
-              {{ contactInfo }}
-            </span>
-          </li>
-          <li>{{ t('redeem.codeRule4') }}</li>
-        </ul>
+              class="ml-1 font-medium text-mica-text-secondary dark:text-mica-text-secondary-dark"
+            >{{ contactInfo }}</span>
+          </p>
+          <p>{{ t('redeem.codeRule4') }}</p>
         </div>
       </div>
 
-      <!-- Recent Activity — HIG grouped list -->
-      <div class="grouped-surface overflow-hidden">
+      <!-- Recent Activity -->
+      <div class="grouped-surface overflow-hidden enter-stage enter-stage-delay-3">
         <div class="px-5 py-3">
-          <p class="text-mica-caption uppercase tracking-wide text-mica-text-tertiary dark:text-mica-text-tertiary-dark">
+          <p class="text-mica-subhead font-medium text-mica-text-secondary dark:text-mica-text-secondary-dark">
             {{ t('redeem.recentActivity') }}
           </p>
         </div>
