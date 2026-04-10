@@ -101,8 +101,7 @@ function shouldAttachCSRF(config: InternalAxiosRequestConfig): boolean {
   if (!MUTATING_METHODS.has(method)) {
     return false
   }
-  const path = normalizePath(config.url)
-  return path !== REFRESH_PATH
+  return true
 }
 
 function isAuthExcludedPath(path: string): boolean {

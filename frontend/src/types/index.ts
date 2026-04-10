@@ -182,6 +182,7 @@ export interface BootstrapMe {
 }
 
 export interface BootstrapResponse {
+  access_token?: string
   csrf_token?: string
   run_mode?: 'standard' | 'simple'
   public_settings: PublicSettings

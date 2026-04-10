@@ -64,7 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
       return
     }
 
-    token.value = null
+    token.value = response.access_token || null
     localStorage.setItem('auth_user', JSON.stringify(currentUser))
   }
 

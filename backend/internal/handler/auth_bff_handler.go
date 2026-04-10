@@ -65,6 +65,7 @@ type bootstrapPendingRegistrationResponse struct {
 type bootstrapResponse struct {
 	Settings            dto.PublicSettings                    `json:"settings"`
 	CSRFToken           string                                `json:"csrf_token"`
+	AccessToken         string                                `json:"access_token,omitempty"`
 	RunMode             string                                `json:"run_mode"`
 	Authenticated       bool                                  `json:"authenticated"`
 	RefreshAvailable    bool                                  `json:"refresh_available"`
@@ -175,6 +176,9 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 		return
 	}
 	if identity != nil {
+		payload.AccessToken = h.currentAccessToken(c)
+	}
+	if identity != nil {
 		h.clearPendingRegistrationCookie(c)
 	} else if pending := h.pendingRegistrationPayload(c); pending != nil {
 		payload.PendingRegistration = pending
@@ -222,6 +226,7 @@ func (h *AuthHandler) SessionLogin(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = result.Tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -254,6 +259,7 @@ func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = result.Tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -324,6 +330,7 @@ func (h *AuthHandler) SessionRefresh(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -403,6 +410,7 @@ func (h *AuthHandler) Registration(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -445,6 +453,7 @@ func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -557,6 +566,7 @@ func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -673,6 +683,7 @@ func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -715,6 +726,7 @@ func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -1123,6 +1135,13 @@ func (h *AuthHandler) currentIdentity(c *gin.Context) (*service.AuthenticatedIde
 		return nil, service.ErrInvalidToken
 	}
 	return h.controlAuthService.AuthenticateAccessToken(c.Request.Context(), token)
+}
+
+func (h *AuthHandler) currentAccessToken(c *gin.Context) string {
+	if token := extractBearerToken(c); token != "" {
+		return token
+	}
+	return h.cookieValue(c, service.ControlAccessCookieName)
 }
 
 func (h *AuthHandler) setSessionCookies(c *gin.Context, tokens *service.ControlSessionTokens) (string, error) {

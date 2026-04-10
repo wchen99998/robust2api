@@ -19,6 +19,7 @@ describe('auth API normalization', () => {
     const { bootstrap } = await import('@/api/auth')
     mockGet.mockResolvedValue({
       data: {
+        access_token: 'access-token-1',
         csrf_token: 'csrf-1',
         run_mode: 'simple',
         authenticated: true,
@@ -65,6 +66,7 @@ describe('auth API normalization', () => {
 
     const data = await bootstrap()
 
+    expect(data.access_token).toBe('access-token-1')
     expect(data.csrf_token).toBe('csrf-1')
     expect(data.run_mode).toBe('simple')
     expect(data.auth_state.authenticated).toBe(true)

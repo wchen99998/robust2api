@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -541,9 +542,7 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("commit refresh transaction: %w", err)
 	}
-	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
-		return nil, nil, err
-	}
+	s.tryStoreSessionSnapshot(ctx, snapshot)
 	return identity, &ControlSessionTokens{
 		AccessToken:       accessToken,
 		RefreshToken:      nextRefreshToken,
@@ -678,9 +677,7 @@ func (s *ControlAuthService) createAuthenticatedSession(ctx context.Context, bun
 	}
 
 	snapshot := sessionRecordToSnapshot(sessionRecord)
-	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
-		return nil, nil, err
-	}
+	s.tryStoreSessionSnapshot(ctx, snapshot)
 
 	return buildAuthenticatedIdentity(bundle, snapshot, user), &ControlSessionTokens{
 		AccessToken:       accessToken,
@@ -760,9 +757,9 @@ func (s *ControlAuthService) getSessionSnapshot(ctx context.Context, sessionID s
 	if s.sessionCache != nil {
 		snapshot, err := s.sessionCache.GetSessionSnapshot(ctx, sessionID)
 		if err != nil {
-			return nil, err
+			logger.LegacyPrintf("service.control_auth", "session snapshot cache read failed: sid=%s err=%v", sessionID, err)
 		}
-		if snapshot != nil {
+		if err == nil && snapshot != nil {
 			return snapshot, nil
 		}
 	}
@@ -775,9 +772,7 @@ func (s *ControlAuthService) getSessionSnapshot(ctx context.Context, sessionID s
 		return nil, err
 	}
 	snapshot := sessionRecordToSnapshot(sessionRecord)
-	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
-		return nil, err
-	}
+	s.tryStoreSessionSnapshot(ctx, snapshot)
 	return snapshot, nil
 }
 
@@ -790,6 +785,15 @@ func (s *ControlAuthService) storeSessionSnapshot(ctx context.Context, snapshot 
 		ttl = controlSessionSnapshotTTL
 	}
 	return s.sessionCache.SetSessionSnapshot(ctx, snapshot, ttl)
+}
+
+func (s *ControlAuthService) tryStoreSessionSnapshot(ctx context.Context, snapshot *SessionSnapshot) {
+	if snapshot == nil {
+		return
+	}
+	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
+		logger.LegacyPrintf("service.control_auth", "session snapshot cache write failed: sid=%s err=%v", snapshot.SessionID, err)
+	}
 }
 
 func (s *ControlAuthService) frontendBaseURL(ctx context.Context) string {

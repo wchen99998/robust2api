@@ -224,9 +224,7 @@ func (s *ControlAuthService) Register(ctx context.Context, input *ControlRegistr
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("commit registration transaction: %w", err)
 	}
-	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
-		return nil, nil, err
-	}
+	s.tryStoreSessionSnapshot(ctx, snapshot)
 	return identity, tokens, nil
 }
 
@@ -560,9 +558,7 @@ func (s *ControlAuthService) registerOAuthSubject(ctx context.Context, input *oa
 	if err := tx.Commit(); err != nil {
 		return nil, nil, err
 	}
-	if err := s.storeSessionSnapshot(ctx, snapshot); err != nil {
-		return nil, nil, err
-	}
+	s.tryStoreSessionSnapshot(ctx, snapshot)
 	return identity, tokens, nil
 }
 

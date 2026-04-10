@@ -74,6 +74,22 @@ describe('API Client', () => {
       const config = adapter.mock.calls[0][0]
       expect(config.headers.get('X-CSRF-Token')).toBe('test-csrf-token')
     })
+
+    it('attaches csrf header for explicit session refresh requests', async () => {
+      const adapter = vi.fn().mockResolvedValue({
+        status: 200,
+        data: { code: 0, data: {} },
+        headers: {},
+        config: {},
+        statusText: 'OK'
+      })
+      apiClient.defaults.adapter = adapter
+
+      await apiClient.post('/session/refresh', {})
+
+      const config = adapter.mock.calls[0][0]
+      expect(config.headers.get('X-CSRF-Token')).toBe('test-csrf-token')
+    })
   })
 
   describe('response interceptor', () => {
