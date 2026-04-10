@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   metadata:
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     outputs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
       version: ${{ steps.meta.outputs.version }}
@@ -70,7 +70,7 @@ jobs:
 
   build-frontend-dist:
     needs: metadata
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -106,7 +106,6 @@ jobs:
     needs: metadata
     strategy:
       fail-fast: false
-      max-parallel: 2
       matrix:
         service:
           - name: gateway
@@ -117,7 +116,7 @@ jobs:
             dockerfile: Dockerfile.worker
           - name: bootstrap
             dockerfile: Dockerfile.bootstrap
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     env:
       IMAGE_NAME: ghcr.io/${{ needs.metadata.outputs.owner_lower }}/${{ needs.metadata.outputs.repo_name }}/${{ matrix.service.name }}
       PLATFORM: linux/amd64
@@ -175,7 +174,7 @@ jobs:
 
   build-frontend-images:
     needs: [metadata, build-frontend-dist]
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     env:
       IMAGE_NAME: ghcr.io/${{ needs.metadata.outputs.owner_lower }}/${{ needs.metadata.outputs.repo_name }}/frontend
       PLATFORM: linux/amd64
@@ -235,7 +234,7 @@ jobs:
 
   merge-manifests:
     needs: [metadata, build-backend-images, build-frontend-images]
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
@@ -292,7 +291,7 @@ jobs:
 
   publish-release:
     needs: [metadata, merge-manifests]
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-24.04
     steps:
       - name: Create or update GitHub Release
         uses: actions/github-script@v8
@@ -378,7 +377,7 @@ jobs:
   sync-version-file:
     needs: [metadata, publish-release]
     if: ${{ needs.publish-release.result == 'success' }}
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout default branch
         uses: actions/checkout@v6
