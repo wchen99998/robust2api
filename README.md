@@ -1,158 +1,75 @@
-# Sub2API
+# robust2api
 
-<div align="center">
+`robust2api` is an AI API gateway for routing requests across multiple upstream AI accounts behind a single authenticated control plane. It handles authentication, API key issuance, billing, load balancing, rate limits, and request forwarding for providers such as OpenAI, Anthropic, Gemini, and related integrations.
 
-[![Go](https://img.shields.io/badge/Go-1.25.7-00ADD8.svg)](https://golang.org/)
-[![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)
-[![Redis](https://img.shields.io/badge/Redis-7+-DC382D.svg)](https://redis.io/)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg)](https://www.docker.com/)
+This repository still uses legacy `sub2api` names in some paths, binaries, Helm chart directories, and configuration examples. Those identifiers are kept where they reflect the current codebase layout.
 
-<a href="https://trendshift.io/repositories/21823" target="_blank"><img src="https://trendshift.io/api/badge/repositories/21823" alt="Wei-Shaw%2Fsub2api | Trendshift" width="250" height="55"/></a>
+## Core Capabilities
 
-**AI API Gateway Platform for Subscription Quota Distribution**
+- Multi-account upstream management across OAuth and API key based providers
+- Platform-issued API keys for end users and internal consumers
+- Token-level usage metering with billing support
+- Sticky-session aware account selection and failover
+- Per-user and per-account concurrency controls
+- Request and token rate limiting
+- Admin dashboard for operations and account management
+- Optional observability stack with OpenTelemetry, Prometheus, Grafana, Tempo, and Loki
 
-English
-
-</div>
-
-> **Sub2API officially uses only the domains `sub2api.org` and `pincc.ai`. Other websites using the Sub2API name may be third-party deployments or services and are not affiliated with this project. Please verify and exercise your own judgment.**
-
----
-
-## Demo
-
-Try Sub2API online: **[https://demo.sub2api.org/](https://demo.sub2api.org/)**
-
-Demo credentials (shared demo environment; **not** created automatically for self-hosted installs):
-
-| Email | Password |
-|-------|----------|
-| admin@sub2api.org | admin123 |
-
-## Overview
-
-Sub2API is an AI API gateway platform designed to distribute and manage API quotas from AI product subscriptions. Users can access upstream AI services through platform-generated API Keys, while the platform handles authentication, billing, load balancing, and request forwarding.
-
-## Features
-
-- **Multi-Account Management** - Support multiple upstream account types (OAuth, API Key)
-- **API Key Distribution** - Generate and manage API Keys for users
-- **Precise Billing** - Token-level usage tracking and cost calculation
-- **Smart Scheduling** - Intelligent account selection with sticky sessions
-- **Concurrency Control** - Per-user and per-account concurrency limits
-- **Rate Limiting** - Configurable request and token rate limits
-- **Observability** - Optional LGTM stack (Prometheus, Grafana, Tempo, Loki) with OpenTelemetry tracing and metrics
-- **Admin Dashboard** - Web interface for monitoring and management
-- **External System Integration** - Embed external systems (e.g. payment, ticketing) via iframe to extend the admin dashboard
-
-## ❤️ Sponsors
-
-> [Want to appear here?](mailto:support@pincc.ai)
-
-<table>
-<tr>
-<td width="180" align="center" valign="middle"><a href="https://shop.pincc.ai/"><img src="assets/partners/logos/pincc-logo.png" alt="pincc" width="150"></a></td>
-<td valign="middle"><b><a href="https://shop.pincc.ai/">PinCC</a></b> is the official relay service built on Sub2API, offering stable access to Claude Code, Codex, Gemini and other popular models — ready to use, no deployment or maintenance required.</td>
-</tr>
-
-<tr>
-<td width="180"><a href="https://www.packyapi.com/register?aff=sub2api"><img src="assets/partners/logos/packycode.png" alt="PackyCode" width="150"></a></td>
-<td>Thanks to PackyCode for sponsoring this project! PackyCode is a reliable and efficient API relay service provider, offering relay services for Claude Code, Codex, Gemini, and more. PackyCode provides special discounts for our software users: register using <a href="https://www.packyapi.com/register?aff=sub2api">this link</a> and enter the "sub2api" promo code during first recharge to get 10% off.</td>
-</tr>
-
-<tr>
-<td width="180"><a href="https://poixe.com/i/sub2api"><img src="assets/partners/logos/poixe.png" alt="PoixeAi" width="150"></a></td>
-<td>Thanks to Poixe Ai for sponsoring this project! Poixe AI provides reliable LLM API services. You can leverage the platform's API endpoints to seamlessly build AI-powered products. Additionally, you can become a vendor by providing AI API resources to the platform and earn revenue. Register through the exclusive <a href="https://poixe.com/i/sub2api">sub2api</a> referral link and receive a bonus of $5 USD on your first top-up.</td>
-</tr>
-
-<tr>
-<td width="180"><a href="https://ctok.ai"><img src="assets/partners/logos/ctok.png" alt="CTok" width="150"></a></td>
-<td>Thanks to CTok.ai for sponsoring this project! CTok.ai is dedicated to building a one-stop AI programming tool service platform. We offer professional Claude Code packages and technical community services, with support for Google Gemini and OpenAI Codex. Through carefully designed plans and a professional tech community, we provide developers with reliable service guarantees and continuous technical support, making AI-assisted programming a true productivity tool. Click <a href="https://ctok.ai">here</a> to register!</td>
-</tr>
-</table>
-
-## Ecosystem
-
-Community projects that extend or integrate with Sub2API:
-
-| Project | Description | Features |
-|---------|-------------|----------|
-| [Sub2ApiPay](https://github.com/touwaeriol/sub2apipay) | Self-service payment system | Self-service top-up and subscription purchase; supports YiPay protocol, WeChat Pay, Alipay, Stripe; embeddable via iframe |
-| [sub2api-mobile](https://github.com/ckken/sub2api-mobile) | Mobile admin console | Cross-platform app (iOS/Android/Web) for user management, account management, monitoring dashboard, and multi-backend switching; built with Expo + React Native |
-
-## Tech Stack
+## Stack
 
 | Component | Technology |
 |-----------|------------|
-| Backend | Go 1.25.7, Gin, Ent |
-| Frontend | Vue 3.4+, Vite 5+, TailwindCSS |
-| Database | PostgreSQL 15+ |
-| Cache/Queue | Redis 7+ |
-| Observability | OpenTelemetry, Prometheus, Grafana, Tempo, Loki |
+| Backend | Go, Gin, Ent |
+| Frontend | Vue 3, TypeScript, Vite, TailwindCSS |
+| Database | PostgreSQL |
+| Cache / Queue | Redis |
+| Infra | Terraform, Helm, Flux CD |
 
----
+## Architecture
 
-## Nginx Reverse Proxy Note
+The backend follows a layered structure:
 
-When using Nginx as a reverse proxy for Sub2API (or CRS) with Codex CLI, add the following to the `http` block in your Nginx configuration:
-
-```nginx
-underscores_in_headers on;
+```text
+handler -> service -> repository -> ent/redis -> PostgreSQL
 ```
 
-Nginx drops headers containing underscores by default (e.g. `session_id`), which breaks sticky session routing in multi-account setups.
+Main services:
 
----
+- `gateway`: inference proxy and upstream request router
+- `control`: admin/auth API and frontend host
+- `worker`: background jobs for usage recording and billing
+- `bootstrap`: migrations and optional initial admin seeding
 
-## Deployment
+## Quick Start
 
-### Method 1: Kubernetes (Terraform + Helm)
-
-Deploy on DigitalOcean Kubernetes with Terraform for infrastructure provisioning and Helm for application deployment. Includes autoscaling, ingress-nginx, cert-manager, Cloudflare DNS, and optional managed PostgreSQL.
-
-See **[DEPLOY.md](DEPLOY.md)** for the full guide.
-
----
-
-### Method 2: Build from Source
-
-Build and run from source code for development or customization.
-
-#### Prerequisites
+### Prerequisites
 
 - Go 1.21+
 - Node.js 18+
+- pnpm
 - PostgreSQL 15+
 - Redis 7+
 
-#### Build Steps
+### Build From Source
 
 ```bash
-# 1. Clone the repository
 git clone https://github.com/Wei-Shaw/sub2api.git
 cd sub2api
 
-# 2. Install pnpm (if not already installed)
-npm install -g pnpm
-
-# 3. Build frontend SPA
 cd frontend
 pnpm install
-pnpm run build
-# Output will be placed in ../frontend/dist/ (nginx sidecar serves it in production)
+pnpm build
 
-# 4. Build backend binaries
 cd ../backend
 go build -o sub2api-gateway ./cmd/gateway
 go build -o sub2api-control ./cmd/control
 go build -o sub2api-bootstrap ./cmd/bootstrap
+go build -o sub2api-worker ./cmd/worker
+```
 
-# 5. Create the runtime config file
-sudo mkdir -p /etc/sub2api
-sudoedit /etc/sub2api/config.yaml
+Create the runtime config file at `/etc/sub2api/config.yaml`, then export bootstrap secrets before the first run:
 
-# 6. Export required secrets and bootstrap env
+```bash
 export DATABASE_HOST=localhost
 export DATABASE_PORT=5432
 export DATABASE_USER=postgres
@@ -163,18 +80,26 @@ export JWT_SECRET="$(openssl rand -hex 32)"
 export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
 export ADMIN_EMAIL=admin@example.com
 export ADMIN_PASSWORD=change-me
-
-# 7. Run bootstrap once (migrations + optional initial admin seed)
-./sub2api-bootstrap
-
-# 8. Start the services
-./sub2api-gateway  # inference proxy
-./sub2api-control  # admin/auth control plane
 ```
 
-> **Note:** The gateway binary is the inference proxy; the control binary handles admin/auth traffic and relies on the separate frontend nginx sidecar. Both read `/etc/sub2api/config.yaml` for runtime settings, while the bootstrap binary still honors bootstrap environment variables only.
+Run bootstrap once, then start the services:
 
-**Key configuration in `/etc/sub2api/config.yaml`:**
+```bash
+./sub2api-bootstrap
+./sub2api-gateway
+./sub2api-control
+./sub2api-worker
+```
+
+## Configuration Notes
+
+- Runtime YAML config is loaded from `/etc/sub2api/config.yaml`
+- Bootstrap reads required secrets from environment variables
+- `JWT_SECRET` must be at least 32 bytes
+- `TOTP_ENCRYPTION_KEY` must be 64 hex characters
+- `RUN_MODE=simple` enables the simplified operating mode
+
+Example config skeleton:
 
 ```yaml
 server:
@@ -193,224 +118,75 @@ redis:
   host: "localhost"
   port: 6379
   password: ""
-
-default:
-  user_concurrency: 5
-  user_balance: 0
-  api_key_prefix: "sk-"
-  rate_multiplier: 1.0
 ```
 
-`JWT_SECRET` must be at least 32 bytes. `TOTP_ENCRYPTION_KEY` must be 64 hex characters (`openssl rand -hex 32`).
-If you already have an admin user, you can omit `ADMIN_EMAIL` and `ADMIN_PASSWORD` when running `sub2api-bootstrap`.
+## Development
 
-### Sora Status (Temporarily Unavailable)
-
-> ⚠️ Sora-related features are temporarily unavailable due to technical issues in upstream integration and media delivery.
-> Please do not rely on Sora in production at this time.
-> Existing `gateway.sora_*` configuration keys are reserved and may not take effect until these issues are resolved.
-
-Additional security-related options are available in `/etc/sub2api/config.yaml`:
-
-- `cors.allowed_origins` for CORS allowlist
-- `security.url_allowlist` for upstream/pricing/CRS host allowlists
-- `security.url_allowlist.enabled` to disable URL validation (use with caution)
-- `security.url_allowlist.allow_insecure_http` to allow HTTP URLs when validation is disabled
-- `security.url_allowlist.allow_private_hosts` to allow private/local IP addresses
-- `security.response_headers.enabled` to enable configurable response header filtering (disabled uses default allowlist)
-- `security.csp` to control Content-Security-Policy headers
-- `billing.circuit_breaker` to fail closed on billing errors
-- `server.trusted_proxies` to enable X-Forwarded-For parsing
-- `turnstile.required` to require Turnstile in release mode
-
-**⚠️ Security Warning: HTTP URL Configuration**
-
-When `security.url_allowlist.enabled=false`, the system performs minimal URL validation by default, **rejecting HTTP URLs** and only allowing HTTPS. To allow HTTP URLs (e.g., for development or internal testing), you must explicitly set:
-
-```yaml
-security:
-  url_allowlist:
-    enabled: false                # Disable allowlist checks
-    allow_insecure_http: true     # Allow HTTP URLs (⚠️ INSECURE)
-```
-
-**Or via environment variable:**
+Run the backend services from `backend/`:
 
 ```bash
-SECURITY_URL_ALLOWLIST_ENABLED=false
-SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP=true
+go run ./cmd/gateway/
+go run ./cmd/control/
+go run ./cmd/worker/
 ```
 
-**Risks of allowing HTTP:**
-- API keys and data transmitted in **plaintext** (vulnerable to interception)
-- Susceptible to **man-in-the-middle (MITM) attacks**
-- **NOT suitable for production** environments
-
-**When to use HTTP:**
-- ✅ Development/testing with local servers (http://localhost)
-- ✅ Internal networks with trusted endpoints
-- ✅ Testing account connectivity before obtaining HTTPS
-- ❌ Production environments (use HTTPS only)
-
-**Example error without this setting:**
-```
-Invalid base URL: invalid url scheme: http
-```
-
-If you disable URL validation or response header filtering, harden your network layer:
-- Enforce an egress allowlist for upstream domains/IPs
-- Block private/loopback/link-local ranges
-- Enforce TLS-only outbound traffic
-- Strip sensitive upstream response headers at the proxy
-
-#### Development Mode
+Run the frontend from `frontend/`:
 
 ```bash
-# Backend (with hot reload)
-cd backend
-go run ./cmd/gateway
-go run ./cmd/control
-
-# Frontend (with hot reload)
-cd frontend
-pnpm run dev
+pnpm install
+pnpm dev
 ```
 
-#### Code Generation
-
-When editing `backend/ent/schema`, regenerate Ent + Wire:
+When editing `backend/ent/schema`, regenerate generated code:
 
 ```bash
 cd backend
 go generate ./ent
 go generate ./cmd/gateway
 go generate ./cmd/control
+go generate ./cmd/worker
 ```
 
-#### Health Checks
+## Deployment
+
+- Kubernetes deployment and GitOps operations are documented in [DEPLOY.md](DEPLOY.md)
+- Terraform infrastructure lives under `infra/production/`
+- Helm manifests live under `deploy/helm/sub2api/`
+- Production cluster manifests live under `clusters/production/`
+
+If you use Nginx in front of the gateway and need Codex CLI compatibility, add this to the `http` block:
+
+```nginx
+underscores_in_headers on;
+```
+
+## Project Layout
+
+```text
+sub2api/
+├── backend/
+│   ├── cmd/
+│   ├── ent/
+│   ├── internal/
+│   └── resources/
+├── frontend/
+├── deploy/
+│   ├── Caddyfile
+│   └── helm/sub2api/
+├── clusters/production/
+├── infra/
+└── docs/
+```
+
+## Health Checks
 
 ```bash
-# Gateway health (inference proxy)
 curl -I http://localhost:8080/livez
 curl -I http://localhost:8080/readyz
-
-# Control health (admin/auth plane)
 curl -I http://localhost:8081/livez
 curl -I http://localhost:8081/readyz
 ```
 
----
-
-## Simple Mode
-
-Simple Mode is designed for individual developers or internal teams who want quick access without full SaaS features.
-
-- Enable: Set environment variable `RUN_MODE=simple`
-- Difference: Hides SaaS-related features and skips billing process
-- Security note: In production, you must also set `SIMPLE_MODE_CONFIRM=true` to allow startup
-
----
-
-## Antigravity Support
-
-Sub2API supports [Antigravity](https://antigravity.so/) accounts. After authorization, dedicated endpoints are available for Claude and Gemini models.
-
-### Dedicated Endpoints
-
-| Endpoint | Model |
-|----------|-------|
-| `/antigravity/v1/messages` | Claude models |
-| `/antigravity/v1beta/` | Gemini models |
-
-### Claude Code Configuration
-
-```bash
-export ANTHROPIC_BASE_URL="http://localhost:8080/antigravity"
-export ANTHROPIC_AUTH_TOKEN="sk-xxx"
-```
-
-### Hybrid Scheduling Mode
-
-Antigravity accounts support optional **hybrid scheduling**. When enabled, the general endpoints `/v1/messages` and `/v1beta/` will also route requests to Antigravity accounts.
-
-> **⚠️ Warning**: Anthropic Claude and Antigravity Claude **cannot be mixed within the same conversation context**. Use groups to isolate them properly.
-
-### Known Issues
-
-In Claude Code, Plan Mode cannot exit automatically. (Normally when using the native Claude API, after planning is complete, Claude Code will pop up options for users to approve or reject the plan.)
-
-**Workaround**: Press `Shift + Tab` to manually exit Plan Mode, then type your response to approve or reject the plan.
-
----
-
-## Project Structure
-
-```
-sub2api/
-├── backend/                  # Go backend service
-│   ├── cmd/gateway/          # Gateway server entry
-│   ├── cmd/control/          # Control/admin server entry
-│   ├── cmd/bootstrap/        # Bootstrap binary for migrations/admin seed
-│   ├── internal/             # Internal modules
-│   │   ├── config/           # Configuration
-│   │   ├── model/            # Data models
-│   │   ├── service/          # Business logic
-│   │   ├── handler/          # HTTP handlers
-│   │   └── gateway/          # API gateway core
-│   └── resources/            # Static resources
-│
-├── frontend/                 # Vue 3 frontend
-│   └── src/
-│       ├── api/              # API calls
-│       ├── stores/           # State management
-│       ├── views/            # Page components
-│       └── components/       # Reusable components
-│
-├── deploy/                   # Deployment files
-│   ├── Caddyfile             # Example Caddy reverse proxy config
-│   └── helm/sub2api/         # Helm chart for Kubernetes deployment
-│
-└── infra/                    # Infrastructure as Code (Terraform)
-    ├── modules/              # Reusable Terraform modules
-    │   ├── doks/             # DigitalOcean Kubernetes cluster
-    │   ├── kubernetes/       # In-cluster bootstrap (ingress, cert-manager)
-    │   ├── database/         # Optional managed PostgreSQL
-    │   └── dns/              # Cloudflare DNS
-    └── production/           # Production environment root
-```
-
-Runtime YAML config is loaded from `/etc/sub2api/config.yaml`.
-
-## Disclaimer
-
-> **Please read carefully before using this project:**
->
-> :rotating_light: **Terms of Service Risk**: Using this project may violate Anthropic's Terms of Service. Please read Anthropic's user agreement carefully before use. All risks arising from the use of this project are borne solely by the user.
->
-> :book: **Disclaimer**: This project is for technical learning and research purposes only. The author assumes no responsibility for account suspension, service interruption, or any other losses caused by the use of this project.
-
----
-
-## Star History
-
-<a href="https://star-history.com/#Wei-Shaw/sub2api&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Wei-Shaw/sub2api&type=Date" />
- </picture>
-</a>
-
----
-
 ## License
 
-MIT License
-
----
-
-<div align="center">
-
-**If you find this project useful, please give it a star!**
-
-</div>
+MIT
