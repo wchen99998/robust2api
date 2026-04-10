@@ -1,12 +1,9 @@
 <template>
   <div class="grouped-surface">
     <div class="grouped-surface-header">
-      <div>
-        <div class="section-kicker">Identity</div>
-        <h2 class="grouped-surface-title">
+      <h2 class="grouped-surface-title">
         {{ t('profile.editProfile') }}
-        </h2>
-      </div>
+      </h2>
     </div>
     <div class="grouped-surface-body">
       <form @submit.prevent="handleUpdateProfile" class="space-y-4">

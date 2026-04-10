@@ -1,23 +1,28 @@
 <template>
   <AppLayout>
     <div class="account-page account-page-wide">
-      <div class="account-page-header">
-        <div class="account-page-eyebrow">My Account</div>
+      <div class="account-page-header enter-stage">
         <div class="account-page-heading">
           <div>
             <h1 class="account-page-title">{{ t('keys.title') }}</h1>
             <p class="account-page-subtitle">{{ t('keys.description') }}</p>
           </div>
-          <div class="account-page-meta">
-            <span class="muted-pill">{{ pagination.total }} {{ t('common.total').toLowerCase() }}</span>
-            <span class="muted-pill">{{ activeKeyCount }} / {{ pagination.total || apiKeys.length }}</span>
+          <div class="flex items-baseline gap-4 tabular-nums">
+            <div class="text-right">
+              <span class="text-[24px] font-bold tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark">{{ pagination.total }}</span>
+              <span class="ml-1.5 text-[13px] text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('common.total').toLowerCase() }}</span>
+            </div>
+            <div class="text-right">
+              <span class="text-[24px] font-bold tracking-tight text-mica-text-primary dark:text-mica-text-primary-dark">{{ activeKeyCount }}</span>
+              <span class="ml-1.5 text-[13px] text-mica-text-tertiary dark:text-mica-text-tertiary-dark">{{ t('common.active')?.toLowerCase() || 'active' }}</span>
+            </div>
           </div>
         </div>
       </div>
 
       <TablePageLayout>
       <template #filters>
-        <div class="grouped-surface">
+        <div class="grouped-surface enter-stage enter-stage-delay-1">
           <div class="grouped-surface-body space-y-3">
             <div class="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div class="flex flex-1 flex-wrap items-center gap-3">
