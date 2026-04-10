@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   metadata:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     outputs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
       version: ${{ steps.meta.outputs.version }}
@@ -70,7 +70,7 @@ jobs:
 
   build-frontend-dist:
     needs: metadata
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -116,16 +116,11 @@ jobs:
             dockerfile: Dockerfile.worker
           - name: bootstrap
             dockerfile: Dockerfile.bootstrap
-        platform:
-          - name: linux/amd64
-            arch: amd64
-            runner: ubuntu-24.04
-          - name: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.platform.runner }}
+    runs-on: [self-hosted, Linux, X64]
     env:
       IMAGE_NAME: ghcr.io/${{ needs.metadata.outputs.owner_lower }}/${{ needs.metadata.outputs.repo_name }}/${{ matrix.service.name }}
+      PLATFORM: linux/amd64
+      ARCH: amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -149,7 +144,7 @@ jobs:
         with:
           context: .
           file: ${{ matrix.service.dockerfile }}
-          platforms: ${{ matrix.platform.name }}
+          platforms: ${{ env.PLATFORM }}
           build-args: |
             VERSION=${{ needs.metadata.outputs.version }}
             COMMIT=${{ needs.metadata.outputs.release_commit }}
@@ -172,26 +167,18 @@ jobs:
       - name: Upload digest artifact
         uses: actions/upload-artifact@v7
         with:
-          name: digests-${{ matrix.service.name }}-${{ matrix.platform.arch }}
+          name: digests-${{ matrix.service.name }}-${{ env.ARCH }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
   build-frontend-images:
     needs: [metadata, build-frontend-dist]
-    strategy:
-      fail-fast: false
-      matrix:
-        platform:
-          - name: linux/amd64
-            arch: amd64
-            runner: ubuntu-24.04
-          - name: linux/arm64
-            arch: arm64
-            runner: ubuntu-24.04-arm
-    runs-on: ${{ matrix.platform.runner }}
+    runs-on: [self-hosted, Linux, X64]
     env:
       IMAGE_NAME: ghcr.io/${{ needs.metadata.outputs.owner_lower }}/${{ needs.metadata.outputs.repo_name }}/frontend
+      PLATFORM: linux/amd64
+      ARCH: amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -221,7 +208,7 @@ jobs:
         with:
           context: .
           file: Dockerfile.frontend.release
-          platforms: ${{ matrix.platform.name }}
+          platforms: ${{ env.PLATFORM }}
           labels: |
             org.opencontainers.image.version=${{ needs.metadata.outputs.version }}
             org.opencontainers.image.revision=${{ needs.metadata.outputs.release_commit }}
@@ -240,14 +227,14 @@ jobs:
       - name: Upload digest artifact
         uses: actions/upload-artifact@v7
         with:
-          name: digests-frontend-${{ matrix.platform.arch }}
+          name: digests-frontend-${{ env.ARCH }}
           path: ${{ runner.temp }}/digests/*
           if-no-files-found: error
           retention-days: 1
 
   merge-manifests:
     needs: [metadata, build-backend-images, build-frontend-images]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     strategy:
       fail-fast: false
       matrix:
@@ -304,7 +291,7 @@ jobs:
 
   publish-release:
     needs: [metadata, merge-manifests]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Create or update GitHub Release
         uses: actions/github-script@v8
@@ -390,7 +377,7 @@ jobs:
   sync-version-file:
     needs: [metadata, publish-release]
     if: ${{ needs.publish-release.result == 'success' }}
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
     steps:
       - name: Checkout default branch
         uses: actions/checkout@v6
