@@ -254,7 +254,7 @@ spec:
     gateway:
       enabled: true
       autoscaling:
-        enabled: false
+        enabled: true
         minReplicas: 1
         maxReplicas: 10
         targetCPUUtilization: 70
