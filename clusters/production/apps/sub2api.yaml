@@ -168,7 +168,7 @@ spec:
   values:
     image:
       bootstrap:
-        tag: "0.3.3"
+        tag: "0.4.2"
 
     imagePullSecrets:
       - name: ghcr-pull
@@ -247,7 +247,7 @@ spec:
   values:
     image:
       gateway:
-        tag: "0.3.3"
+        tag: "0.4.2"
 
     imagePullSecrets:
       - name: ghcr-pull
@@ -395,9 +395,9 @@ spec:
   values:
     image:
       control:
-        tag: "0.3.3"
+        tag: "0.4.2"
       frontend:
-        tag: "0.3.3"
+        tag: "0.4.2"
 
     imagePullSecrets:
       - name: ghcr-pull
@@ -520,7 +520,7 @@ spec:
   values:
     image:
       worker:
-        tag: "0.3.3"
+        tag: "0.4.2"
 
     imagePullSecrets:
       - name: ghcr-pull
