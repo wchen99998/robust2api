@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -135,4 +136,97 @@ func TestSettingService_GetPublicSettings_DoesNotTriggerOIDCDiscovery(t *testing
 	require.True(t, settings.OIDCOAuthEnabled)
 	require.Equal(t, "OIDC SSO", settings.OIDCOAuthProviderName)
 	require.Zero(t, discoveryHits.Load())
+}
+
+func TestSettingService_GetOIDCConnectOAuthConfig_UsesDiscoveryDefaults(t *testing.T) {
+	var discoveryHits atomic.Int32
+	discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/issuer/.well-known/openid-configuration" {
+			http.NotFound(w, r)
+			return
+		}
+		discoveryHits.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"authorization_endpoint":"https://issuer.example.com/auth",
+			"token_endpoint":"https://issuer.example.com/token",
+			"userinfo_endpoint":"https://issuer.example.com/userinfo",
+			"jwks_uri":"https://issuer.example.com/jwks"
+		}`))
+	}))
+	defer discoveryServer.Close()
+
+	svc := NewSettingService(&settingPublicRepoStub{}, &config.Config{
+		OIDC: config.OIDCConnectConfig{
+			Enabled:             true,
+			ClientID:            "client-id",
+			ClientSecret:        "client-secret",
+			IssuerURL:           discoveryServer.URL + "/issuer",
+			RedirectURL:         "https://control.example.com/api/v1/auth/oauth/oidc/callback",
+			FrontendRedirectURL: "/auth/oidc/callback",
+			Scopes:              "openid email profile",
+			TokenAuthMethod:     "client_secret_post",
+			ValidateIDToken:     true,
+			AllowedSigningAlgs:  "RS256",
+			ClockSkewSeconds:    120,
+		},
+	})
+
+	effective, err := svc.GetOIDCConnectOAuthConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "OIDC", effective.ProviderName)
+	require.Equal(t, discoveryServer.URL+"/issuer/.well-known/openid-configuration", effective.DiscoveryURL)
+	require.Equal(t, "https://issuer.example.com/auth", effective.AuthorizeURL)
+	require.Equal(t, "https://issuer.example.com/token", effective.TokenURL)
+	require.Equal(t, "https://issuer.example.com/userinfo", effective.UserInfoURL)
+	require.Equal(t, "https://issuer.example.com/jwks", effective.JWKSURL)
+	require.Equal(t, int32(1), discoveryHits.Load())
+}
+
+func TestSettingService_GetOIDCConnectOAuthConfig_AllowsPublicClientWithPKCE(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{}, &config.Config{
+		OIDC: config.OIDCConnectConfig{
+			Enabled:             true,
+			ClientID:            "public-client",
+			IssuerURL:           "https://issuer.example.com",
+			AuthorizeURL:        "https://issuer.example.com/auth",
+			TokenURL:            "https://issuer.example.com/token",
+			UserInfoURL:         "https://issuer.example.com/userinfo",
+			RedirectURL:         "https://control.example.com/api/v1/auth/oauth/oidc/callback",
+			FrontendRedirectURL: "/auth/oidc/callback",
+			Scopes:              "openid profile",
+			TokenAuthMethod:     "none",
+			UsePKCE:             true,
+			ClockSkewSeconds:    60,
+		},
+	})
+
+	effective, err := svc.GetOIDCConnectOAuthConfig(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "none", effective.TokenAuthMethod)
+	require.True(t, effective.UsePKCE)
+}
+
+func TestSettingService_GetOIDCConnectOAuthConfig_RejectsPublicClientWithoutPKCE(t *testing.T) {
+	svc := NewSettingService(&settingPublicRepoStub{}, &config.Config{
+		OIDC: config.OIDCConnectConfig{
+			Enabled:             true,
+			ClientID:            "public-client",
+			IssuerURL:           "https://issuer.example.com",
+			AuthorizeURL:        "https://issuer.example.com/auth",
+			TokenURL:            "https://issuer.example.com/token",
+			UserInfoURL:         "https://issuer.example.com/userinfo",
+			RedirectURL:         "https://control.example.com/api/v1/auth/oauth/oidc/callback",
+			FrontendRedirectURL: "/auth/oidc/callback",
+			Scopes:              "openid profile",
+			TokenAuthMethod:     "none",
+			UsePKCE:             false,
+			ClockSkewSeconds:    60,
+		},
+	})
+
+	_, err := svc.GetOIDCConnectOAuthConfig(context.Background())
+	require.Error(t, err)
+	require.Equal(t, "OAUTH_CONFIG_INVALID", infraerrors.Reason(err))
+	require.Equal(t, "oauth pkce must be enabled when token_auth_method=none", infraerrors.Message(err))
 }
