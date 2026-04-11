@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 )
 
-const resetSessionDriverName = "sub2api-test-reset-session"
+const resetSessionDriverName = "robust2api-test-reset-session"
 
 var (
 	registerResetSessionDriverOnce sync.Once

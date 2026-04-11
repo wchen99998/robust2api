@@ -119,7 +119,7 @@
 
                 <a
                   v-if="authStore.isAdmin"
-                  href="https://github.com/Wei-Shaw/sub2api"
+:href="ORIGIN_REPO_URL"
                   target="_blank"
                   rel="noopener noreferrer"
                   @click="closeDropdown"
@@ -213,6 +213,7 @@ import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import SubscriptionProgressMini from '@/components/common/SubscriptionProgressMini.vue'
 import AnnouncementBell from '@/components/common/AnnouncementBell.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { ORIGIN_REPO_URL } from '@/constants/project'
 
 const router = useRouter()
 const route = useRoute()

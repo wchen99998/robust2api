@@ -29,7 +29,7 @@ const (
 	RoleBilling Role = "billing"
 )
 
-var configSearchPaths = []string{"/etc/sub2api"}
+var configSearchPaths = []string{"/etc/robust2api"}
 
 // 使用量记录队列溢出策略
 const (
@@ -1127,7 +1127,7 @@ func setDefaults() {
 	// Log
 	viper.SetDefault("log.level", "info")
 	viper.SetDefault("log.format", "console")
-	viper.SetDefault("log.service_name", "sub2api")
+	viper.SetDefault("log.service_name", "robust2api")
 	viper.SetDefault("log.env", "production")
 	viper.SetDefault("log.caller", true)
 	viper.SetDefault("log.stacktrace_level", "error")
@@ -1238,7 +1238,7 @@ func setDefaults() {
 	viper.SetDefault("database.port", 5432)
 	viper.SetDefault("database.user", "postgres")
 	viper.SetDefault("database.password", "postgres")
-	viper.SetDefault("database.dbname", "sub2api")
+	viper.SetDefault("database.dbname", "robust2api")
 	viper.SetDefault("database.sslmode", "prefer")
 	viper.SetDefault("database.max_open_conns", 256)
 	viper.SetDefault("database.max_idle_conns", 128)
@@ -1317,7 +1317,7 @@ func setDefaults() {
 
 	// Dashboard cache
 	viper.SetDefault("dashboard_cache.enabled", true)
-	viper.SetDefault("dashboard_cache.key_prefix", "sub2api:")
+	viper.SetDefault("dashboard_cache.key_prefix", "robust2api:")
 	viper.SetDefault("dashboard_cache.stats_fresh_ttl_seconds", 15)
 	viper.SetDefault("dashboard_cache.stats_ttl_seconds", 30)
 	viper.SetDefault("dashboard_cache.stats_refresh_timeout_seconds", 30)
@@ -1490,7 +1490,7 @@ func setDefaults() {
 
 	// OpenTelemetry
 	viper.SetDefault("otel.enabled", false)
-	viper.SetDefault("otel.service_name", "sub2api")
+	viper.SetDefault("otel.service_name", "robust2api")
 	viper.SetDefault("otel.endpoint", "http://alloy.monitoring.svc:4318")
 	viper.SetDefault("otel.trace_sample_rate", 0.1)
 	viper.SetDefault("otel.metrics_port", 9090)

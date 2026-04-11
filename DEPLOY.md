@@ -1,9 +1,9 @@
 # Kubernetes Deployment Guide
 
-Sub2API runs on DigitalOcean Kubernetes (DOKS) with a clean ownership split:
+Robust2API runs on DigitalOcean Kubernetes (DOKS) with a clean ownership split:
 
 - **Terraform** manages cloud resources: DOKS cluster, optional managed PostgreSQL, optional R2 storage buckets, and Cloudflare API token bootstrap secrets.
-- **Flux CD** manages everything inside the cluster: ingress-nginx, cert-manager, ExternalDNS, the Sub2API application, and the monitoring stack (LGTM) — all via GitOps.
+- **Flux CD** manages everything inside the cluster: ingress-nginx, cert-manager, ExternalDNS, the Robust2API application, and the monitoring stack (LGTM) — all via GitOps.
 
 All in-cluster changes are made by editing YAML files in `clusters/production/`, committing, and pushing. Flux reconciles automatically within 1 minute.
 
@@ -14,7 +14,7 @@ DO Load Balancer (TLS passthrough)
     |
 ingress-nginx (TLS via cert-manager DNS-01 / Let's Encrypt)
     |
-Sub2API pods (namespace: sub2api)
+Robust2API pods (namespace: robust2api)
     +-- Redis (in-cluster Bitnami, standalone)
     +-- PostgreSQL (in-cluster Bitnami or external DO Managed)
 
@@ -62,8 +62,8 @@ Flux CD (namespace: flux-system)
 | `infrastructure` | `clusters/production/infrastructure/` | ingress-nginx, cert-manager, external-dns, namespaces, Helm sources |
 | `cert-manager-issuers` | `clusters/production/infrastructure/issuers/` | ClusterIssuer (depends on cert-manager CRDs) |
 | `monitoring` | `clusters/production/monitoring/` | Monitoring HelmRelease (Prometheus, Grafana, Tempo, Loki, Alloy) |
-| `apps` | `clusters/production/apps/` | Sub2API HelmRelease (gateway, control, worker, bootstrap, Grafana datasource, in-cluster DB reader-role provisioning) |
-| `grafana-apps` | `clusters/production/grafana-apps/` | Sub2API Grafana dashboards (post-app provisioning) |
+| `apps` | `clusters/production/apps/` | Robust2API HelmRelease (gateway, control, worker, bootstrap, Grafana datasource, in-cluster DB reader-role provisioning) |
+| `grafana-apps` | `clusters/production/grafana-apps/` | Robust2API Grafana dashboards (post-app provisioning) |
 
 Dependency chain: `infrastructure` -> `cert-manager-issuers` -> `monitoring` -> `apps` -> `grafana-apps`.
 
@@ -79,7 +79,7 @@ Edit `terraform.tfvars`:
 ```hcl
 do_token             = "dop_v1_..."
 region               = "sgp1"
-cluster_name         = "sub2api"
+cluster_name         = "robust2api"
 k8s_version          = "1.34"
 node_size            = "s-2vcpu-4gb"
 min_nodes            = 2
@@ -105,23 +105,23 @@ Flux HelmReleases reference secrets via `valuesFrom`. Create them before bootstr
 
 ```bash
 kubectl create secret docker-registry ghcr-pull \
-  -n sub2api \
+  -n robust2api \
   --docker-server=ghcr.io \
   --docker-username=<github-username> \
   --docker-password=<github-pat-with-read-packages>
 ```
 
-### Sub2API Secrets
+### Robust2API Secrets
 
 ```bash
-kubectl create namespace sub2api --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace robust2api --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl apply -f - <<'EOF'
 apiVersion: v1
 kind: Secret
 metadata:
-  name: sub2api-secrets
-  namespace: sub2api
+  name: robust2api-secrets
+  namespace: robust2api
 type: Opaque
 stringData:
   secrets.jwtSecret: "<random-32-char>"
@@ -135,9 +135,9 @@ stringData:
 EOF
 ```
 
-The default GitOps manifests in [clusters/production/apps/sub2api.yaml](/Users/chenwuhao/Dev/sub2api/clusters/production/apps/sub2api.yaml) run PostgreSQL and Redis in-cluster, and the bootstrap, gateway, control, and worker releases reuse `postgresql.auth.password` and `redis.auth.password` when connecting to those services. You do not need duplicate `externalDatabase.password` or `externalRedis.password` entries for that path.
+The default GitOps manifests in [clusters/production/apps/robust2api.yaml](/Users/chenwuhao/Dev/robust2api/clusters/production/apps/robust2api.yaml) run PostgreSQL and Redis in-cluster, and the bootstrap, gateway, control, and worker releases reuse `postgresql.auth.password` and `redis.auth.password` when connecting to those services. You do not need duplicate `externalDatabase.password` or `externalRedis.password` entries for that path.
 
-If you switch the manifests to external PostgreSQL or Redis, update the affected `valuesFrom` entries in [clusters/production/apps/sub2api.yaml](/Users/chenwuhao/Dev/sub2api/clusters/production/apps/sub2api.yaml) to source the external credentials, and keep `postgresql.auth.postgresPassword` empty when `postgresql.enabled=false`.
+If you switch the manifests to external PostgreSQL or Redis, update the affected `valuesFrom` entries in [clusters/production/apps/robust2api.yaml](/Users/chenwuhao/Dev/robust2api/clusters/production/apps/robust2api.yaml) to source the external credentials, and keep `postgresql.auth.postgresPassword` empty when `postgresql.enabled=false`.
 
 If you provision DigitalOcean Managed PostgreSQL via Terraform, copy the `grafana_reader_user` / `grafana_reader_password` outputs into `grafanaProvisioning.reader.username` / `grafanaProvisioning.reader.password`.
 
@@ -184,7 +184,7 @@ EOF
 ```
 
 Flux substitutes `${BASE_DOMAIN}`, `${ADMIN_EMAIL}`, and `${CF_R2_ACCOUNT_ID}`
-in `apps/sub2api.yaml`, `infrastructure/external-dns.yaml`,
+in `apps/robust2api.yaml`, `infrastructure/external-dns.yaml`,
 `infrastructure/issuers/cluster-issuer.yaml`, and `monitoring/monitoring.yaml`
 at reconcile time. If you change any of these values later, update the
 ConfigMap and Flux will re-apply on the next reconcile.
@@ -198,7 +198,7 @@ Edit `clusters/production/` files with your production values before bootstrappi
 | `infrastructure/external-dns.yaml` | `txtOwnerId`; uncomment `extraArgs: [--cloudflare-proxied]` if using CF proxy |
 | `monitoring/monitoring.yaml` | `grafanaIngress.enabled`, optional `grafanaIngress.host`, R2 bucket names |
 | `monitoring.yaml` | Set `spec.suspend: false` to enable monitoring |
-| `apps/sub2api.yaml` | Image tags, public URL scheme/host overrides, ingress TLS/override settings, resource limits, `observability` settings, `grafanaProvisioning` enablement |
+| `apps/robust2api.yaml` | Image tags, public URL scheme/host overrides, ingress TLS/override settings, resource limits, `observability` settings, `grafanaProvisioning` enablement |
 | `grafana-apps/grafana-apps.yaml` | Dashboard release values if you need to override the monitoring namespace |
 
 Domain, Let's Encrypt email, and Cloudflare R2 account ID come from the
@@ -207,8 +207,8 @@ Domain, Let's Encrypt email, and Cloudflare R2 account ID come from the
 By default, public ingress hosts follow the shared `service-namespace.domain`
 convention. For example:
 
-- `gateway-sub2api.<baseDomain>` for the API gateway
-- `app-sub2api.<baseDomain>` for the control/frontend app
+- `gateway-robust2api.<baseDomain>` for the API gateway
+- `app-robust2api.<baseDomain>` for the control/frontend app
 - `grafana-monitoring.<baseDomain>` for Grafana
 
 Set explicit `host` or URL override fields only when you intentionally want a
@@ -218,7 +218,7 @@ Public URL schemes are configured separately from ingress TLS so deployments
 that terminate HTTPS at Cloudflare, a load balancer, or another proxy can still
 publish `https://` URLs correctly. If Grafana uses an explicit
 `monitoring.grafanaIngress.host`, mirror that hostname in
-`apps/sub2api.yaml` under `public.grafana.host` unless you set a full
+`apps/robust2api.yaml` under `public.grafana.host` unless you set a full
 `config.grafanaUrl` override there instead.
 
 ## 4. Bootstrap Flux
@@ -253,11 +253,11 @@ flux get sources git
 # external-dns  1.16.1    True   Helm upgrade succeeded...
 # ingress-nginx 4.12.1    True   Helm upgrade succeeded...
 # monitoring    0.1.0+... True   Helm upgrade succeeded...
-# sub2api       0.2.0+... True   Helm upgrade succeeded...
+# robust2api       0.2.0+... True   Helm upgrade succeeded...
 # grafana-apps  0.1.0+... True   Helm upgrade succeeded...
 
 # Pods
-kubectl get pods -n sub2api
+kubectl get pods -n robust2api
 kubectl get pods -n monitoring
 kubectl get pods -n ingress-nginx
 kubectl get pods -n cert-manager
@@ -280,7 +280,7 @@ git tag v0.4.0
 git push origin v0.4.0
 ```
 
-2. Update image tags in `clusters/production/apps/sub2api.yaml`:
+2. Update image tags in `clusters/production/apps/robust2api.yaml`:
 
 ```yaml
 image:
@@ -299,7 +299,7 @@ image:
 3. Commit and push — Flux deploys automatically:
 
 ```bash
-git add clusters/production/apps/sub2api.yaml
+git add clusters/production/apps/robust2api.yaml
 git commit -m "deploy: v0.4.0"
 git push
 ```
@@ -328,7 +328,7 @@ git push
 ```bash
 flux reconcile source git flux-system          # Fetch latest git
 flux reconcile kustomization apps              # Reconcile apps layer
-flux reconcile helmrelease sub2api -n sub2api  # Reconcile specific release
+flux reconcile helmrelease robust2api -n robust2api  # Reconcile specific release
 flux reconcile helmrelease monitoring -n monitoring
 ```
 
@@ -343,7 +343,7 @@ flux resume kustomization monitoring     # Resume monitoring
 
 ### Dashboards
 
-Four Sub2API dashboards are provisioned automatically via the `grafana-apps` HelmRelease after both the monitoring and app layers are ready:
+Four Robust2API dashboards are provisioned automatically via the `grafana-apps` HelmRelease after both the monitoring and app layers are ready:
 
 | Dashboard | Datasource | Description |
 |-----------|-----------|-------------|
@@ -352,23 +352,23 @@ Four Sub2API dashboards are provisioned automatically via the `grafana-apps` Hel
 | **Runtime** | Prometheus | RPS, error rate, p95 latency, p95 TTFT, token throughput, upstream errors, failovers, rate limit rejections, queue depth, active accounts |
 | **Resources** | Prometheus | Goroutines, memory usage (stack/other), GC pause duration |
 
-The Runtime dashboard metrics (`sub2api_*`) only populate when real authenticated API traffic flows through the gateway. Until then, panels show "No data" — this is expected.
+The Runtime dashboard metrics (`robust2api_*`) only populate when real authenticated API traffic flows through the gateway. Until then, panels show "No data" — this is expected.
 
 ### Observability Pipeline
 
 ```
-Sub2API pods --OTLP/gRPC--> Alloy (port 4317) ---> Tempo (traces -> R2)
+Robust2API pods --OTLP/gRPC--> Alloy (port 4317) ---> Tempo (traces -> R2)
                                                  |-> Loki (logs -> R2)
-Sub2API pods --/metrics--> Prometheus (scrape via ServiceMonitor)
+Robust2API pods --/metrics--> Prometheus (scrape via ServiceMonitor)
 ```
 
-Configuration in `clusters/production/apps/sub2api.yaml`:
+Configuration in `clusters/production/apps/robust2api.yaml`:
 
 ```yaml
 observability:
   enabled: true
   otel:
-    serviceName: sub2api
+    serviceName: robust2api
     endpoint: "monitoring-alloy.monitoring.svc:4317"
     traceSampleRate: "0.1"
     metricsPort: 9090
@@ -381,8 +381,8 @@ observability:
 
 Provisioned automatically:
 - `monitoring` provisions Prometheus, Loki, Tempo, and Alertmanager.
-- `sub2api` provisions the Sub2API PostgreSQL datasource into the monitoring namespace.
-- In in-cluster PostgreSQL mode, `sub2api` also reconciles the `grafana_reader` role after install/upgrade.
+- `robust2api` provisions the Robust2API PostgreSQL datasource into the monitoring namespace.
+- In in-cluster PostgreSQL mode, `robust2api` also reconciles the `grafana_reader` role after install/upgrade.
 
 ## Troubleshooting
 
@@ -413,11 +413,11 @@ kubectl get nodes -o wide                  # Check node count
 Options:
 - Increase `max_nodes` in `terraform.tfvars` and `terraform apply`
 - Reduce resource requests in the HelmRelease values
-- The sub2api chart uses `preferredDuringSchedulingIgnoredDuringExecution` anti-affinity, so pods can land on the PostgreSQL node if needed
+- The robust2api chart uses `preferredDuringSchedulingIgnoredDuringExecution` anti-affinity, so pods can land on the PostgreSQL node if needed
 
 ### ImagePullBackOff
 
-- Verify `ghcr-pull` secret: `kubectl get secret ghcr-pull -n sub2api`
+- Verify `ghcr-pull` secret: `kubectl get secret ghcr-pull -n robust2api`
 - Check token has `read:packages` scope
 - Verify image exists: `docker manifest inspect ghcr.io/wchen99998/robust2api/gateway:<tag>`
 
@@ -436,12 +436,12 @@ Common cause: Cloudflare API token missing DNS edit permission.
 The bootstrap job runs DB migrations and may CrashLoop briefly while PostgreSQL starts. Check:
 
 ```bash
-kubectl logs -n sub2api -l app.kubernetes.io/component=bootstrap --tail=50
+kubectl logs -n robust2api -l app.kubernetes.io/component=bootstrap --tail=50
 ```
 
 ### Flux Controller Logs
 
 ```bash
 flux logs --level=error
-flux logs --kind=HelmRelease --name=sub2api --namespace=sub2api
+flux logs --kind=HelmRelease --name=robust2api --namespace=robust2api
 ```

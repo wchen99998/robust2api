@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/pkg/timezone"
 	"github.com/XSAM/otelsql"
 	_ "github.com/lib/pq"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"

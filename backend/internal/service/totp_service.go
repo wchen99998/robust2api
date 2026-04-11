@@ -11,7 +11,7 @@ import (
 
 	"github.com/pquerna/otp/totp"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	infraerrors "github.com/wchen99998/robust2api/internal/pkg/errors"
 )
 
 var (
@@ -83,7 +83,7 @@ const (
 	totpLoginTTL    = 5 * time.Minute
 	totpAttemptsTTL = 15 * time.Minute
 	maxTotpAttempts = 5
-	totpIssuer      = "robust2api"
+	totpIssuer      = "Robust2API"
 )
 
 // TotpService handles TOTP operations

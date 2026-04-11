@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/pkg/pagination"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/stretchr/testify/require"
 )
 

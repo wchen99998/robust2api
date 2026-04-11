@@ -10,16 +10,16 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-const gatewayTracerName = "sub2api.gateway"
+const gatewayTracerName = "robust2api.gateway"
 
 const (
-	EventFailoverCandidate = "sub2api.failover_candidate_detected"
-	EventSameAccountRetry  = "sub2api.same_account_retry"
-	EventAccountSwitch     = "sub2api.account_switch"
-	EventUpstreamTimeout   = "sub2api.upstream_timeout"
-	EventStreamIdleTimeout = "sub2api.stream_idle_timeout"
-	EventClientDisconnect  = "sub2api.client_disconnect"
-	EventFallbackResponse  = "sub2api.fallback_response_written"
+	EventFailoverCandidate = "robust2api.failover_candidate_detected"
+	EventSameAccountRetry  = "robust2api.same_account_retry"
+	EventAccountSwitch     = "robust2api.account_switch"
+	EventUpstreamTimeout   = "robust2api.upstream_timeout"
+	EventStreamIdleTimeout = "robust2api.stream_idle_timeout"
+	EventClientDisconnect  = "robust2api.client_disconnect"
+	EventFallbackResponse  = "robust2api.fallback_response_written"
 )
 
 func GatewayTracer() trace.Tracer {
@@ -27,63 +27,63 @@ func GatewayTracer() trace.Tracer {
 }
 
 func AttrPlatform(value string) attribute.KeyValue {
-	return attribute.String("sub2api.platform", strings.TrimSpace(value))
+	return attribute.String("robust2api.platform", strings.TrimSpace(value))
 }
 
 func AttrRequestedModel(value string) attribute.KeyValue {
-	return attribute.String("sub2api.requested_model", strings.TrimSpace(value))
+	return attribute.String("robust2api.requested_model", strings.TrimSpace(value))
 }
 
 func AttrEffectiveModel(value string) attribute.KeyValue {
-	return attribute.String("sub2api.effective_model", strings.TrimSpace(value))
+	return attribute.String("robust2api.effective_model", strings.TrimSpace(value))
 }
 
 func AttrStream(value bool) attribute.KeyValue {
-	return attribute.Bool("sub2api.stream", value)
+	return attribute.Bool("robust2api.stream", value)
 }
 
 func AttrUserID(value int64) attribute.KeyValue {
-	return attribute.Int64("sub2api.user_id", value)
+	return attribute.Int64("robust2api.user_id", value)
 }
 
 func AttrAPIKeyID(value int64) attribute.KeyValue {
-	return attribute.Int64("sub2api.api_key_id", value)
+	return attribute.Int64("robust2api.api_key_id", value)
 }
 
 func AttrGroupID(value int64) attribute.KeyValue {
-	return attribute.Int64("sub2api.group_id", value)
+	return attribute.Int64("robust2api.group_id", value)
 }
 
 func AttrAccountID(value int64) attribute.KeyValue {
-	return attribute.Int64("sub2api.account_id", value)
+	return attribute.Int64("robust2api.account_id", value)
 }
 
 func AttrTransport(value string) attribute.KeyValue {
-	return attribute.String("sub2api.transport", strings.TrimSpace(value))
+	return attribute.String("robust2api.transport", strings.TrimSpace(value))
 }
 
 func AttrUpstreamRequestID(value string) attribute.KeyValue {
-	return attribute.String("sub2api.upstream_request_id", strings.TrimSpace(value))
+	return attribute.String("robust2api.upstream_request_id", strings.TrimSpace(value))
 }
 
 func AttrUpstreamStatusCode(value int) attribute.KeyValue {
-	return attribute.Int("sub2api.upstream_status_code", value)
+	return attribute.Int("robust2api.upstream_status_code", value)
 }
 
 func AttrUpstreamLatencyMs(value int64) attribute.KeyValue {
-	return attribute.Int64("sub2api.upstream_latency_ms", value)
+	return attribute.Int64("robust2api.upstream_latency_ms", value)
 }
 
 func AttrTTFTMs(value int64) attribute.KeyValue {
-	return attribute.Int64("sub2api.ttft_ms", value)
+	return attribute.Int64("robust2api.ttft_ms", value)
 }
 
 func AttrFailoverSwitchCount(value int) attribute.KeyValue {
-	return attribute.Int("sub2api.failover_switch_count", value)
+	return attribute.Int("robust2api.failover_switch_count", value)
 }
 
 func AttrStatusCodeLabel(value int) attribute.KeyValue {
-	return attribute.String("sub2api.status_code", strconv.Itoa(value))
+	return attribute.String("robust2api.status_code", strconv.Itoa(value))
 }
 
 func SetSpanAttributes(span trace.Span, attrs ...attribute.KeyValue) {

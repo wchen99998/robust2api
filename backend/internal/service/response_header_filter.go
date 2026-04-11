@@ -1,8 +1,8 @@
 package service
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/util/responseheaders"
 )
 
 func compileResponseHeaderFilter(cfg *config.Config) *responseheaders.CompiledHeaderFilter {

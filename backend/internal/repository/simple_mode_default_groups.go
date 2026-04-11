@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/group"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/wchen99998/robust2api/ent"
+	"github.com/wchen99998/robust2api/ent/group"
+	"github.com/wchen99998/robust2api/internal/service"
 )
 
 func EnsureSimpleModeDefaultGroups(ctx context.Context, client *dbent.Client) error {

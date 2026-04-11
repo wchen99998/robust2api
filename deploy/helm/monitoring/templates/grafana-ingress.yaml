@@ -1,6 +1,6 @@
 {{- $hostOverride := trim (default "" .Values.grafanaIngress.host) -}}
 {{- if or .Values.grafanaIngress.enabled $hostOverride }}
-{{- $grafanaHost := required "grafanaIngress.host or public.baseDomain must be set when Grafana ingress is requested" (include "sub2api-monitoring.grafanaHost" . | trim) -}}
+{{- $grafanaHost := required "grafanaIngress.host or public.baseDomain must be set when Grafana ingress is requested" (include "robust2api-monitoring.grafanaHost" . | trim) -}}
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

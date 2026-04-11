@@ -1,0 +1,73 @@
+{{- if and .Values.frontend.enabled .Values.control.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "robust2api.fullname" . }}-frontend
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "robust2api.frontend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "robust2api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "robust2api.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: {{ default 20 .Values.frontend.terminationGracePeriodSeconds }}
+      containers:
+        - name: frontend
+          image: "{{ .Values.image.frontend.repository }}:{{ .Values.image.frontend.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.frontend.pullPolicy }}
+          env:
+            - name: CONTROL_UPSTREAM
+              value: "http://{{ include "robust2api.frontendControlServiceName" . }}:{{ .Values.controlAPIService.port }}"
+            - name: GATEWAY_UPSTREAM
+              value: "http://{{ include "robust2api.frontendGatewayServiceName" . }}:{{ .Values.service.port }}"
+            - name: EXTRA_FRAME_SRC_ORIGINS
+              value: {{ include "robust2api.frameSrcOrigins" . | quote }}
+          ports:
+            - name: frontend
+              containerPort: {{ .Values.control.frontend.port }}
+              protocol: TCP
+          resources:
+            {{- toYaml .Values.control.frontend.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.frontend.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- range . }}
+        - maxSkew: {{ .maxSkew }}
+          topologyKey: {{ .topologyKey }}
+          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          {{- if .labelSelector }}
+          labelSelector:
+            {{- toYaml .labelSelector | nindent 12 }}
+          {{- else }}
+          labelSelector:
+            matchLabels:
+              {{- include "robust2api.frontend.selectorLabels" $ | nindent 14 }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+{{- end }}

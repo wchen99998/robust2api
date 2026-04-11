@@ -13,8 +13,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/wchen99998/robust2api/internal/config"
+	infraerrors "github.com/wchen99998/robust2api/internal/pkg/errors"
 	"github.com/imroc/req/v3"
 	"golang.org/x/sync/singleflight"
 )
@@ -260,7 +260,7 @@ func (s *SettingService) GetPublicSettings(ctx context.Context) (*PublicSettings
 		TotpEnabled:                      settings[SettingKeyTotpEnabled] == "true",
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
-		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "robust2api"),
+		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Robust2API"),
 		SiteLogo:                         settings[SettingKeySiteLogo],
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                       s.resolveAPIBaseURL(settings),
@@ -864,7 +864,7 @@ func (s *SettingService) IsTotpEncryptionKeyConfigured() bool {
 func (s *SettingService) GetSiteName(ctx context.Context) string {
 	value, err := s.settingRepo.GetValue(ctx, SettingKeySiteName)
 	if err != nil || value == "" {
-		return "robust2api"
+		return "Robust2API"
 	}
 	return value
 }
@@ -920,7 +920,7 @@ func (s *SettingService) InitializeDefaultSettings(ctx context.Context) error {
 		SettingKeyEmailVerifyEnabled:               "false",
 		SettingKeyRegistrationEmailSuffixWhitelist: "[]",
 		SettingKeyPromoCodeEnabled:                 "true", // 默认启用优惠码功能
-		SettingKeySiteName:                         "robust2api",
+		SettingKeySiteName:                         "Robust2API",
 		SettingKeySiteLogo:                         "",
 		SettingKeyPurchaseSubscriptionEnabled:      "false",
 		SettingKeyPurchaseSubscriptionURL:          "",
@@ -979,7 +979,7 @@ func (s *SettingService) parseSettings(settings map[string]string) *SystemSettin
 		TurnstileEnabled:                 settings[SettingKeyTurnstileEnabled] == "true",
 		TurnstileSiteKey:                 settings[SettingKeyTurnstileSiteKey],
 		TurnstileSecretKeyConfigured:     settings[SettingKeyTurnstileSecretKey] != "",
-		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "robust2api"),
+		SiteName:                         s.getStringOrDefault(settings, SettingKeySiteName, "Robust2API"),
 		SiteLogo:                         settings[SettingKeySiteLogo],
 		SiteSubtitle:                     s.getStringOrDefault(settings, SettingKeySiteSubtitle, "Subscription to API Conversion Platform"),
 		APIBaseURL:                       s.resolveAPIBaseURL(settings),

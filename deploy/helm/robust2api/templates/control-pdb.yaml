@@ -1,0 +1,14 @@
+{{- if and .Values.control.enabled .Values.control.pdb.enabled }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "robust2api.fullname" . }}-control
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: control
+spec:
+  minAvailable: {{ .Values.control.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "robust2api.control.selectorLabels" . | nindent 6 }}
+{{- end }}

@@ -1,7 +1,7 @@
 variable "cluster_name" {
   description = "Name prefix for the database cluster"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "region" {
@@ -24,13 +24,13 @@ variable "db_engine_version" {
 variable "db_name" {
   description = "Name of the database to create"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "db_user" {
   description = "Name of the database user to create"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "grafana_reader_user" {
@@ -47,5 +47,5 @@ variable "doks_cluster_id" {
 variable "tags" {
   description = "Tags to apply to database resources"
   type        = list(string)
-  default     = ["sub2api", "terraform"]
+  default     = ["robust2api", "terraform"]
 }

@@ -12,8 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	platformconfig "github.com/Wei-Shaw/sub2api/internal/platform/config"
-	platformlogging "github.com/Wei-Shaw/sub2api/internal/platform/logging"
+	platformconfig "github.com/wchen99998/robust2api/internal/platform/config"
+	platformlogging "github.com/wchen99998/robust2api/internal/platform/logging"
 )
 
 func Run() error {

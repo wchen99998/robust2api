@@ -1,4 +1,4 @@
-module github.com/Wei-Shaw/sub2api
+module github.com/wchen99998/robust2api
 
 go 1.26.2
 

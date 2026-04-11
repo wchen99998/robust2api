@@ -44,7 +44,7 @@ describe('admin DashboardView', () => {
     })
 
     const iframe = wrapper.get('iframe')
-    const dashboardUrl = 'https://grafana.example.com/d/sub2api-admin-overview/sub2api-admin-overview'
+    const dashboardUrl = 'https://grafana.example.com/d/robust2api-admin-overview/robust2api-admin-overview'
     expect(iframe.attributes('src')).toBe(dashboardUrl)
     expect(wrapper.get('a').attributes('href')).toBe(dashboardUrl)
   })
@@ -66,7 +66,7 @@ describe('admin DashboardView', () => {
     })
 
     expect(wrapper.get('iframe').attributes('src')).toBe(
-      'https://grafana.example.com/grafana/d/sub2api-admin-overview/sub2api-admin-overview'
+      'https://grafana.example.com/grafana/d/robust2api-admin-overview/robust2api-admin-overview'
     )
   })
 

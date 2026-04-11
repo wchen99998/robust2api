@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
-	"github.com/Wei-Shaw/sub2api/internal/repository"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/ent"
+	"github.com/wchen99998/robust2api/internal/pkg/timezone"
+	"github.com/wchen99998/robust2api/internal/repository"
+	"github.com/wchen99998/robust2api/internal/service"
 
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"

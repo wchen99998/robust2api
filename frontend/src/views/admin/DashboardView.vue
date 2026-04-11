@@ -56,8 +56,8 @@ import Icon from '@/components/icons/Icon.vue'
 const { t } = useI18n()
 const appStore = useAppStore()
 
-const GRAFANA_DASHBOARD_UID = 'sub2api-admin-overview'
-const GRAFANA_DASHBOARD_SLUG = 'sub2api-admin-overview'
+const GRAFANA_DASHBOARD_UID = 'robust2api-admin-overview'
+const GRAFANA_DASHBOARD_SLUG = 'robust2api-admin-overview'
 
 const rawGrafanaUrl = computed(() => {
   return appStore.cachedPublicSettings?.grafana_url ?? appStore.grafanaUrl ?? ''

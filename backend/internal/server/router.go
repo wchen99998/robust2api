@@ -3,12 +3,12 @@ package server
 import (
 	"net/http"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/handler"
-	"github.com/Wei-Shaw/sub2api/internal/health"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/server/routes"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/handler"
+	"github.com/wchen99998/robust2api/internal/health"
+	middleware2 "github.com/wchen99998/robust2api/internal/server/middleware"
+	"github.com/wchen99998/robust2api/internal/server/routes"
+	"github.com/wchen99998/robust2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -63,7 +63,7 @@ func SetupControlRouter(
 
 func applySharedRouterMiddleware(r *gin.Engine, cfg *config.Config) {
 	if cfg.Otel.Enabled {
-		r.Use(otelgin.Middleware("sub2api",
+		r.Use(otelgin.Middleware("robust2api",
 			otelgin.WithFilter(func(r *http.Request) bool {
 				p := r.URL.Path
 				return p != "/livez" && p != "/readyz" && p != "/startupz" && p != "/health"

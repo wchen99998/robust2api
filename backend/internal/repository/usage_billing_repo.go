@@ -6,8 +6,8 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	"github.com/wchen99998/robust2api/internal/service"
 )
 
 type usageBillingRepository struct {

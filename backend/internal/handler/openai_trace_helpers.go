@@ -3,8 +3,8 @@ package handler
 import (
 	"context"
 
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"

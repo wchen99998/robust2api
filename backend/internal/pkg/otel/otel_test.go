@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/config"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/sdk/instrumentation"
@@ -44,7 +44,7 @@ func TestFilteredTraceExporter_DropsFastRedisSpans(t *testing.T) {
 	err := exporter.ExportSpans(context.Background(), []sdktrace.ReadOnlySpan{
 		testSpanStub("redis.get", "github.com/redis/go-redis/extra/redisotel", 500*time.Microsecond, codes.Unset).Snapshot(),
 		testSpanStub("redis.dial", "github.com/redis/go-redis/extra/redisotel", 5*time.Millisecond, codes.Unset).Snapshot(),
-		testSpanStub("http.request", "sub2api.gateway", 250*time.Microsecond, codes.Unset).Snapshot(),
+		testSpanStub("http.request", "robust2api.gateway", 250*time.Microsecond, codes.Unset).Snapshot(),
 	})
 	require.NoError(t, err)
 

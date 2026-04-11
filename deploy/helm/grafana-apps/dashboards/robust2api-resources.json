@@ -1,0 +1,51 @@
+{
+  "title": "Robust2API Resources",
+  "uid": "robust2api-resources",
+  "schemaVersion": 39,
+  "version": 1,
+  "timezone": "browser",
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "title": "Goroutines",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "go_goroutine_count{job=~\".*robust2api.*\"}",
+          "legendFormat": "Goroutines"
+        }
+      ]
+    },
+    {
+      "title": "Memory Usage",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum(go_memory_used_bytes{job=~\".*robust2api.*\"}) by (go_memory_type) / 1024 / 1024",
+          "legendFormat": "{{go_memory_type}} Used (MB)"
+        },
+        {
+          "expr": "sum(go_memory_gc_goal_bytes{job=~\".*robust2api.*\"}) / 1024 / 1024",
+          "legendFormat": "GC Goal (MB)"
+        }
+      ]
+    },
+    {
+      "title": "GC Pause Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus" },
+      "targets": [
+        {
+          "expr": "rate(go_gc_duration_seconds_sum{job=~\".*robust2api.*\"}[5m]) * 1000",
+          "legendFormat": "GC Pause (ms/s)"
+        }
+      ]
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 package otel
 
 import (
-	appotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	appotel "github.com/wchen99998/robust2api/internal/pkg/otel"
 	"github.com/google/wire"
 )
 

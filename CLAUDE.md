@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Sub2API is an AI API Gateway Platform for subscription quota distribution. It consolidates multiple upstream AI service accounts (OpenAI, Claude/Anthropic, Gemini, Sora, etc.) behind a unified gateway with billing, authentication, rate limiting, and load balancing.
+Robust2API is an AI API Gateway Platform for subscription quota distribution. It consolidates multiple upstream AI service accounts (OpenAI, Claude/Anthropic, Gemini, Sora, etc.) behind a unified gateway with billing, authentication, rate limiting, and load balancing.
 
 **Tech stack:** Go backend (Gin + Ent ORM) + Vue 3 frontend (TypeScript + Vite + pnpm) + PostgreSQL + Redis
 
@@ -108,7 +108,7 @@ Always use `pnpm` (never `npm`). The `pnpm-lock.yaml` must be committed. CI uses
 
 ## Configuration
 
-- Config file: YAML loaded by Viper from `/etc/sub2api/config.yaml`
+- Config file: YAML loaded by Viper from `/etc/robust2api/config.yaml`
 - Environment variable override: no prefix, dots replaced by underscores (e.g., `SERVER_PORT=8080`, `OTEL_ENABLED=true`)
 - Run modes: `standard` (full SaaS with billing) or `simple` (internal use)
 - Bootstrap: `backend/cmd/bootstrap` runs migrations and optional initial admin seeding from environment variables
@@ -156,7 +156,7 @@ terraform output            # Show outputs (cluster endpoint, DB credentials, et
 ### Important Notes
 
 - `terraform.tfvars` contains secrets and is **gitignored** — copy from `terraform.tfvars.example`
-- After `terraform apply`, configure kubectl: `doctl kubernetes cluster kubeconfig save sub2api`
+- After `terraform apply`, configure kubectl: `doctl kubernetes cluster kubeconfig save robust2api`
 - Terraform only manages cloud resources and Cloudflare API token bootstrap secrets
 - All in-cluster resources are managed by Flux — see `DEPLOY.md` for the full guide
 
@@ -174,12 +174,12 @@ clusters/production/
 ├── apps.yaml              # Kustomization: apps (depends on cert-manager issuers)
 ├── infrastructure/        # ingress-nginx, cert-manager, external-dns, namespaces
 ├── monitoring/            # monitoring namespace + LGTM stack
-└── apps/                  # Sub2API application
+└── apps/                  # Robust2API application
 ```
 
 To deploy or change anything in-cluster: edit the relevant YAML file, commit, push. Flux syncs within 1 minute.
 
-## Deployment (`deploy/helm/sub2api/`)
+## Deployment (`deploy/helm/robust2api/`)
 
 The application is deployed as three separate services via Flux GitOps:
 
@@ -189,11 +189,11 @@ The application is deployed as three separate services via Flux GitOps:
 
 ### Quick Deploy/Upgrade
 
-Edit image tags in `clusters/production/apps/sub2api.yaml`, commit, and push:
+Edit image tags in `clusters/production/apps/robust2api.yaml`, commit, and push:
 
 ```bash
-# Update image tags in clusters/production/apps/sub2api.yaml
-git add clusters/production/apps/sub2api.yaml
+# Update image tags in clusters/production/apps/robust2api.yaml
+git add clusters/production/apps/robust2api.yaml
 git commit -m "deploy: v0.3.0"
 git push
 # Flux syncs automatically within 1 minute

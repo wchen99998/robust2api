@@ -26,34 +26,34 @@ RUN VERSION_VALUE="${VERSION}" && \
     CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X main.Version=${VERSION_VALUE} -X main.Commit=${COMMIT} -X main.Date=${DATE_VALUE} -X main.BuildType=release" \
     -trimpath \
-    -o /app/sub2api-control \
+    -o /app/robust2api-control \
     ./cmd/control
 
 FROM ${ALPINE_IMAGE}
 
 LABEL maintainer="Wccccc <github.com/wchen99998>"
-LABEL description="Sub2API Control Plane - admin/auth UI backend"
-LABEL org.opencontainers.image.source="https://github.com/wchen99998/sub2api"
+LABEL description="Robust2API Control Plane - admin/auth UI backend"
+LABEL org.opencontainers.image.source="https://github.com/wchen99998/robust2api"
 
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
     && rm -rf /var/cache/apk/*
 
-RUN addgroup -g 1000 sub2api && \
-    adduser -u 1000 -G sub2api -s /bin/sh -D sub2api
+RUN addgroup -g 1000 robust2api && \
+    adduser -u 1000 -G robust2api -s /bin/sh -D robust2api
 
 WORKDIR /app
 
-COPY --from=builder --chown=sub2api:sub2api /app/sub2api-control /app/sub2api-control
-COPY --from=builder --chown=sub2api:sub2api /app/backend/resources /app/resources
-RUN mkdir -p /app/data && chown sub2api:sub2api /app/data
+COPY --from=builder --chown=robust2api:robust2api /app/robust2api-control /app/robust2api-control
+COPY --from=builder --chown=robust2api:robust2api /app/backend/resources /app/resources
+RUN mkdir -p /app/data && chown robust2api:robust2api /app/data
 
-USER sub2api
+USER robust2api
 
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget -q -T 5 -O /dev/null http://localhost:${SERVER_PORT:-8080}/livez || exit 1
 
-ENTRYPOINT ["/app/sub2api-control"]
+ENTRYPOINT ["/app/robust2api-control"]

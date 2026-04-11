@@ -9,14 +9,14 @@ import (
 	"strings"
 	"time"
 
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/apikey"
-	dbgroup "github.com/Wei-Shaw/sub2api/ent/group"
-	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
-	"github.com/Wei-Shaw/sub2api/ent/userallowedgroup"
-	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	dbent "github.com/wchen99998/robust2api/ent"
+	"github.com/wchen99998/robust2api/ent/apikey"
+	dbgroup "github.com/wchen99998/robust2api/ent/group"
+	dbuser "github.com/wchen99998/robust2api/ent/user"
+	"github.com/wchen99998/robust2api/ent/userallowedgroup"
+	"github.com/wchen99998/robust2api/ent/usersubscription"
+	"github.com/wchen99998/robust2api/internal/pkg/pagination"
+	"github.com/wchen99998/robust2api/internal/service"
 )
 
 type userRepository struct {

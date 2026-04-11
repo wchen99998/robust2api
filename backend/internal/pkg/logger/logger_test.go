@@ -33,7 +33,7 @@ func TestInit_StdoutOnly(t *testing.T) {
 	err = Init(InitOptions{
 		Level:       "debug",
 		Format:      "json",
-		ServiceName: "sub2api",
+		ServiceName: "robust2api",
 		Environment: "test",
 		Output: OutputOptions{
 			ToStdout: true,
@@ -120,7 +120,7 @@ func TestInit_CallerShouldPointToCallsite(t *testing.T) {
 	if err := Init(InitOptions{
 		Level:       "info",
 		Format:      "json",
-		ServiceName: "sub2api",
+		ServiceName: "robust2api",
 		Environment: "test",
 		Caller:      true,
 		Output: OutputOptions{

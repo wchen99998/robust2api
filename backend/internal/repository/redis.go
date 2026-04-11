@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/config"
 	"github.com/redis/go-redis/extra/redisotel/v9"
 	"github.com/redis/go-redis/v9"
 )

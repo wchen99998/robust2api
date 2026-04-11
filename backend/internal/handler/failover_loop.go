@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
+	"github.com/wchen99998/robust2api/internal/service"
 	"go.uber.org/zap"
 )
 

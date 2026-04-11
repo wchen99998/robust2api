@@ -1,6 +1,6 @@
 apiVersion: v2
-name: sub2api-monitoring
-description: LGTM observability stack for Sub2API (Loki, Grafana, Tempo, Prometheus)
+name: robust2api-monitoring
+description: LGTM observability stack for Robust2API (Loki, Grafana, Tempo, Prometheus)
 type: application
 version: 0.1.0
 appVersion: "1.0.0"

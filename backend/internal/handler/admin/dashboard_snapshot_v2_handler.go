@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/pkg/response"
+	"github.com/wchen99998/robust2api/internal/pkg/usagestats"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 

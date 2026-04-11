@@ -1,5 +1,5 @@
 # =============================================================================
-# Sub2API Bootstrap — Multi-Stage Dockerfile
+# Robust2API Bootstrap — Multi-Stage Dockerfile
 # =============================================================================
 # Builds the bootstrap binary for DB migration and seeding.
 # Produces a minimal image with only the binary and TLS/timezone support.
@@ -39,7 +39,7 @@ RUN VERSION_VALUE="${VERSION}" && \
     CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X main.Version=${VERSION_VALUE} -X main.Commit=${COMMIT} -X main.Date=${DATE_VALUE} -X main.BuildType=release" \
     -trimpath \
-    -o /app/sub2api-bootstrap \
+    -o /app/robust2api-bootstrap \
     ./cmd/bootstrap
 
 # -----------------------------------------------------------------------------
@@ -48,21 +48,21 @@ RUN VERSION_VALUE="${VERSION}" && \
 FROM ${ALPINE_IMAGE}
 
 LABEL maintainer="Wccccc <github.com/wchen99998>"
-LABEL description="Sub2API Bootstrap - DB Migration & Seeding"
-LABEL org.opencontainers.image.source="https://github.com/wchen99998/sub2api"
+LABEL description="Robust2API Bootstrap - DB Migration & Seeding"
+LABEL org.opencontainers.image.source="https://github.com/wchen99998/robust2api"
 
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
     && rm -rf /var/cache/apk/*
 
-RUN addgroup -g 1000 sub2api && \
-    adduser -u 1000 -G sub2api -s /bin/sh -D sub2api
+RUN addgroup -g 1000 robust2api && \
+    adduser -u 1000 -G robust2api -s /bin/sh -D robust2api
 
 WORKDIR /app
 
-COPY --from=backend-builder --chown=sub2api:sub2api /app/sub2api-bootstrap /app/sub2api-bootstrap
+COPY --from=backend-builder --chown=robust2api:robust2api /app/robust2api-bootstrap /app/robust2api-bootstrap
 
-USER sub2api
+USER robust2api
 
-ENTRYPOINT ["/app/sub2api-bootstrap"]
+ENTRYPOINT ["/app/robust2api-bootstrap"]

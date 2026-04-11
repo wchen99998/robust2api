@@ -1,7 +1,7 @@
 variable "cluster_name" {
   description = "Name of the DOKS cluster"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "region" {
@@ -49,5 +49,5 @@ variable "surge_upgrade" {
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = list(string)
-  default     = ["sub2api", "terraform"]
+  default     = ["robust2api", "terraform"]
 }

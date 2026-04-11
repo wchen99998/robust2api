@@ -366,16 +366,17 @@ import { useI18n } from 'vue-i18n'
 import { useAppStore } from '@/stores'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import Icon from '@/components/icons/Icon.vue'
+import { ORIGIN_REPO_URL } from '@/constants/project'
 
 const { t, locale } = useI18n()
 const appStore = useAppStore()
 
 // ==================== Site Settings (same as HomeView) ====================
 
-const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'robust2api')
+const siteName = computed(() => appStore.cachedPublicSettings?.site_name || appStore.siteName || 'Robust2API')
 const siteLogo = computed(() => appStore.cachedPublicSettings?.site_logo || appStore.siteLogo || '')
 const docUrl = computed(() => appStore.cachedPublicSettings?.doc_url || appStore.docUrl || '')
-const githubUrl = 'https://github.com/Wei-Shaw/sub2api'
+const githubUrl = ORIGIN_REPO_URL
 
 // ==================== Theme (same as HomeView) ====================
 

@@ -1,7 +1,7 @@
 package health
 
 import (
-	apphealth "github.com/Wei-Shaw/sub2api/internal/health"
+	apphealth "github.com/wchen99998/robust2api/internal/health"
 	"github.com/google/wire"
 )
 

@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
-	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	"github.com/wchen99998/robust2api/internal/pkg/openai"
+	"github.com/wchen99998/robust2api/internal/util/urlvalidator"
 	"go.uber.org/zap"
 )
 

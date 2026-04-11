@@ -23,7 +23,7 @@ variable "region" {
 variable "cluster_name" {
   description = "DOKS cluster name"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "k8s_version" {

@@ -31,7 +31,7 @@ func TestHelmTemplate_MergesIngressAnnotationsAndSetsComponentServiceNames(t *te
 		"observability": map[string]any{
 			"enabled": true,
 			"otel": map[string]any{
-				"serviceName": "sub2api",
+				"serviceName": "robust2api",
 				"environment": "staging",
 			},
 		},
@@ -54,8 +54,8 @@ func TestHelmTemplate_MergesIngressAnnotationsAndSetsComponentServiceNames(t *te
 
 	manifests := renderChart(t, overlayPath)
 
-	gatewayIngress := findManifest(t, manifests, "Ingress", "sub2api-gateway")
-	controlIngress := findManifest(t, manifests, "Ingress", "sub2api-control")
+	gatewayIngress := findManifest(t, manifests, "Ingress", "robust2api-gateway")
+	controlIngress := findManifest(t, manifests, "Ingress", "robust2api-control")
 
 	gatewayAnnotations := nestedStringMap(t, gatewayIngress, "metadata", "annotations")
 	require.Equal(t, "letsencrypt-staging", gatewayAnnotations["cert-manager.io/cluster-issuer"])
@@ -67,19 +67,19 @@ func TestHelmTemplate_MergesIngressAnnotationsAndSetsComponentServiceNames(t *te
 	_, inheritedGatewayTimeout := controlAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"]
 	require.False(t, inheritedGatewayTimeout)
 
-	gatewayDeployment := findManifest(t, manifests, "Deployment", "sub2api-gateway")
-	controlDeployment := findManifest(t, manifests, "Deployment", "sub2api-control")
-	workerDeployment := findManifest(t, manifests, "Deployment", "sub2api-worker")
+	gatewayDeployment := findManifest(t, manifests, "Deployment", "robust2api-gateway")
+	controlDeployment := findManifest(t, manifests, "Deployment", "robust2api-control")
+	workerDeployment := findManifest(t, manifests, "Deployment", "robust2api-worker")
 
-	require.Equal(t, "sub2api-gateway", containerEnvValue(t, gatewayDeployment, "OTEL_SERVICE_NAME"))
-	require.Equal(t, "sub2api-control", containerEnvValue(t, controlDeployment, "OTEL_SERVICE_NAME"))
-	require.Equal(t, "sub2api-worker", containerEnvValue(t, workerDeployment, "OTEL_SERVICE_NAME"))
+	require.Equal(t, "robust2api-gateway", containerEnvValue(t, gatewayDeployment, "OTEL_SERVICE_NAME"))
+	require.Equal(t, "robust2api-control", containerEnvValue(t, controlDeployment, "OTEL_SERVICE_NAME"))
+	require.Equal(t, "robust2api-worker", containerEnvValue(t, workerDeployment, "OTEL_SERVICE_NAME"))
 	require.Contains(t, containerEnvValue(t, gatewayDeployment, "OTEL_RESOURCE_ATTRIBUTES"), "deployment.environment=staging")
-	require.Contains(t, containerEnvValue(t, gatewayDeployment, "OTEL_RESOURCE_ATTRIBUTES"), "sub2api.component=gateway")
+	require.Contains(t, containerEnvValue(t, gatewayDeployment, "OTEL_RESOURCE_ATTRIBUTES"), "robust2api.component=gateway")
 }
 
 func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testing.T) {
-	gatewayValuesPath := productionValuesPath(t, "sub2api-gateway")
+	gatewayValuesPath := productionValuesPath(t, "robust2api-gateway")
 	sharedSecretsPath := writeValuesFile(t, map[string]any{
 		"externalDatabase": map[string]any{
 			"password": "test-password",
@@ -90,22 +90,22 @@ func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testi
 	})
 	manifests := renderChart(t, gatewayValuesPath, sharedSecretsPath)
 
-	gatewayIngress := findManifest(t, manifests, "Ingress", "sub2api-gateway")
+	gatewayIngress := findManifest(t, manifests, "Ingress", "robust2api-gateway")
 	gatewayAnnotations := nestedStringMap(t, gatewayIngress, "metadata", "annotations")
 	require.Equal(t, "10", gatewayAnnotations["nginx.ingress.kubernetes.io/proxy-connect-timeout"])
 	require.Equal(t, "600", gatewayAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"])
 	require.Equal(t, "600", gatewayAnnotations["nginx.ingress.kubernetes.io/proxy-send-timeout"])
-	requireManifestAbsent(t, manifests, "Ingress", "sub2api-control")
+	requireManifestAbsent(t, manifests, "Ingress", "robust2api-control")
 
-	findManifest(t, manifests, "HorizontalPodAutoscaler", "sub2api-gateway")
-	findManifest(t, manifests, "PodDisruptionBudget", "sub2api-gateway")
+	findManifest(t, manifests, "HorizontalPodAutoscaler", "robust2api-gateway")
+	findManifest(t, manifests, "PodDisruptionBudget", "robust2api-gateway")
 
-	gatewayDeployment := findManifest(t, manifests, "Deployment", "sub2api-gateway")
+	gatewayDeployment := findManifest(t, manifests, "Deployment", "robust2api-gateway")
 	topologySpread := nestedSlice(t, gatewayDeployment, "spec", "template", "spec", "topologySpreadConstraints")
 	require.Len(t, topologySpread, 2)
-	require.Equal(t, "sub2api-gateway", containerEnvValue(t, gatewayDeployment, "OTEL_SERVICE_NAME"))
+	require.Equal(t, "robust2api-gateway", containerEnvValue(t, gatewayDeployment, "OTEL_SERVICE_NAME"))
 
-	controlValuesPath := productionValuesPath(t, "sub2api-control")
+	controlValuesPath := productionValuesPath(t, "robust2api-control")
 	controlSecretsPath := writeValuesFile(t, map[string]any{
 		"secrets": map[string]any{
 			"jwtSecret":         "jwt-secret",
@@ -126,31 +126,31 @@ func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testi
 		},
 	})
 	controlManifests := renderChart(t, controlValuesPath, controlSecretsPath)
-	controlIngress := findManifest(t, controlManifests, "Ingress", "sub2api-control")
+	controlIngress := findManifest(t, controlManifests, "Ingress", "robust2api-control")
 	controlAnnotations := nestedStringMap(t, controlIngress, "metadata", "annotations")
 	_, controlHasLongReadTimeout := controlAnnotations["nginx.ingress.kubernetes.io/proxy-read-timeout"]
 	require.False(t, controlHasLongReadTimeout)
-	frontendDeployment := findManifest(t, controlManifests, "Deployment", "sub2api-frontend")
+	frontendDeployment := findManifest(t, controlManifests, "Deployment", "robust2api-frontend")
 	require.Equal(t, "https://grafana-monitoring.${BASE_DOMAIN}", containerEnvValue(t, frontendDeployment, "EXTRA_FRAME_SRC_ORIGINS"))
 }
 
 func TestHelmTemplate_DefaultValuesRenderLegacySingleReleaseTopology(t *testing.T) {
 	manifests := renderChart(t)
 
-	findManifest(t, manifests, "Deployment", "sub2api-gateway")
-	controlDeployment := findManifest(t, manifests, "Deployment", "sub2api-control")
-	findManifest(t, manifests, "Deployment", "sub2api-worker")
-	frontendDeployment := findManifest(t, manifests, "Deployment", "sub2api-frontend")
+	findManifest(t, manifests, "Deployment", "robust2api-gateway")
+	controlDeployment := findManifest(t, manifests, "Deployment", "robust2api-control")
+	findManifest(t, manifests, "Deployment", "robust2api-worker")
+	frontendDeployment := findManifest(t, manifests, "Deployment", "robust2api-frontend")
 
-	findManifest(t, manifests, "Service", "sub2api-gateway")
-	frontendService := findManifest(t, manifests, "Service", "sub2api-control")
-	findManifest(t, manifests, "Service", "sub2api-control-api")
+	findManifest(t, manifests, "Service", "robust2api-gateway")
+	frontendService := findManifest(t, manifests, "Service", "robust2api-control")
+	findManifest(t, manifests, "Service", "robust2api-control-api")
 
-	findManifest(t, manifests, "Ingress", "sub2api-gateway")
-	findManifest(t, manifests, "Ingress", "sub2api-control")
+	findManifest(t, manifests, "Ingress", "robust2api-gateway")
+	findManifest(t, manifests, "Ingress", "robust2api-control")
 
-	bootstrapJob := findManifest(t, manifests, "Job", "sub2api-bootstrap")
-	require.Equal(t, "sub2api-bootstrap", stringValue(nestedMap(t, bootstrapJob, "metadata")["name"]))
+	bootstrapJob := findManifest(t, manifests, "Job", "robust2api-bootstrap")
+	require.Equal(t, "robust2api-bootstrap", stringValue(nestedMap(t, bootstrapJob, "metadata")["name"]))
 
 	controlContainers := nestedSlice(t, controlDeployment, "spec", "template", "spec", "containers")
 	require.Len(t, controlContainers, 1)
@@ -158,8 +158,8 @@ func TestHelmTemplate_DefaultValuesRenderLegacySingleReleaseTopology(t *testing.
 	require.True(t, ok)
 	require.Equal(t, "control", stringValue(controlContainer["name"]))
 
-	require.Equal(t, "http://sub2api-control-api:8080", containerEnvValue(t, frontendDeployment, "CONTROL_UPSTREAM"))
-	require.Equal(t, "http://sub2api-gateway:80", containerEnvValue(t, frontendDeployment, "GATEWAY_UPSTREAM"))
+	require.Equal(t, "http://robust2api-control-api:8080", containerEnvValue(t, frontendDeployment, "CONTROL_UPSTREAM"))
+	require.Equal(t, "http://robust2api-gateway:80", containerEnvValue(t, frontendDeployment, "GATEWAY_UPSTREAM"))
 
 	frontendSelector := nestedMap(t, frontendService, "spec", "selector")
 	require.Equal(t, "frontend", stringValue(frontendSelector["app.kubernetes.io/component"]))
@@ -181,7 +181,7 @@ func TestHelmTemplate_ComponentSelectiveControlReleaseRendersWithoutGatewayAndWo
 		},
 		"frontend": map[string]any{
 			"enabled":            true,
-			"gatewayServiceName": "sub2api-gateway-gateway",
+			"gatewayServiceName": "robust2api-gateway-gateway",
 		},
 		"ingress": map[string]any{
 			"enabled": true,
@@ -214,18 +214,18 @@ func TestHelmTemplate_ComponentSelectiveControlReleaseRendersWithoutGatewayAndWo
 	})
 	manifests := renderChart(t, valuesPath)
 
-	findManifest(t, manifests, "Deployment", "sub2api-control")
-	frontendDeployment := findManifest(t, manifests, "Deployment", "sub2api-frontend")
-	findManifest(t, manifests, "Service", "sub2api-control")
-	findManifest(t, manifests, "Service", "sub2api-control-api")
-	findManifest(t, manifests, "Ingress", "sub2api-control")
+	findManifest(t, manifests, "Deployment", "robust2api-control")
+	frontendDeployment := findManifest(t, manifests, "Deployment", "robust2api-frontend")
+	findManifest(t, manifests, "Service", "robust2api-control")
+	findManifest(t, manifests, "Service", "robust2api-control-api")
+	findManifest(t, manifests, "Ingress", "robust2api-control")
 
-	requireManifestAbsent(t, manifests, "Deployment", "sub2api-gateway")
-	requireManifestAbsent(t, manifests, "Deployment", "sub2api-worker")
-	requireManifestAbsent(t, manifests, "Job", "sub2api-bootstrap")
-	requireManifestAbsent(t, manifests, "Ingress", "sub2api-gateway")
+	requireManifestAbsent(t, manifests, "Deployment", "robust2api-gateway")
+	requireManifestAbsent(t, manifests, "Deployment", "robust2api-worker")
+	requireManifestAbsent(t, manifests, "Job", "robust2api-bootstrap")
+	requireManifestAbsent(t, manifests, "Ingress", "robust2api-gateway")
 
-	require.Equal(t, "http://sub2api-gateway-gateway:80", containerEnvValue(t, frontendDeployment, "GATEWAY_UPSTREAM"))
+	require.Equal(t, "http://robust2api-gateway-gateway:80", containerEnvValue(t, frontendDeployment, "GATEWAY_UPSTREAM"))
 }
 
 func TestHelmTemplate_BootstrapChecksumTracksOnlyBootstrapInputs(t *testing.T) {
@@ -255,8 +255,8 @@ func TestHelmTemplate_BootstrapChecksumTracksOnlyBootstrapInputs(t *testing.T) {
 		"externalDatabase": map[string]any{
 			"host":     "postgres.internal",
 			"port":     5432,
-			"user":     "sub2api",
-			"database": "sub2api",
+			"user":     "robust2api",
+			"database": "robust2api",
 			"sslmode":  "require",
 			"password": "db-password",
 		},
@@ -299,7 +299,7 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 		expectedObject string
 	}{
 		{
-			releaseName: "sub2api",
+			releaseName: "robust2api",
 			secrets: map[string]any{
 				"postgresql": map[string]any{
 					"auth": map[string]any{
@@ -320,10 +320,10 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 				},
 			},
 			expectedKind:   "Service",
-			expectedObject: "sub2api-postgresql",
+			expectedObject: "robust2api-postgresql",
 		},
 		{
-			releaseName: "sub2api-bootstrap",
+			releaseName: "robust2api-bootstrap",
 			secrets: map[string]any{
 				"secrets": map[string]any{
 					"jwtSecret":         "jwt-secret",
@@ -338,10 +338,10 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 				},
 			},
 			expectedKind:   "Job",
-			expectedObject: "sub2api-bootstrap-bootstrap",
+			expectedObject: "robust2api-bootstrap-bootstrap",
 		},
 		{
-			releaseName: "sub2api-gateway",
+			releaseName: "robust2api-gateway",
 			secrets: map[string]any{
 				"externalDatabase": map[string]any{
 					"password": "db-password",
@@ -351,10 +351,10 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 				},
 			},
 			expectedKind:   "Deployment",
-			expectedObject: "sub2api-gateway-gateway",
+			expectedObject: "robust2api-gateway-gateway",
 		},
 		{
-			releaseName: "sub2api-control",
+			releaseName: "robust2api-control",
 			secrets: map[string]any{
 				"secrets": map[string]any{
 					"jwtSecret":         "jwt-secret",
@@ -375,10 +375,10 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 				},
 			},
 			expectedKind:   "Deployment",
-			expectedObject: "sub2api-control-frontend",
+			expectedObject: "robust2api-control-frontend",
 		},
 		{
-			releaseName: "sub2api-worker",
+			releaseName: "robust2api-worker",
 			secrets: map[string]any{
 				"externalDatabase": map[string]any{
 					"password": "db-password",
@@ -388,7 +388,7 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 				},
 			},
 			expectedKind:   "Deployment",
-			expectedObject: "sub2api-worker-worker",
+			expectedObject: "robust2api-worker-worker",
 		},
 	}
 
@@ -399,11 +399,11 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 			secretsPath := writeValuesFile(t, tc.secrets)
 			manifests := renderChartWithReleaseName(t, tc.releaseName, valuesPath, secretsPath)
 			findManifest(t, manifests, tc.expectedKind, tc.expectedObject)
-			if tc.releaseName == "sub2api" {
-				findManifest(t, manifests, "Secret", "sub2api-postgresql-crt")
-				postgresqlStatefulSet := findManifest(t, manifests, "StatefulSet", "sub2api-postgresql")
+			if tc.releaseName == "robust2api" {
+				findManifest(t, manifests, "Secret", "robust2api-postgresql-crt")
+				postgresqlStatefulSet := findManifest(t, manifests, "StatefulSet", "robust2api-postgresql")
 				require.Equal(t, "yes", containerEnvValue(t, postgresqlStatefulSet, "POSTGRESQL_ENABLE_TLS"))
-				grafanaDatasource := findManifest(t, manifests, "Secret", "sub2api-grafana-datasource-postgres")
+				grafanaDatasource := findManifest(t, manifests, "Secret", "robust2api-grafana-datasource-postgres")
 				grafanaDatasourceConfig := nestedMap(t, grafanaDatasource, "stringData")
 				require.Contains(t, stringValue(grafanaDatasourceConfig["pg-datasource.yaml"]), "sslmode: \"require\"")
 			}
@@ -414,15 +414,15 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 func TestProductionReleaseValues_PreserveSharedDataServicesAndOrdering(t *testing.T) {
 	releases := productionHelmReleases(t)
 
-	provisioning, ok := releases["sub2api"]
+	provisioning, ok := releases["robust2api"]
 	require.True(t, ok)
-	bootstrap, ok := releases["sub2api-bootstrap"]
+	bootstrap, ok := releases["robust2api-bootstrap"]
 	require.True(t, ok)
-	gateway, ok := releases["sub2api-gateway"]
+	gateway, ok := releases["robust2api-gateway"]
 	require.True(t, ok)
-	control, ok := releases["sub2api-control"]
+	control, ok := releases["robust2api-control"]
 	require.True(t, ok)
-	worker, ok := releases["sub2api-worker"]
+	worker, ok := releases["robust2api-worker"]
 	require.True(t, ok)
 
 	postgresqlValues, ok := provisioning.Spec.Values["postgresql"].(map[string]any)
@@ -437,29 +437,29 @@ func TestProductionReleaseValues_PreserveSharedDataServicesAndOrdering(t *testin
 	require.True(t, ok)
 	require.True(t, boolValue(redisValues["enabled"]))
 
-	require.Contains(t, dependencyNames(bootstrap), "sub2api")
-	require.Contains(t, dependencyNames(gateway), "sub2api-bootstrap")
-	require.Contains(t, dependencyNames(control), "sub2api-bootstrap")
-	require.Contains(t, dependencyNames(control), "sub2api-gateway")
-	require.Contains(t, dependencyNames(worker), "sub2api-bootstrap")
+	require.Contains(t, dependencyNames(bootstrap), "robust2api")
+	require.Contains(t, dependencyNames(gateway), "robust2api-bootstrap")
+	require.Contains(t, dependencyNames(control), "robust2api-bootstrap")
+	require.Contains(t, dependencyNames(control), "robust2api-gateway")
+	require.Contains(t, dependencyNames(worker), "robust2api-bootstrap")
 
-	for _, releaseName := range []string{"sub2api-bootstrap", "sub2api-gateway", "sub2api-control", "sub2api-worker"} {
+	for _, releaseName := range []string{"robust2api-bootstrap", "robust2api-gateway", "robust2api-control", "robust2api-worker"} {
 		release := releases[releaseName]
 
 		externalDatabase, ok := release.Spec.Values["externalDatabase"].(map[string]any)
 		require.True(t, ok, "release %s missing externalDatabase values", releaseName)
-		require.Equal(t, "sub2api-postgresql", stringValue(externalDatabase["host"]))
+		require.Equal(t, "robust2api-postgresql", stringValue(externalDatabase["host"]))
 		require.Equal(t, "require", stringValue(externalDatabase["sslmode"]))
 
 		externalRedis, ok := release.Spec.Values["externalRedis"].(map[string]any)
 		require.True(t, ok, "release %s missing externalRedis values", releaseName)
-		require.Equal(t, "sub2api-redis-master", stringValue(externalRedis["host"]))
+		require.Equal(t, "robust2api-redis-master", stringValue(externalRedis["host"]))
 	}
 }
 
 func renderChart(t *testing.T, valuesFiles ...string) []map[string]any {
 	t.Helper()
-	return renderChartWithReleaseName(t, "sub2api", valuesFiles...)
+	return renderChartWithReleaseName(t, "robust2api", valuesFiles...)
 }
 
 func renderChartWithReleaseName(t *testing.T, releaseName string, valuesFiles ...string) []map[string]any {
@@ -468,8 +468,8 @@ func renderChartWithReleaseName(t *testing.T, releaseName string, valuesFiles ..
 		t.Skip("helm binary not available")
 	}
 
-	chartPath := filepath.Join(repoRoot(t), "deploy", "helm", "sub2api")
-	args := []string{"template", releaseName, chartPath, "--namespace", "sub2api"}
+	chartPath := filepath.Join(repoRoot(t), "deploy", "helm", "robust2api")
+	args := []string{"template", releaseName, chartPath, "--namespace", "robust2api"}
 	for _, valuesFile := range valuesFiles {
 		args = append(args, "-f", valuesFile)
 	}
@@ -503,7 +503,7 @@ func productionReleaseValues(t *testing.T) map[string]map[string]any {
 func productionHelmReleases(t *testing.T) map[string]helmRelease {
 	t.Helper()
 
-	releasePath := filepath.Join(repoRoot(t), "clusters", "production", "apps", "sub2api.yaml")
+	releasePath := filepath.Join(repoRoot(t), "clusters", "production", "apps", "robust2api.yaml")
 	raw, err := os.ReadFile(releasePath)
 	require.NoError(t, err)
 
@@ -666,13 +666,13 @@ func renderBootstrapChecksum(t *testing.T, values map[string]any) string {
 
 	overlayPath := writeValuesFile(t, values)
 	manifests := renderChart(t, overlayPath)
-	job := findManifest(t, manifests, "Job", "sub2api-bootstrap")
+	job := findManifest(t, manifests, "Job", "robust2api-bootstrap")
 
 	metadataAnnotations := nestedStringMap(t, job, "metadata", "annotations")
 	templateAnnotations := nestedStringMap(t, job, "spec", "template", "metadata", "annotations")
-	require.Equal(t, metadataAnnotations["sub2api.io/bootstrap-inputs-checksum"], templateAnnotations["sub2api.io/bootstrap-inputs-checksum"])
+	require.Equal(t, metadataAnnotations["robust2api.io/bootstrap-inputs-checksum"], templateAnnotations["robust2api.io/bootstrap-inputs-checksum"])
 
-	return metadataAnnotations["sub2api.io/bootstrap-inputs-checksum"]
+	return metadataAnnotations["robust2api.io/bootstrap-inputs-checksum"]
 }
 
 func cloneMap(t *testing.T, src map[string]any) map[string]any {

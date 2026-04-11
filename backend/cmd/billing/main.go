@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-	billingapp "github.com/Wei-Shaw/sub2api/internal/app/billing"
+	_ "github.com/wchen99998/robust2api/ent/runtime"
+	billingapp "github.com/wchen99998/robust2api/internal/app/billing"
 )
 
 //go:embed VERSION
@@ -36,7 +36,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API Billing %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		log.Printf("Robust2API Billing %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
 

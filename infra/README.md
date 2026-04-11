@@ -1,4 +1,4 @@
-# Sub2API Infrastructure
+# Robust2API Infrastructure
 
 Terraform modules for provisioning DigitalOcean Kubernetes infrastructure.
 
@@ -25,22 +25,22 @@ terraform apply
 Configure kubectl:
 
 ```bash
-doctl kubernetes cluster kubeconfig save sub2api
+doctl kubernetes cluster kubeconfig save robust2api
 ```
 
-Deploy Sub2API via Helm:
+Deploy Robust2API via Helm:
 
 ```bash
-helm install sub2api ../../deploy/helm/sub2api \
-  -n sub2api \
-  -f ../../deploy/helm/sub2api/values-production.yaml \
+helm install robust2api ../../deploy/helm/robust2api \
+  -n robust2api \
+  -f ../../deploy/helm/robust2api/values-production.yaml \
   --set config.grafanaUrl=<grafana_url_if_monitoring_enabled> \
   --set secrets.jwtSecret=<value> \
   --set secrets.totpEncryptionKey=<value> \
   --set secrets.adminPassword=<value>
 ```
 
-If you enabled managed PostgreSQL, Terraform also outputs `grafana_reader_user` and `grafana_reader_password`. Copy those values into the Sub2API release secret keys `grafanaProvisioning.reader.username` and `grafanaProvisioning.reader.password` so Grafana uses the dedicated read-only account instead of the app user.
+If you enabled managed PostgreSQL, Terraform also outputs `grafana_reader_user` and `grafana_reader_password`. Copy those values into the Robust2API release secret keys `grafanaProvisioning.reader.username` and `grafanaProvisioning.reader.password` so Grafana uses the dedicated read-only account instead of the app user.
 
 ## Modules
 

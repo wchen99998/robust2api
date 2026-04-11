@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	"github.com/wchen99998/robust2api/internal/config"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -72,8 +72,8 @@ func TestOpenAIGatewayService_Forward_CreatesAttemptAndTransformSpans(t *testing
 
 	require.Equal(t, root.SpanContext().SpanID(), attempt.Parent().SpanID())
 	require.Equal(t, root.SpanContext().SpanID(), transform.Parent().SpanID())
-	require.Equal(t, "http", spanAttributeValue(attempt, "sub2api.transport"))
-	require.Equal(t, "openai", spanAttributeValue(attempt, "sub2api.platform"))
+	require.Equal(t, "http", spanAttributeValue(attempt, "robust2api.transport"))
+	require.Equal(t, "openai", spanAttributeValue(attempt, "robust2api.platform"))
 }
 
 func TestOpenAIGatewayService_ForwardAsChatCompletions_CreatesAttemptAndTransformSpans(t *testing.T) {
@@ -135,8 +135,8 @@ func TestOpenAIGatewayService_ForwardAsChatCompletions_CreatesAttemptAndTransfor
 
 	require.Equal(t, root.SpanContext().SpanID(), attempt.Parent().SpanID())
 	require.Equal(t, root.SpanContext().SpanID(), transform.Parent().SpanID())
-	require.Equal(t, "http", spanAttributeValue(attempt, "sub2api.transport"))
-	require.Equal(t, "gpt-5.4", spanAttributeValue(attempt, "sub2api.requested_model"))
+	require.Equal(t, "http", spanAttributeValue(attempt, "robust2api.transport"))
+	require.Equal(t, "gpt-5.4", spanAttributeValue(attempt, "robust2api.requested_model"))
 }
 
 func TestOpenAIGatewayService_HandleStreamingResponse_AddsTimeoutAndDisconnectEvents(t *testing.T) {
@@ -347,7 +347,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_CreatesAttemptSp
 	root := findEndedSpanByName(t, recorder.Ended(), "gateway.responses_ws")
 	attempt := findEndedSpanByName(t, recorder.Ended(), "gateway.upstream_attempt")
 	require.Equal(t, root.SpanContext().SpanID(), attempt.Parent().SpanID())
-	require.Equal(t, "responses_websockets_v2", spanAttributeValue(attempt, "sub2api.transport"))
+	require.Equal(t, "responses_websockets_v2", spanAttributeValue(attempt, "robust2api.transport"))
 }
 
 func newSpanRecorderProvider() (*tracetest.SpanRecorder, *sdktrace.TracerProvider) {

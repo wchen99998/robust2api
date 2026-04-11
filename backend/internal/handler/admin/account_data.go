@@ -10,15 +10,15 @@ import (
 
 	"log/slog"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/pkg/openai"
+	"github.com/wchen99998/robust2api/internal/pkg/response"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
 const (
-	dataType       = "sub2api-data"
-	legacyDataType = "sub2api-bundle"
+	dataType       = "robust2api-data"
+	legacyDataType = "robust2api-bundle"
 	dataVersion    = 1
 	dataPageCap    = 1000
 )

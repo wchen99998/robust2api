@@ -8,9 +8,9 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	"github.com/wchen99998/robust2api/internal/pkg/usagestats"
 )
 
 const (

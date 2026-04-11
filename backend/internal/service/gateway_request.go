@@ -10,8 +10,8 @@ import (
 	"strings"
 	"unsafe"
 
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
+	"github.com/wchen99998/robust2api/internal/domain"
+	"github.com/wchen99998/robust2api/internal/pkg/antigravity"
 	"github.com/tidwall/gjson"
 	"github.com/tidwall/sjson"
 )
