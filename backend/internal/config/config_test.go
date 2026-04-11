@@ -38,6 +38,34 @@ func TestNormalizeRunMode(t *testing.T) {
 	}
 }
 
+func TestNormalizeControlAuthMode(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", "local"},
+		{"local", "local"},
+		{"EXTERNAL_OIDC", "external_oidc"},
+		{"external-auth0", "external-auth0"},
+	}
+
+	for _, tt := range tests {
+		result := NormalizeControlAuthMode(tt.input)
+		if result != tt.expected {
+			t.Errorf("NormalizeControlAuthMode(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestLoadRejectsUnknownControlAuthMode(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("CONTROL_AUTH_MODE", "external-auth0")
+
+	_, err := load(RoleControl)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "control_auth.mode must be one of")
+}
+
 func TestLoadDefaultSchedulingConfig(t *testing.T) {
 	resetViperWithJWTSecret(t)
 

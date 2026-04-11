@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
@@ -115,9 +116,17 @@ func (authBFFLocalMFAStub) GetVerificationMethod(_ context.Context) *service.Ver
 
 type authBFFSessionAuthStub struct {
 	capabilities *service.ControlAuthCapabilities
+	identity     *service.AuthenticatedIdentity
+	authErr      error
 }
 
 func (s *authBFFSessionAuthStub) AuthenticateAccessToken(_ context.Context, _ string) (*service.AuthenticatedIdentity, error) {
+	if s.authErr != nil {
+		return nil, s.authErr
+	}
+	if s.identity != nil {
+		return s.identity, nil
+	}
 	return nil, service.ErrInvalidToken
 }
 
@@ -321,6 +330,40 @@ func TestBootstrap_ExposesAuthoritativeAuthCapabilitiesAndProviders(t *testing.T
 	require.True(t, ok)
 	require.Equal(t, "oidc", firstProvider["id"])
 	require.Equal(t, "/api/v1/oauth/oidc/start", firstProvider["start_path"])
+}
+
+func TestBootstrap_DoesNotExposeAccessToken(t *testing.T) {
+	handler := newAuthBFFTestHandler(service.ControlAuthModeLocal, map[string]string{
+		service.SettingKeySiteName:           "Sub2API",
+		service.SettingKeyBackendModeEnabled: "false",
+	}, nil)
+	handler.controlSessionAuth = &authBFFSessionAuthStub{
+		capabilities: authCapabilitiesForMode(service.ControlAuthModeLocal, map[string]string{}),
+		identity: &service.AuthenticatedIdentity{
+			SubjectID:         "subject-1",
+			SessionID:         "session-1",
+			LegacyUserID:      1,
+			AMR:               "pwd",
+			AuthVersion:       1,
+			PrimaryRole:       service.RoleUser,
+			Roles:             []string{service.RoleUser},
+			Profile:           &service.SubjectProfileRecord{SubjectID: "subject-1", LegacyUserID: 1, Email: "user@example.com", Username: "tester"},
+			SessionExpiresAt:  time.Now().Add(5 * time.Minute),
+			SessionAbsoluteAt: time.Now().Add(time.Hour),
+			SessionLastSeenAt: time.Now(),
+		},
+	}
+
+	c, rec := newHandlerTestContext(http.MethodGet, "/api/v1/bootstrap", "")
+	c.Request.AddCookie(&http.Cookie{Name: service.ControlAccessCookieName, Value: "cookie-access-token"})
+	handler.Bootstrap(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	resp := decodeHandlerResponse(t, rec)
+	payload, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+	_, exists := payload["access_token"]
+	require.False(t, exists)
 }
 
 func TestSessionLogin_DisabledCredentialModesReturnForbidden(t *testing.T) {

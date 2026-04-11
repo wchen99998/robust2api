@@ -187,14 +187,6 @@ export function normalizeBootstrapResponse(raw: unknown): BootstrapResponse {
         expires_at: String(pendingRegistrationRaw.expires_at ?? '')
       } as BootstrapPendingRegistration)
     : null
-  const accessToken =
-    typeof payload.access_token === 'string'
-      ? payload.access_token
-      : typeof payload.token === 'string'
-        ? payload.token
-        : typeof meRaw.access_token === 'string'
-          ? meRaw.access_token
-          : undefined
   const authCapabilitiesRaw = isObjectRecord(payload.auth_capabilities)
     ? payload.auth_capabilities
     : null
@@ -276,7 +268,6 @@ export function normalizeBootstrapResponse(raw: unknown): BootstrapResponse {
   }
 
   return {
-    access_token: accessToken,
     csrf_token: typeof payload.csrf_token === 'string' ? payload.csrf_token : undefined,
     run_mode: explicitRunMode,
     public_settings: normalizePublicSettings(publicSettingsRaw),

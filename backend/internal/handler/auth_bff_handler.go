@@ -62,21 +62,20 @@ type bootstrapPendingRegistrationResponse struct {
 }
 
 type bootstrapResponse struct {
-	Settings            dto.PublicSettings                    `json:"settings"`
-	AuthCapabilities    *service.ControlAuthCapabilities      `json:"auth_capabilities,omitempty"`
+	Settings            dto.PublicSettings                      `json:"settings"`
+	AuthCapabilities    *service.ControlAuthCapabilities        `json:"auth_capabilities,omitempty"`
 	AuthProviders       []service.ControlAuthProviderDescriptor `json:"auth_providers,omitempty"`
-	CSRFToken           string                                `json:"csrf_token"`
-	AccessToken         string                                `json:"access_token,omitempty"`
-	RunMode             string                                `json:"run_mode"`
-	Authenticated       bool                                  `json:"authenticated"`
-	RefreshAvailable    bool                                  `json:"refresh_available"`
-	Subject             *bootstrapSubjectResponse             `json:"subject,omitempty"`
-	Profile             *dto.User                             `json:"profile,omitempty"`
-	Roles               []string                              `json:"roles,omitempty"`
-	PrimaryRole         string                                `json:"primary_role,omitempty"`
-	MFA                 *bootstrapMFAResponse                 `json:"mfa,omitempty"`
-	Session             *bootstrapSessionResponse             `json:"session,omitempty"`
-	PendingRegistration *bootstrapPendingRegistrationResponse `json:"pending_registration,omitempty"`
+	CSRFToken           string                                  `json:"csrf_token"`
+	RunMode             string                                  `json:"run_mode"`
+	Authenticated       bool                                    `json:"authenticated"`
+	RefreshAvailable    bool                                    `json:"refresh_available"`
+	Subject             *bootstrapSubjectResponse               `json:"subject,omitempty"`
+	Profile             *dto.User                               `json:"profile,omitempty"`
+	Roles               []string                                `json:"roles,omitempty"`
+	PrimaryRole         string                                  `json:"primary_role,omitempty"`
+	MFA                 *bootstrapMFAResponse                   `json:"mfa,omitempty"`
+	Session             *bootstrapSessionResponse               `json:"session,omitempty"`
+	PendingRegistration *bootstrapPendingRegistrationResponse   `json:"pending_registration,omitempty"`
 }
 
 type sessionLoginRequest struct {
@@ -177,9 +176,6 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 		return
 	}
 	if identity != nil {
-		payload.AccessToken = h.currentAccessToken(c)
-	}
-	if identity != nil {
 		h.clearPendingRegistrationCookie(c)
 	} else if pending := h.pendingRegistrationPayload(c); pending != nil {
 		payload.PendingRegistration = pending
@@ -227,7 +223,6 @@ func (h *AuthHandler) SessionLogin(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = result.Tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -260,7 +255,6 @@ func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = result.Tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -331,7 +325,6 @@ func (h *AuthHandler) SessionRefresh(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -411,7 +404,6 @@ func (h *AuthHandler) Registration(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -454,7 +446,6 @@ func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -567,7 +558,6 @@ func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -700,7 +690,6 @@ func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -747,7 +736,6 @@ func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	payload.AccessToken = tokens.AccessToken
 	response.Success(c, payload)
 }
 
@@ -950,13 +938,6 @@ func (h *AuthHandler) currentIdentity(c *gin.Context) (*service.AuthenticatedIde
 		return nil, service.ErrInvalidToken
 	}
 	return h.controlSessionAuth.AuthenticateAccessToken(c.Request.Context(), token)
-}
-
-func (h *AuthHandler) currentAccessToken(c *gin.Context) string {
-	if token := extractBearerToken(c); token != "" {
-		return token
-	}
-	return h.cookieValue(c, service.ControlAccessCookieName)
 }
 
 func (h *AuthHandler) setSessionCookies(c *gin.Context, tokens *service.ControlSessionTokens) (string, error) {

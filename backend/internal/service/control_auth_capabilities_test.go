@@ -120,3 +120,29 @@ func TestControlAuthService_AuthCapabilities_ExternalOIDCMode(t *testing.T) {
 	require.False(t, caps.MFASelfServiceEnabled)
 	require.True(t, caps.ProfileSelfServiceEnabled)
 }
+
+func TestControlAuthService_RegistrationPreflight_UsesAuthModeAwareFlags(t *testing.T) {
+	cfg := &config.Config{
+		ControlAuth: config.ControlAuthConfig{
+			Mode: ControlAuthModeExternalOIDC,
+		},
+	}
+	settingSvc := NewSettingService(&controlAuthCapabilitySettingRepoStub{values: map[string]string{
+		SettingKeyRegistrationEnabled:  "true",
+		SettingKeyEmailVerifyEnabled:   "true",
+		SettingKeyPasswordResetEnabled: "true",
+		SettingKeyTotpEnabled:          "true",
+		SettingKeyBackendModeEnabled:   "false",
+	}}, cfg)
+	svc := &ControlAuthService{
+		cfg:            cfg,
+		settingService: settingSvc,
+	}
+
+	result, err := svc.RegistrationPreflight(context.Background(), "", "", "")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.False(t, result.RegistrationEnabled)
+	require.False(t, result.EmailVerificationRequired)
+	require.Contains(t, result.Errors, "REGISTRATION_DISABLED")
+}

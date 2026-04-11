@@ -35,7 +35,6 @@ const fakeUser = {
 }
 
 const fakeBootstrap = {
-  access_token: 'access-token-1',
   csrf_token: 'csrf-token',
   run_mode: 'simple' as const,
   public_settings: {} as any,
@@ -78,7 +77,7 @@ describe('useAuthStore', () => {
     expect(store.user?.email).toBe('test@example.com')
     expect(store.csrfToken).toBe('csrf-token')
     expect(store.runMode).toBe('simple')
-    expect(store.token).toBe('access-token-1')
+    expect(store.token).toBeNull()
     expect(store.authCapabilities?.password_change_enabled).toBe(true)
     expect(store.authProviders[0]?.id).toBe('oidc')
   })
@@ -92,7 +91,7 @@ describe('useAuthStore', () => {
     expect(result).toEqual(fakeBootstrap)
     expect(store.isAuthenticated).toBe(true)
     expect(store.user?.username).toBe('testuser')
-    expect(store.token).toBe('access-token-1')
+    expect(store.token).toBeNull()
   })
 
   it('login returns MFA challenge without authenticating', async () => {
@@ -151,7 +150,7 @@ describe('useAuthStore', () => {
     expect(mockRefreshSession).toHaveBeenCalledTimes(1)
     expect(store.isAuthenticated).toBe(true)
     expect(store.user?.email).toBe('test@example.com')
-    expect(store.token).toBe('access-token-1')
+    expect(store.token).toBeNull()
   })
 
   it('login2FA authenticates via challenge', async () => {

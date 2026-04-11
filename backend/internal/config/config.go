@@ -332,25 +332,25 @@ type ProxyProbeConfig struct {
 }
 
 type BillingConfig struct {
-	CircuitBreaker CircuitBreakerConfig  `mapstructure:"circuit_breaker"`
-	Stream         BillingStreamConfig   `mapstructure:"stream"`
-	DBPool         BillingDBPoolConfig   `mapstructure:"db_pool"`
-	HealthPort     string                `mapstructure:"health_port"`
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+	Stream         BillingStreamConfig  `mapstructure:"stream"`
+	DBPool         BillingDBPoolConfig  `mapstructure:"db_pool"`
+	HealthPort     string               `mapstructure:"health_port"`
 }
 
 // BillingStreamConfig configures the Redis Stream used as a message broker
 // between the gateway (publisher) and the billing service (consumer).
 type BillingStreamConfig struct {
-	Key                     string `mapstructure:"key"`
-	ConsumerGroup           string `mapstructure:"consumer_group"`
-	MaxLen                  int64  `mapstructure:"max_len"`
-	DLQKey                  string `mapstructure:"dlq_key"`
-	BatchSize               int    `mapstructure:"batch_size"`
-	BlockTimeoutSeconds     int    `mapstructure:"block_timeout_seconds"`
-	PendingRecoverySeconds  int    `mapstructure:"pending_recovery_seconds"`
-	MaxRetryCount           int    `mapstructure:"max_retry_count"`
-	Workers                 int    `mapstructure:"workers"`
-	PublishRetries          int    `mapstructure:"publish_retries"`
+	Key                    string `mapstructure:"key"`
+	ConsumerGroup          string `mapstructure:"consumer_group"`
+	MaxLen                 int64  `mapstructure:"max_len"`
+	DLQKey                 string `mapstructure:"dlq_key"`
+	BatchSize              int    `mapstructure:"batch_size"`
+	BlockTimeoutSeconds    int    `mapstructure:"block_timeout_seconds"`
+	PendingRecoverySeconds int    `mapstructure:"pending_recovery_seconds"`
+	MaxRetryCount          int    `mapstructure:"max_retry_count"`
+	Workers                int    `mapstructure:"workers"`
+	PublishRetries         int    `mapstructure:"publish_retries"`
 }
 
 // BillingDBPoolConfig configures the dedicated DB connection pool for billing writes.
@@ -956,10 +956,12 @@ func NormalizeRunMode(value string) string {
 func NormalizeControlAuthMode(value string) string {
 	normalized := strings.ToLower(strings.TrimSpace(value))
 	switch normalized {
+	case "":
+		return "local"
 	case "local", "external_oidc", "external_auth0", "external_clerk":
 		return normalized
 	default:
-		return "local"
+		return normalized
 	}
 }
 

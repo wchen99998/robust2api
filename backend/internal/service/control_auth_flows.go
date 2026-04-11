@@ -23,8 +23,8 @@ func (s *ControlAuthService) SyncUserIdentity(ctx context.Context, userID int64)
 
 func (s *ControlAuthService) RegistrationPreflight(ctx context.Context, email, promoCode, invitationCode string) (*RegistrationPreflightResult, error) {
 	result := &RegistrationPreflightResult{
-		RegistrationEnabled:       s.isRegistrationAllowed(ctx),
-		EmailVerificationRequired: s.settingService != nil && s.settingService.IsEmailVerifyEnabled(ctx),
+		RegistrationEnabled:       s.registrationEnabled(ctx),
+		EmailVerificationRequired: s.emailVerificationEnabled(ctx),
 		InvitationRequired:        s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx),
 		EmailSuffixAllowed:        true,
 		PromoStatus:               "not_provided",

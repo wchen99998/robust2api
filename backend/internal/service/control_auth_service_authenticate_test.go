@@ -180,6 +180,35 @@ func TestControlAuthService_AuthenticateAccessToken_UsesReadOnlyIdentityLookup(t
 	require.False(t, repo.ensureCalled)
 }
 
+func TestControlAuthService_AuthenticateAccessToken_RejectsEmbedToken(t *testing.T) {
+	signingKey := newTestControlSigningKey(t)
+	now := time.Now()
+
+	svc := &ControlAuthService{
+		issuer:           "https://control.example.test",
+		audience:         "https://control.example.test",
+		activeSigningKey: signingKey,
+		verificationKeys: map[string]*ecdsa.PublicKey{
+			signingKey.kid: signingKey.publicKey,
+		},
+	}
+
+	token, _, err := svc.signSessionToken(
+		"50ee32fe-4372-443e-acb0-5f65c9c7a2bf",
+		"0fa843c7-7882-4986-af28-d6a5c59106b3",
+		7,
+		"pwd",
+		controlEmbedTokenTTL,
+		now,
+		controlTokenPurposeEmbed,
+	)
+	require.NoError(t, err)
+
+	identity, err := svc.AuthenticateAccessToken(context.Background(), token)
+	require.Nil(t, identity)
+	require.ErrorIs(t, err, ErrInvalidToken)
+}
+
 func TestControlAuthService_GetSessionSnapshot_FallsBackToRepositoryWhenCacheFails(t *testing.T) {
 	now := time.Now()
 	sessionRecord := &SessionRecord{

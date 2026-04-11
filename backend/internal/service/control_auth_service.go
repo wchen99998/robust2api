@@ -52,6 +52,9 @@ const (
 
 	controlIssuerDefault   = "sub2api-control"
 	controlAudienceDefault = "sub2api-control"
+
+	controlTokenPurposeAccess = "access"
+	controlTokenPurposeEmbed  = "embed"
 )
 
 var (
@@ -75,6 +78,7 @@ type controlAccessClaims struct {
 	SessionID   string `json:"sid"`
 	AuthVersion int64  `json:"av"`
 	AMR         string `json:"amr"`
+	Purpose     string `json:"pur"`
 	jwt.RegisteredClaims
 }
 
@@ -384,6 +388,9 @@ func (s *ControlAuthService) AuthenticateAccessToken(ctx context.Context, tokenS
 	if len(claims.Audience) == 0 || claims.Audience[0] != s.audience {
 		return nil, ErrInvalidToken
 	}
+	if claims.Purpose != controlTokenPurposeAccess {
+		return nil, ErrInvalidToken
+	}
 
 	snapshot, err := s.getSessionSnapshot(ctx, claims.SessionID)
 	if err != nil {
@@ -691,7 +698,15 @@ func (s *ControlAuthService) IssueEmbedToken(ctx context.Context, identity *Auth
 	if identity == nil {
 		return nil, ErrInvalidToken
 	}
-	token, expiresAt, err := s.signSessionToken(identity.SubjectID, identity.SessionID, identity.AuthVersion, identity.AMR, controlEmbedTokenTTL, time.Now())
+	token, expiresAt, err := s.signSessionToken(
+		identity.SubjectID,
+		identity.SessionID,
+		identity.AuthVersion,
+		identity.AMR,
+		controlEmbedTokenTTL,
+		time.Now(),
+		controlTokenPurposeEmbed,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -817,10 +832,18 @@ func (s *ControlAuthService) newSessionRecords(bundle *IdentityBundle, user *Use
 }
 
 func (s *ControlAuthService) signAccessToken(subjectID, sessionID string, authVersion int64, amr string, now time.Time) (string, time.Time, error) {
-	return s.signSessionToken(subjectID, sessionID, authVersion, amr, controlAccessTokenTTL, now)
+	return s.signSessionToken(
+		subjectID,
+		sessionID,
+		authVersion,
+		amr,
+		controlAccessTokenTTL,
+		now,
+		controlTokenPurposeAccess,
+	)
 }
 
-func (s *ControlAuthService) signSessionToken(subjectID, sessionID string, authVersion int64, amr string, ttl time.Duration, now time.Time) (string, time.Time, error) {
+func (s *ControlAuthService) signSessionToken(subjectID, sessionID string, authVersion int64, amr string, ttl time.Duration, now time.Time, purpose string) (string, time.Time, error) {
 	if s == nil || s.activeSigningKey == nil || s.activeSigningKey.privateKey == nil {
 		return "", time.Time{}, fmt.Errorf("signing key not initialized")
 	}
@@ -830,6 +853,7 @@ func (s *ControlAuthService) signSessionToken(subjectID, sessionID string, authV
 		SessionID:   sessionID,
 		AuthVersion: authVersion,
 		AMR:         amr,
+		Purpose:     strings.TrimSpace(purpose),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    s.issuer,
 			Subject:   subjectID,
