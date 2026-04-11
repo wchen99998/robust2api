@@ -13,7 +13,7 @@
       "title": "Total Users",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -27,7 +27,7 @@
       "title": "Active API Keys",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -41,7 +41,7 @@
       "title": "Total Accounts",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -55,7 +55,7 @@
       "title": "Today Requests",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -69,7 +69,7 @@
       "title": "Total Requests",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -83,7 +83,7 @@
       "title": "Today Actual Cost",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -97,7 +97,7 @@
       "title": "Today Tokens",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -111,7 +111,7 @@
       "title": "Total Tokens",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -125,7 +125,7 @@
       "title": "Total Actual Cost",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -139,7 +139,7 @@
       "title": "Active Users (Today)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 12, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -153,7 +153,7 @@
       "title": "RPM (Last Hour)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 16, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -167,7 +167,7 @@
       "title": "Average Duration (ms)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 20, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -181,7 +181,7 @@
       "title": "Requests Trend (Hourly)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -195,7 +195,7 @@
       "title": "Actual Cost Trend (Daily)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",

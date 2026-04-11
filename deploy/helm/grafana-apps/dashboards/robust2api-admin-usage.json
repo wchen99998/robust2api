@@ -13,7 +13,7 @@
       "title": "Hourly Requests",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -27,7 +27,7 @@
       "title": "Hourly Tokens",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -41,7 +41,7 @@
       "title": "Actual Cost (Daily)",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -55,7 +55,7 @@
       "title": "Model Spend Top 12",
       "type": "table",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -69,7 +69,7 @@
       "title": "Group Spend",
       "type": "table",
       "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -83,7 +83,7 @@
       "title": "Top Users by Actual Cost",
       "type": "table",
       "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",
@@ -97,7 +97,7 @@
       "title": "Top Users Token Trend",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
-      "datasource": { "type": "postgres", "uid": "robust2api-pg" },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
       "targets": [
         {
           "refId": "A",

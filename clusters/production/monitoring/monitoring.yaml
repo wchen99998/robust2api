@@ -55,7 +55,7 @@ spec:
         storage:
           trace:
             s3:
-              bucket: robust2api-tempo
+              bucket: sub2api-tempo
               endpoint: ${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com
 
     loki:
@@ -64,6 +64,6 @@ spec:
           s3:
             endpoint: ${CF_R2_ACCOUNT_ID}.r2.cloudflarestorage.com
           bucketNames:
-            chunks: robust2api-loki
-            ruler: robust2api-loki
-            admin: robust2api-loki
+            chunks: sub2api-loki
+            ruler: sub2api-loki
+            admin: sub2api-loki

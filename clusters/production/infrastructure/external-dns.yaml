@@ -32,7 +32,7 @@ spec:
             name: cloudflare-api-token
             key: api-token
     policy: sync
-    txtOwnerId: robust2api
+    txtOwnerId: sub2api
     domainFilters:
       - ${BASE_DOMAIN}
     sources:

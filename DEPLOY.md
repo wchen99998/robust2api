@@ -7,6 +7,8 @@ Robust2API runs on DigitalOcean Kubernetes (DOKS) with a clean ownership split:
 
 All in-cluster changes are made by editing YAML files in `clusters/production/`, committing, and pushing. Flux reconciles automatically within 1 minute.
 
+The production cluster intentionally keeps the historical `sub2api` namespace, HelmRelease names, and stateful service identifiers so Flux can perform in-place upgrades without replacing PostgreSQL or Redis.
+
 ```
 Cloudflare (DNS managed by ExternalDNS, proxied)
     |
@@ -14,7 +16,7 @@ DO Load Balancer (TLS passthrough)
     |
 ingress-nginx (TLS via cert-manager DNS-01 / Let's Encrypt)
     |
-Robust2API pods (namespace: robust2api)
+Robust2API pods (namespace: sub2api, retained for continuity)
     +-- Redis (in-cluster Bitnami, standalone)
     +-- PostgreSQL (in-cluster Bitnami or external DO Managed)
 
@@ -105,7 +107,7 @@ Flux HelmReleases reference secrets via `valuesFrom`. Create them before bootstr
 
 ```bash
 kubectl create secret docker-registry ghcr-pull \
-  -n robust2api \
+  -n sub2api \
   --docker-server=ghcr.io \
   --docker-username=<github-username> \
   --docker-password=<github-pat-with-read-packages>
@@ -114,14 +116,14 @@ kubectl create secret docker-registry ghcr-pull \
 ### Robust2API Secrets
 
 ```bash
-kubectl create namespace robust2api --dry-run=client -o yaml | kubectl apply -f -
+kubectl create namespace sub2api --dry-run=client -o yaml | kubectl apply -f -
 
 kubectl apply -f - <<'EOF'
 apiVersion: v1
 kind: Secret
 metadata:
-  name: robust2api-secrets
-  namespace: robust2api
+  name: sub2api-secrets
+  namespace: sub2api
 type: Opaque
 stringData:
   secrets.jwtSecret: "<random-32-char>"
@@ -207,8 +209,8 @@ Domain, Let's Encrypt email, and Cloudflare R2 account ID come from the
 By default, public ingress hosts follow the shared `service-namespace.domain`
 convention. For example:
 
-- `gateway-robust2api.<baseDomain>` for the API gateway
-- `app-robust2api.<baseDomain>` for the control/frontend app
+- `gateway-sub2api.<baseDomain>` for the API gateway
+- `app-sub2api.<baseDomain>` for the control/frontend app
 - `grafana-monitoring.<baseDomain>` for Grafana
 
 Set explicit `host` or URL override fields only when you intentionally want a
@@ -253,11 +255,11 @@ flux get sources git
 # external-dns  1.16.1    True   Helm upgrade succeeded...
 # ingress-nginx 4.12.1    True   Helm upgrade succeeded...
 # monitoring    0.1.0+... True   Helm upgrade succeeded...
-# robust2api       0.2.0+... True   Helm upgrade succeeded...
+# sub2api          0.2.0+... True   Helm upgrade succeeded...
 # grafana-apps  0.1.0+... True   Helm upgrade succeeded...
 
 # Pods
-kubectl get pods -n robust2api
+kubectl get pods -n sub2api
 kubectl get pods -n monitoring
 kubectl get pods -n ingress-nginx
 kubectl get pods -n cert-manager
@@ -328,7 +330,7 @@ git push
 ```bash
 flux reconcile source git flux-system          # Fetch latest git
 flux reconcile kustomization apps              # Reconcile apps layer
-flux reconcile helmrelease robust2api -n robust2api  # Reconcile specific release
+flux reconcile helmrelease sub2api -n sub2api  # Reconcile specific release
 flux reconcile helmrelease monitoring -n monitoring
 ```
 
@@ -381,8 +383,8 @@ observability:
 
 Provisioned automatically:
 - `monitoring` provisions Prometheus, Loki, Tempo, and Alertmanager.
-- `robust2api` provisions the Robust2API PostgreSQL datasource into the monitoring namespace.
-- In in-cluster PostgreSQL mode, `robust2api` also reconciles the `grafana_reader` role after install/upgrade.
+- `sub2api` provisions the Robust2API PostgreSQL datasource into the monitoring namespace.
+- In in-cluster PostgreSQL mode, `sub2api` also reconciles the `grafana_reader` role after install/upgrade.
 
 ## Troubleshooting
 
@@ -417,7 +419,7 @@ Options:
 
 ### ImagePullBackOff
 
-- Verify `ghcr-pull` secret: `kubectl get secret ghcr-pull -n robust2api`
+- Verify `ghcr-pull` secret: `kubectl get secret ghcr-pull -n sub2api`
 - Check token has `read:packages` scope
 - Verify image exists: `docker manifest inspect ghcr.io/wchen99998/robust2api/gateway:<tag>`
 
@@ -436,12 +438,12 @@ Common cause: Cloudflare API token missing DNS edit permission.
 The bootstrap job runs DB migrations and may CrashLoop briefly while PostgreSQL starts. Check:
 
 ```bash
-kubectl logs -n robust2api -l app.kubernetes.io/component=bootstrap --tail=50
+kubectl logs -n sub2api -l app.kubernetes.io/component=bootstrap --tail=50
 ```
 
 ### Flux Controller Logs
 
 ```bash
 flux logs --level=error
-flux logs --kind=HelmRelease --name=robust2api --namespace=robust2api
+flux logs --kind=HelmRelease --name=sub2api --namespace=sub2api
 ```

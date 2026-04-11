@@ -1,8 +1,8 @@
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: robust2api
-  namespace: robust2api
+  name: sub2api
+  namespace: sub2api
 spec:
   interval: 10m
   chart:
@@ -24,26 +24,28 @@ spec:
   timeout: 10m
   valuesFrom:
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: postgresql.auth.password
       targetPath: postgresql.auth.password
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: postgresql.auth.postgresPassword
       targetPath: postgresql.auth.postgresPassword
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: redis.auth.password
       targetPath: redis.auth.password
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: grafanaProvisioning.reader.username
       targetPath: grafanaProvisioning.reader.username
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: grafanaProvisioning.reader.password
       targetPath: grafanaProvisioning.reader.password
   values:
+    nameOverride: sub2api
+
     gateway:
       enabled: false
     control:
@@ -69,7 +71,7 @@ spec:
       monitoringNamespace: monitoring
       datasource:
         name: Robust2API PostgreSQL
-        uid: robust2api-pg
+        uid: sub2api-pg
         postgresVersion: 1700
 
     postgresql:
@@ -120,12 +122,12 @@ spec:
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: robust2api-bootstrap
-  namespace: robust2api
+  name: sub2api-bootstrap
+  namespace: sub2api
 spec:
   interval: 10m
   dependsOn:
-    - name: robust2api
+    - name: sub2api
   chart:
     spec:
       chart: deploy/helm/robust2api
@@ -145,26 +147,28 @@ spec:
   timeout: 10m
   valuesFrom:
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: secrets.jwtSecret
       targetPath: secrets.jwtSecret
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: secrets.totpEncryptionKey
       targetPath: secrets.totpEncryptionKey
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: secrets.adminPassword
       targetPath: secrets.adminPassword
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
+    nameOverride: sub2api
+
     image:
       bootstrap:
         tag: "0.5.0"
@@ -198,25 +202,25 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: robust2api-postgresql
+      host: sub2api-postgresql
       port: 5432
-      user: robust2api
-      database: robust2api
+      user: sub2api
+      database: sub2api
       sslmode: require
     externalRedis:
-      host: robust2api-redis-master
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: robust2api-gateway
-  namespace: robust2api
+  name: sub2api-gateway
+  namespace: sub2api
 spec:
   interval: 10m
   dependsOn:
-    - name: robust2api-bootstrap
+    - name: sub2api-bootstrap
   chart:
     spec:
       chart: deploy/helm/robust2api
@@ -236,14 +240,16 @@ spec:
   timeout: 10m
   valuesFrom:
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
+    nameOverride: sub2api
+
     image:
       gateway:
         tag: "0.5.0"
@@ -333,26 +339,26 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: robust2api-postgresql
+      host: sub2api-postgresql
       port: 5432
-      user: robust2api
-      database: robust2api
+      user: sub2api
+      database: sub2api
       sslmode: require
     externalRedis:
-      host: robust2api-redis-master
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: robust2api-control
-  namespace: robust2api
+  name: sub2api-control
+  namespace: sub2api
 spec:
   interval: 10m
   dependsOn:
-    - name: robust2api-bootstrap
-    - name: robust2api-gateway
+    - name: sub2api-bootstrap
+    - name: sub2api-gateway
   chart:
     spec:
       chart: deploy/helm/robust2api
@@ -372,26 +378,28 @@ spec:
   timeout: 10m
   valuesFrom:
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: secrets.jwtSecret
       targetPath: secrets.jwtSecret
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: secrets.totpEncryptionKey
       targetPath: secrets.totpEncryptionKey
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: secrets.adminPassword
       targetPath: secrets.adminPassword
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
+    nameOverride: sub2api
+
     image:
       control:
         tag: "0.5.0"
@@ -421,7 +429,7 @@ spec:
       enabled: false
     frontend:
       enabled: true
-      gatewayServiceName: robust2api-gateway-gateway
+      gatewayServiceName: sub2api-gateway-gateway
     bootstrap:
       enabled: false
 
@@ -471,25 +479,25 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: robust2api-postgresql
+      host: sub2api-postgresql
       port: 5432
-      user: robust2api
-      database: robust2api
+      user: sub2api
+      database: sub2api
       sslmode: require
     externalRedis:
-      host: robust2api-redis-master
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: robust2api-worker
-  namespace: robust2api
+  name: sub2api-worker
+  namespace: sub2api
 spec:
   interval: 10m
   dependsOn:
-    - name: robust2api-bootstrap
+    - name: sub2api-bootstrap
   chart:
     spec:
       chart: deploy/helm/robust2api
@@ -509,14 +517,16 @@ spec:
   timeout: 10m
   valuesFrom:
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
+    nameOverride: sub2api
+
     image:
       worker:
         tag: "0.5.0"
@@ -570,25 +580,25 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: robust2api-postgresql
+      host: sub2api-postgresql
       port: 5432
-      user: robust2api
-      database: robust2api
+      user: sub2api
+      database: sub2api
       sslmode: require
     externalRedis:
-      host: robust2api-redis-master
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true
 ---
 apiVersion: helm.toolkit.fluxcd.io/v2
 kind: HelmRelease
 metadata:
-  name: robust2api-billing
-  namespace: robust2api
+  name: sub2api-billing
+  namespace: sub2api
 spec:
   interval: 10m
   dependsOn:
-    - name: robust2api-bootstrap
+    - name: sub2api-bootstrap
   chart:
     spec:
       chart: deploy/helm/robust2api
@@ -608,14 +618,16 @@ spec:
   timeout: 10m
   valuesFrom:
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: postgresql.auth.password
       targetPath: externalDatabase.password
     - kind: Secret
-      name: robust2api-secrets
+      name: sub2api-secrets
       valuesKey: redis.auth.password
       targetPath: externalRedis.password
   values:
+    nameOverride: sub2api
+
     image:
       billing:
         tag: "0.5.0"
@@ -671,12 +683,12 @@ spec:
     redis:
       enabled: false
     externalDatabase:
-      host: robust2api-postgresql
+      host: sub2api-postgresql
       port: 5432
-      user: robust2api
-      database: robust2api
+      user: sub2api
+      database: sub2api
       sslmode: require
     externalRedis:
-      host: robust2api-redis-master
+      host: sub2api-redis-master
       port: 6379
       enableTLS: true

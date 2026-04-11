@@ -27,7 +27,7 @@ spec:
       service:
         externalTrafficPolicy: Local
         annotations:
-          service.beta.kubernetes.io/do-loadbalancer-name: robust2api-lb
+          service.beta.kubernetes.io/do-loadbalancer-name: sub2api-lb
           service.beta.kubernetes.io/do-loadbalancer-tls-passthrough: "true"
       config:
         enable-underscores-in-headers: "true"
