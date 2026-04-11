@@ -24,6 +24,12 @@ describe('auth API normalization', () => {
         run_mode: 'simple',
         authenticated: true,
         refresh_available: true,
+        auth_capabilities: {
+          provider: 'local',
+          password_login_enabled: true,
+          password_reset_enabled: false,
+          mfa_self_service_enabled: true
+        },
         settings: {
           registration_enabled: true
         },
@@ -69,6 +75,8 @@ describe('auth API normalization', () => {
     expect(data.access_token).toBe('access-token-1')
     expect(data.csrf_token).toBe('csrf-1')
     expect(data.run_mode).toBe('simple')
+    expect(data.auth_capabilities?.provider).toBe('local')
+    expect(data.auth_capabilities?.mfa_self_service_enabled).toBe(true)
     expect(data.auth_state.authenticated).toBe(true)
     expect(data.auth_state.refresh_available).toBe(true)
     expect(data.me?.subject_id).toBe('subject-1')

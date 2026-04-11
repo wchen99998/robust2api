@@ -10,11 +10,11 @@ import (
 )
 
 // NewJWTAuthMiddleware creates the control-plane authenticated-user middleware.
-func NewJWTAuthMiddleware(controlAuthService *service.ControlAuthService) JWTAuthMiddleware {
+func NewJWTAuthMiddleware(controlAuthService service.ControlAccessTokenAuthenticator) JWTAuthMiddleware {
 	return JWTAuthMiddleware(jwtAuth(controlAuthService))
 }
 
-func jwtAuth(controlAuthService *service.ControlAuthService) gin.HandlerFunc {
+func jwtAuth(controlAuthService service.ControlAccessTokenAuthenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := extractControlAccessToken(c)
 		if tokenString == "" {
@@ -64,7 +64,7 @@ func extractControlAccessToken(c *gin.Context) string {
 	return strings.TrimSpace(parts[1])
 }
 
-func authenticateControlIdentity(c *gin.Context, controlAuthService *service.ControlAuthService, tokenString string) (*service.AuthenticatedIdentity, error) {
+func authenticateControlIdentity(c *gin.Context, controlAuthService service.ControlAccessTokenAuthenticator, tokenString string) (*service.AuthenticatedIdentity, error) {
 	if controlAuthService == nil {
 		return nil, errors.New("control auth service is not configured")
 	}

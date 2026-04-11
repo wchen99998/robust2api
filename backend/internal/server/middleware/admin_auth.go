@@ -10,11 +10,11 @@ import (
 )
 
 // NewAdminAuthMiddleware creates the authenticated-admin middleware.
-func NewAdminAuthMiddleware(controlAuthService *service.ControlAuthService) AdminAuthMiddleware {
+func NewAdminAuthMiddleware(controlAuthService service.ControlAccessTokenAuthenticator) AdminAuthMiddleware {
 	return AdminAuthMiddleware(adminAuth(controlAuthService))
 }
 
-func adminAuth(controlAuthService *service.ControlAuthService) gin.HandlerFunc {
+func adminAuth(controlAuthService service.ControlAccessTokenAuthenticator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		tokenString := extractControlAccessToken(c)
 		if isWebSocketUpgradeRequest(c) {

@@ -198,6 +198,21 @@ func (s *ControlAuthService) JWKS() *ControlJWKS {
 	return s.jwks
 }
 
+func (s *ControlAuthService) AuthCapabilities(ctx context.Context) *ControlAuthCapabilities {
+	passwordResetEnabled := false
+	mfaSelfServiceEnabled := false
+	if s != nil && s.settingService != nil {
+		passwordResetEnabled = s.settingService.IsPasswordResetEnabled(ctx)
+		mfaSelfServiceEnabled = s.settingService.IsTotpEnabled(ctx)
+	}
+	return &ControlAuthCapabilities{
+		Provider:              ControlAuthProviderLocal,
+		PasswordLoginEnabled:  true,
+		PasswordResetEnabled:  passwordResetEnabled,
+		MFASelfServiceEnabled: mfaSelfServiceEnabled,
+	}
+}
+
 func (s *ControlAuthService) loadSigningKeys(ctx context.Context) error {
 	activeKey, err := s.loadOrCreateSigningKey(ctx, controlAccessKeyActiveSecret)
 	if err != nil {

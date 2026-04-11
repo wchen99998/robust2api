@@ -64,6 +64,7 @@ type bootstrapPendingRegistrationResponse struct {
 
 type bootstrapResponse struct {
 	Settings            dto.PublicSettings                    `json:"settings"`
+	AuthCapabilities    *service.ControlAuthCapabilities      `json:"auth_capabilities,omitempty"`
 	CSRFToken           string                                `json:"csrf_token"`
 	AccessToken         string                                `json:"access_token,omitempty"`
 	RunMode             string                                `json:"run_mode"`
@@ -1035,6 +1036,7 @@ func (h *AuthHandler) buildBootstrapPayload(ctx context.Context, identity *servi
 
 	payload := &bootstrapResponse{
 		Settings:         settings,
+		AuthCapabilities: h.controlAuthService.AuthCapabilities(ctx),
 		CSRFToken:        csrfToken,
 		RunMode:          h.currentRunMode(),
 		Authenticated:    identity != nil,

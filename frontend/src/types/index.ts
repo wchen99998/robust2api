@@ -153,6 +153,13 @@ export interface BootstrapAuthState {
   refresh_available?: boolean
 }
 
+export interface BootstrapAuthCapabilities {
+  provider: string
+  password_login_enabled: boolean
+  password_reset_enabled: boolean
+  mfa_self_service_enabled: boolean
+}
+
 export interface BootstrapSession {
   session_id: string
   expires_at: string
@@ -186,6 +193,7 @@ export interface BootstrapResponse {
   csrf_token?: string
   run_mode?: 'standard' | 'simple'
   public_settings: PublicSettings
+  auth_capabilities?: BootstrapAuthCapabilities
   auth_state: BootstrapAuthState
   me?: BootstrapMe | null
   pending_registration?: BootstrapPendingRegistration | null

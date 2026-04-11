@@ -16,6 +16,7 @@ import type {
   BootstrapResponse,
   BootstrapPendingRegistration,
   BootstrapSession,
+  BootstrapAuthCapabilities,
   RegistrationPreflightRequest,
   RegistrationPreflightResponse
 } from '@/types'
@@ -193,12 +194,27 @@ export function normalizeBootstrapResponse(raw: unknown): BootstrapResponse {
         : typeof meRaw.access_token === 'string'
           ? meRaw.access_token
           : undefined
+  const authCapabilitiesRaw = isObjectRecord(payload.auth_capabilities)
+    ? payload.auth_capabilities
+    : null
+  const authCapabilities: BootstrapAuthCapabilities | undefined = authCapabilitiesRaw
+    ? {
+        provider:
+          typeof authCapabilitiesRaw.provider === 'string'
+            ? authCapabilitiesRaw.provider
+            : 'local',
+        password_login_enabled: Boolean(authCapabilitiesRaw.password_login_enabled),
+        password_reset_enabled: Boolean(authCapabilitiesRaw.password_reset_enabled),
+        mfa_self_service_enabled: Boolean(authCapabilitiesRaw.mfa_self_service_enabled)
+      }
+    : undefined
 
   return {
     access_token: accessToken,
     csrf_token: typeof payload.csrf_token === 'string' ? payload.csrf_token : undefined,
     run_mode: explicitRunMode,
     public_settings: normalizePublicSettings(publicSettingsRaw),
+    auth_capabilities: authCapabilities,
     auth_state: {
       authenticated: Boolean(
         payload.authenticated ??

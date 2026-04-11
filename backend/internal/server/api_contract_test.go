@@ -50,6 +50,12 @@ func TestAPIContracts(t *testing.T) {
 				"data": {
 					"authenticated": false,
 					"refresh_available": false,
+					"auth_capabilities": {
+						"provider": "local",
+						"password_login_enabled": true,
+						"password_reset_enabled": false,
+						"mfa_self_service_enabled": false
+					},
 					"csrf_token": "csrf-test-token",
 					"run_mode": "standard",
 					"settings": {
