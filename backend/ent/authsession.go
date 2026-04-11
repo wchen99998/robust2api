@@ -185,47 +185,26 @@ func (_m *AuthSession) Unwrap() *AuthSession {
 
 // String implements the fmt.Stringer.
 func (_m *AuthSession) String() string {
-	var builder strings.Builder
-	builder.WriteString("AuthSession(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("subject_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SubjectID))
-	builder.WriteString(", ")
-	builder.WriteString("legacy_user_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.LegacyUserID))
-	builder.WriteString(", ")
-	builder.WriteString("status=")
-	builder.WriteString(_m.Status)
-	builder.WriteString(", ")
-	builder.WriteString("amr=")
-	builder.WriteString(_m.Amr)
-	builder.WriteString(", ")
-	builder.WriteString("last_seen_at=")
-	builder.WriteString(_m.LastSeenAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("expires_at=")
-	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("absolute_expires_at=")
-	builder.WriteString(_m.AbsoluteExpiresAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.RevokedAt; v != nil {
-		builder.WriteString("revoked_at=")
-		builder.WriteString(v.Format(time.ANSIC))
+	fields := []string{
+		fmt.Sprintf("id=%v", _m.ID),
+		"created_at=" + _m.CreatedAt.Format(time.ANSIC),
+		"updated_at=" + _m.UpdatedAt.Format(time.ANSIC),
+		fmt.Sprintf("subject_id=%v", _m.SubjectID),
+		fmt.Sprintf("legacy_user_id=%v", _m.LegacyUserID),
+		"status=" + _m.Status,
+		"amr=" + _m.Amr,
+		"last_seen_at=" + _m.LastSeenAt.Format(time.ANSIC),
+		"expires_at=" + _m.ExpiresAt.Format(time.ANSIC),
+		"absolute_expires_at=" + _m.AbsoluteExpiresAt.Format(time.ANSIC),
 	}
-	builder.WriteString(", ")
-	builder.WriteString("current_refresh_token_hash=<sensitive>")
-	builder.WriteString(", ")
-	builder.WriteString("auth_version=")
-	builder.WriteString(fmt.Sprintf("%v", _m.AuthVersion))
-	builder.WriteByte(')')
-	return builder.String()
+	if v := _m.RevokedAt; v != nil {
+		fields = append(fields, "revoked_at="+v.Format(time.ANSIC))
+	}
+	fields = append(fields,
+		"current_refresh_token_hash=<sensitive>",
+		fmt.Sprintf("auth_version=%v", _m.AuthVersion),
+	)
+	return "AuthSession(" + strings.Join(fields, ", ") + ")"
 }
 
 // AuthSessions is a parsable slice of AuthSession.

@@ -143,32 +143,19 @@ func (_m *AuthPasswordResetToken) Unwrap() *AuthPasswordResetToken {
 
 // String implements the fmt.Stringer.
 func (_m *AuthPasswordResetToken) String() string {
-	var builder strings.Builder
-	builder.WriteString("AuthPasswordResetToken(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("subject_id=")
-	builder.WriteString(fmt.Sprintf("%v", _m.SubjectID))
-	builder.WriteString(", ")
-	builder.WriteString("email=")
-	builder.WriteString(_m.Email)
-	builder.WriteString(", ")
-	builder.WriteString("token_hash=<sensitive>")
-	builder.WriteString(", ")
-	builder.WriteString("expires_at=")
-	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.ConsumedAt; v != nil {
-		builder.WriteString("consumed_at=")
-		builder.WriteString(v.Format(time.ANSIC))
+	fields := []string{
+		fmt.Sprintf("id=%v", _m.ID),
+		"created_at=" + _m.CreatedAt.Format(time.ANSIC),
+		"updated_at=" + _m.UpdatedAt.Format(time.ANSIC),
+		fmt.Sprintf("subject_id=%v", _m.SubjectID),
+		"email=" + _m.Email,
+		"token_hash=<sensitive>",
+		"expires_at=" + _m.ExpiresAt.Format(time.ANSIC),
 	}
-	builder.WriteByte(')')
-	return builder.String()
+	if v := _m.ConsumedAt; v != nil {
+		fields = append(fields, "consumed_at="+v.Format(time.ANSIC))
+	}
+	return "AuthPasswordResetToken(" + strings.Join(fields, ", ") + ")"
 }
 
 // AuthPasswordResetTokens is a parsable slice of AuthPasswordResetToken.

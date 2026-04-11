@@ -175,45 +175,23 @@ func (_m *AuthRegistrationChallenge) Unwrap() *AuthRegistrationChallenge {
 
 // String implements the fmt.Stringer.
 func (_m *AuthRegistrationChallenge) String() string {
-	var builder strings.Builder
-	builder.WriteString("AuthRegistrationChallenge(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("provider=")
-	builder.WriteString(_m.Provider)
-	builder.WriteString(", ")
-	builder.WriteString("issuer=")
-	builder.WriteString(_m.Issuer)
-	builder.WriteString(", ")
-	builder.WriteString("external_subject=")
-	builder.WriteString(_m.ExternalSubject)
-	builder.WriteString(", ")
-	builder.WriteString("email=")
-	builder.WriteString(_m.Email)
-	builder.WriteString(", ")
-	builder.WriteString("registration_email=")
-	builder.WriteString(_m.RegistrationEmail)
-	builder.WriteString(", ")
-	builder.WriteString("username=")
-	builder.WriteString(_m.Username)
-	builder.WriteString(", ")
-	builder.WriteString("redirect_to=")
-	builder.WriteString(_m.RedirectTo)
-	builder.WriteString(", ")
-	builder.WriteString("expires_at=")
-	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.ConsumedAt; v != nil {
-		builder.WriteString("consumed_at=")
-		builder.WriteString(v.Format(time.ANSIC))
+	fields := []string{
+		fmt.Sprintf("id=%v", _m.ID),
+		"created_at=" + _m.CreatedAt.Format(time.ANSIC),
+		"updated_at=" + _m.UpdatedAt.Format(time.ANSIC),
+		"provider=" + _m.Provider,
+		"issuer=" + _m.Issuer,
+		"external_subject=" + _m.ExternalSubject,
+		"email=" + _m.Email,
+		"registration_email=" + _m.RegistrationEmail,
+		"username=" + _m.Username,
+		"redirect_to=" + _m.RedirectTo,
+		"expires_at=" + _m.ExpiresAt.Format(time.ANSIC),
 	}
-	builder.WriteByte(')')
-	return builder.String()
+	if v := _m.ConsumedAt; v != nil {
+		fields = append(fields, "consumed_at="+v.Format(time.ANSIC))
+	}
+	return "AuthRegistrationChallenge(" + strings.Join(fields, ", ") + ")"
 }
 
 // AuthRegistrationChallenges is a parsable slice of AuthRegistrationChallenge.

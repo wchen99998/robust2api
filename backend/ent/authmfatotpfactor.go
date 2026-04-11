@@ -130,26 +130,17 @@ func (_m *AuthMFATOTPFactor) Unwrap() *AuthMFATOTPFactor {
 
 // String implements the fmt.Stringer.
 func (_m *AuthMFATOTPFactor) String() string {
-	var builder strings.Builder
-	builder.WriteString("AuthMFATOTPFactor(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("secret_encrypted=<sensitive>")
-	builder.WriteString(", ")
-	builder.WriteString("enabled=")
-	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))
-	builder.WriteString(", ")
-	if v := _m.EnabledAt; v != nil {
-		builder.WriteString("enabled_at=")
-		builder.WriteString(v.Format(time.ANSIC))
+	fields := []string{
+		fmt.Sprintf("id=%v", _m.ID),
+		"created_at=" + _m.CreatedAt.Format(time.ANSIC),
+		"updated_at=" + _m.UpdatedAt.Format(time.ANSIC),
+		"secret_encrypted=<sensitive>",
+		fmt.Sprintf("enabled=%v", _m.Enabled),
 	}
-	builder.WriteByte(')')
-	return builder.String()
+	if v := _m.EnabledAt; v != nil {
+		fields = append(fields, "enabled_at="+v.Format(time.ANSIC))
+	}
+	return "AuthMFATOTPFactor(" + strings.Join(fields, ", ") + ")"
 }
 
 // AuthMFATOTPFactors is a parsable slice of AuthMFATOTPFactor.

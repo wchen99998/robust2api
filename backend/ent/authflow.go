@@ -177,42 +177,23 @@ func (_m *AuthFlow) Unwrap() *AuthFlow {
 
 // String implements the fmt.Stringer.
 func (_m *AuthFlow) String() string {
-	var builder strings.Builder
-	builder.WriteString("AuthFlow(")
-	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
-	builder.WriteString("created_at=")
-	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("updated_at=")
-	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	builder.WriteString("provider=")
-	builder.WriteString(_m.Provider)
-	builder.WriteString(", ")
-	builder.WriteString("purpose=")
-	builder.WriteString(_m.Purpose)
-	builder.WriteString(", ")
-	builder.WriteString("issuer=")
-	builder.WriteString(_m.Issuer)
-	builder.WriteString(", ")
-	builder.WriteString("state_hash=<sensitive>")
-	builder.WriteString(", ")
-	builder.WriteString("code_verifier=<sensitive>")
-	builder.WriteString(", ")
-	builder.WriteString("nonce=<sensitive>")
-	builder.WriteString(", ")
-	builder.WriteString("redirect_to=")
-	builder.WriteString(_m.RedirectTo)
-	builder.WriteString(", ")
-	builder.WriteString("expires_at=")
-	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))
-	builder.WriteString(", ")
-	if v := _m.ConsumedAt; v != nil {
-		builder.WriteString("consumed_at=")
-		builder.WriteString(v.Format(time.ANSIC))
+	fields := []string{
+		fmt.Sprintf("id=%v", _m.ID),
+		"created_at=" + _m.CreatedAt.Format(time.ANSIC),
+		"updated_at=" + _m.UpdatedAt.Format(time.ANSIC),
+		"provider=" + _m.Provider,
+		"purpose=" + _m.Purpose,
+		"issuer=" + _m.Issuer,
+		"state_hash=<sensitive>",
+		"code_verifier=<sensitive>",
+		"nonce=<sensitive>",
+		"redirect_to=" + _m.RedirectTo,
+		"expires_at=" + _m.ExpiresAt.Format(time.ANSIC),
 	}
-	builder.WriteByte(')')
-	return builder.String()
+	if v := _m.ConsumedAt; v != nil {
+		fields = append(fields, "consumed_at="+v.Format(time.ANSIC))
+	}
+	return "AuthFlow(" + strings.Join(fields, ", ") + ")"
 }
 
 // AuthFlows is a parsable slice of AuthFlow.
