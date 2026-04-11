@@ -28,7 +28,15 @@ func (s *controlAuthRepoStub) GetIdentityBundleBySubjectID(_ context.Context, su
 	return s.bundle, nil
 }
 
-func (s *controlAuthRepoStub) EnsureSubjectShadow(_ context.Context, _ *User) (*IdentityBundle, error) {
+func (s *controlAuthRepoStub) EnsureSubjectAccount(_ context.Context, _ *User) (*IdentityBundle, error) {
+	s.ensureCalled = true
+	if s.bundle == nil {
+		return nil, errors.New("identity bundle not configured")
+	}
+	return s.bundle, nil
+}
+
+func (s *controlAuthRepoStub) SyncLocalCredentialState(_ context.Context, _ *User) (*IdentityBundle, error) {
 	s.ensureCalled = true
 	if s.bundle == nil {
 		return nil, errors.New("identity bundle not configured")

@@ -79,6 +79,7 @@ func RegisterAuthRoutes(
 	{
 		authenticated.DELETE("/session", h.Auth.SessionLogout)
 		authenticated.DELETE("/sessions", h.Auth.SessionsLogoutAll)
+		authenticated.POST("/embed-token", h.Auth.EmbedToken)
 		authenticated.PATCH("/me", h.Auth.PatchMe)
 		authenticated.POST("/me/password/change", h.Auth.ChangeMyPassword)
 

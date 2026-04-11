@@ -38,14 +38,11 @@ func adminAuth(controlAuthService service.ControlAccessTokenAuthenticator) gin.H
 			return
 		}
 
-		concurrency := 0
-		if identity.User != nil {
-			concurrency = identity.User.Concurrency
-		}
-
 		c.Set(string(ContextKeyUser), AuthSubject{
-			UserID:      identity.LegacyUserID,
-			Concurrency: concurrency,
+			SubjectID:    identity.SubjectID,
+			SessionID:    identity.SessionID,
+			UserID:       identity.LegacyUserID,
+			Concurrency:  identity.Concurrency,
 		})
 		c.Set(string(ContextKeyUserRole), identity.PrimaryRole)
 		authMethod := strings.TrimSpace(identity.AMR)

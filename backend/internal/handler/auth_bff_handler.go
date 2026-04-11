@@ -14,7 +14,6 @@ import (
 	"github.com/Wei-Shaw/sub2api/internal/handler/dto"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/oauth"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 
@@ -65,6 +64,7 @@ type bootstrapPendingRegistrationResponse struct {
 type bootstrapResponse struct {
 	Settings            dto.PublicSettings                    `json:"settings"`
 	AuthCapabilities    *service.ControlAuthCapabilities      `json:"auth_capabilities,omitempty"`
+	AuthProviders       []service.ControlAuthProviderDescriptor `json:"auth_providers,omitempty"`
 	CSRFToken           string                                `json:"csrf_token"`
 	AccessToken         string                                `json:"access_token,omitempty"`
 	RunMode             string                                `json:"run_mode"`
@@ -189,7 +189,7 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 }
 
 func (h *AuthHandler) SessionLogin(c *gin.Context) {
-	if h.controlSessionAuth == nil {
+	if h.controlLocalCredentials == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -200,7 +200,7 @@ func (h *AuthHandler) SessionLogin(c *gin.Context) {
 		return
 	}
 
-	result, err := h.controlSessionAuth.Login(c.Request.Context(), req.Email, req.Password, req.TurnstileToken, ip.GetClientIP(c))
+	result, err := h.controlLocalCredentials.Login(c.Request.Context(), req.Email, req.Password, req.TurnstileToken, ip.GetClientIP(c))
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -232,7 +232,7 @@ func (h *AuthHandler) SessionLogin(c *gin.Context) {
 }
 
 func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
-	if h.controlSessionAuth == nil {
+	if h.controlLocalCredentials == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -243,7 +243,7 @@ func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
 		return
 	}
 
-	result, err := h.controlSessionAuth.CompleteLoginTOTP(c.Request.Context(), req.LoginChallengeID, req.TOTPCode)
+	result, err := h.controlLocalCredentials.CompleteLoginTOTP(c.Request.Context(), req.LoginChallengeID, req.TOTPCode)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -336,7 +336,7 @@ func (h *AuthHandler) SessionRefresh(c *gin.Context) {
 }
 
 func (h *AuthHandler) RegistrationPreflight(c *gin.Context) {
-	if h.controlLocalAuth == nil {
+	if h.controlRegistration == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -347,7 +347,7 @@ func (h *AuthHandler) RegistrationPreflight(c *gin.Context) {
 		return
 	}
 
-	result, err := h.controlLocalAuth.RegistrationPreflight(c.Request.Context(), req.Email, req.PromoCode, req.InvitationCode)
+	result, err := h.controlRegistration.RegistrationPreflight(c.Request.Context(), req.Email, req.PromoCode, req.InvitationCode)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -356,7 +356,7 @@ func (h *AuthHandler) RegistrationPreflight(c *gin.Context) {
 }
 
 func (h *AuthHandler) RegistrationEmailCode(c *gin.Context) {
-	if h.controlLocalAuth == nil {
+	if h.controlRegistration == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -367,7 +367,7 @@ func (h *AuthHandler) RegistrationEmailCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.controlLocalAuth.SendRegistrationEmailCode(c.Request.Context(), req.Email); err != nil {
+	if err := h.controlRegistration.SendRegistrationEmailCode(c.Request.Context(), req.Email); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -375,7 +375,7 @@ func (h *AuthHandler) RegistrationEmailCode(c *gin.Context) {
 }
 
 func (h *AuthHandler) Registration(c *gin.Context) {
-	if h.controlSessionAuth == nil || h.controlLocalAuth == nil {
+	if h.controlSessionAuth == nil || h.controlRegistration == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -386,7 +386,7 @@ func (h *AuthHandler) Registration(c *gin.Context) {
 		return
 	}
 
-	identity, tokens, err := h.controlLocalAuth.Register(c.Request.Context(), &service.ControlRegistrationInput{
+	identity, tokens, err := h.controlRegistration.Register(c.Request.Context(), &service.ControlRegistrationInput{
 		Email:            req.Email,
 		Password:         req.Password,
 		VerificationCode: req.VerificationCode,
@@ -416,7 +416,7 @@ func (h *AuthHandler) Registration(c *gin.Context) {
 }
 
 func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
-	if h.controlSessionAuth == nil || h.controlLocalAuth == nil {
+	if h.controlSessionAuth == nil || h.controlRegistration == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -433,7 +433,7 @@ func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
 		return
 	}
 
-	identity, tokens, err := h.controlLocalAuth.CompleteOAuthRegistration(c.Request.Context(), challengeID, req.InvitationCode)
+	identity, tokens, err := h.controlRegistration.CompleteOAuthRegistration(c.Request.Context(), challengeID, req.InvitationCode)
 	if err != nil {
 		if errors.Is(err, service.ErrRegistrationChallengeNotFound) {
 			h.clearPendingRegistrationCookie(c)
@@ -459,7 +459,7 @@ func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
 }
 
 func (h *AuthHandler) PasswordForgot(c *gin.Context) {
-	if h.controlLocalAuth == nil {
+	if h.controlLocalCredentials == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -470,7 +470,7 @@ func (h *AuthHandler) PasswordForgot(c *gin.Context) {
 		return
 	}
 
-	if err := h.controlLocalAuth.RequestPasswordReset(c.Request.Context(), req.Email); err != nil {
+	if err := h.controlLocalCredentials.RequestPasswordReset(c.Request.Context(), req.Email); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -480,7 +480,7 @@ func (h *AuthHandler) PasswordForgot(c *gin.Context) {
 }
 
 func (h *AuthHandler) PasswordReset(c *gin.Context) {
-	if h.controlLocalAuth == nil {
+	if h.controlLocalCredentials == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -491,7 +491,7 @@ func (h *AuthHandler) PasswordReset(c *gin.Context) {
 		return
 	}
 
-	if err := h.controlLocalAuth.ResetPassword(c.Request.Context(), req.Email, req.Token, req.NewPassword); err != nil {
+	if err := h.controlLocalCredentials.ResetPassword(c.Request.Context(), req.Email, req.Token, req.NewPassword); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -501,7 +501,7 @@ func (h *AuthHandler) PasswordReset(c *gin.Context) {
 }
 
 func (h *AuthHandler) PatchMe(c *gin.Context) {
-	if h.controlLocalAuth == nil {
+	if h.controlProfile == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -518,7 +518,7 @@ func (h *AuthHandler) PatchMe(c *gin.Context) {
 		return
 	}
 
-	updatedIdentity, err := h.controlLocalAuth.UpdateProfile(c.Request.Context(), identity, req.Username)
+	updatedIdentity, err := h.controlProfile.UpdateProfile(c.Request.Context(), identity, req.Username)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -526,14 +526,14 @@ func (h *AuthHandler) PatchMe(c *gin.Context) {
 
 	response.Success(c, gin.H{
 		"subject":      h.newBootstrapSubject(updatedIdentity),
-		"profile":      dto.UserFromService(updatedIdentity.User),
+		"profile":      h.bootstrapProfile(c.Request.Context(), updatedIdentity),
 		"roles":        updatedIdentity.Roles,
 		"primary_role": updatedIdentity.PrimaryRole,
 	})
 }
 
 func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
-	if h.controlSessionAuth == nil || h.controlLocalAuth == nil {
+	if h.controlSessionAuth == nil || h.controlLocalCredentials == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -550,7 +550,7 @@ func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
 		return
 	}
 
-	nextIdentity, tokens, err := h.controlLocalAuth.ChangePassword(c.Request.Context(), identity, req.OldPassword, req.NewPassword)
+	nextIdentity, tokens, err := h.controlLocalCredentials.ChangePassword(c.Request.Context(), identity, req.OldPassword, req.NewPassword)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -572,8 +572,12 @@ func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
 }
 
 func (h *AuthHandler) GetMyTOTP(c *gin.Context) {
-	if h.totpService == nil {
+	if h.controlLocalMFA == nil {
 		response.InternalError(c, "totp service is not configured")
+		return
+	}
+	if !h.mfaSelfServiceEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrMFASelfServiceDisabled)
 		return
 	}
 
@@ -583,7 +587,7 @@ func (h *AuthHandler) GetMyTOTP(c *gin.Context) {
 		return
 	}
 
-	status, err := h.totpService.GetStatus(c.Request.Context(), identity.LegacyUserID)
+	status, err := h.controlLocalMFA.GetStatus(c.Request.Context(), identity.LegacyUserID)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -592,7 +596,7 @@ func (h *AuthHandler) GetMyTOTP(c *gin.Context) {
 	resp := gin.H{
 		"enabled":             status.Enabled,
 		"feature_enabled":     status.FeatureEnabled,
-		"verification_method": h.totpService.GetVerificationMethod(c.Request.Context()),
+		"verification_method": h.controlLocalMFA.GetVerificationMethod(c.Request.Context()),
 	}
 	if status.EnabledAt != nil {
 		ts := status.EnabledAt.Unix()
@@ -602,8 +606,12 @@ func (h *AuthHandler) GetMyTOTP(c *gin.Context) {
 }
 
 func (h *AuthHandler) SendMyTOTPCode(c *gin.Context) {
-	if h.totpService == nil {
+	if h.controlLocalMFA == nil {
 		response.InternalError(c, "totp service is not configured")
+		return
+	}
+	if !h.mfaSelfServiceEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrMFASelfServiceDisabled)
 		return
 	}
 
@@ -613,7 +621,7 @@ func (h *AuthHandler) SendMyTOTPCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.totpService.SendVerifyCode(c.Request.Context(), identity.LegacyUserID); err != nil {
+	if err := h.controlLocalMFA.SendVerifyCode(c.Request.Context(), identity.LegacyUserID); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -621,8 +629,12 @@ func (h *AuthHandler) SendMyTOTPCode(c *gin.Context) {
 }
 
 func (h *AuthHandler) SetupMyTOTP(c *gin.Context) {
-	if h.totpService == nil {
+	if h.controlLocalMFA == nil {
 		response.InternalError(c, "totp service is not configured")
+		return
+	}
+	if !h.mfaSelfServiceEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrMFASelfServiceDisabled)
 		return
 	}
 
@@ -637,7 +649,7 @@ func (h *AuthHandler) SetupMyTOTP(c *gin.Context) {
 		return
 	}
 
-	result, err := h.totpService.InitiateSetup(c.Request.Context(), identity.LegacyUserID, req.EmailCode, req.Password)
+	result, err := h.controlLocalMFA.InitiateSetup(c.Request.Context(), identity.LegacyUserID, req.EmailCode, req.Password)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -646,8 +658,12 @@ func (h *AuthHandler) SetupMyTOTP(c *gin.Context) {
 }
 
 func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
-	if h.totpService == nil || h.controlSessionAuth == nil {
+	if h.controlLocalMFA == nil || h.controlSessionAuth == nil {
 		response.InternalError(c, "totp service is not configured")
+		return
+	}
+	if !h.mfaSelfServiceEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrMFASelfServiceDisabled)
 		return
 	}
 
@@ -662,7 +678,7 @@ func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if err := h.totpService.CompleteSetup(c.Request.Context(), identity.LegacyUserID, req.TOTPCode, req.SetupToken); err != nil {
+	if err := h.controlLocalMFA.CompleteSetup(c.Request.Context(), identity.LegacyUserID, req.TOTPCode, req.SetupToken); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -689,8 +705,12 @@ func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
 }
 
 func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
-	if h.totpService == nil || h.controlSessionAuth == nil {
+	if h.controlLocalMFA == nil || h.controlSessionAuth == nil {
 		response.InternalError(c, "totp service is not configured")
+		return
+	}
+	if !h.mfaSelfServiceEnabled(c.Request.Context()) {
+		response.ErrorFrom(c, service.ErrMFASelfServiceDisabled)
 		return
 	}
 
@@ -705,7 +725,7 @@ func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if err := h.totpService.Disable(c.Request.Context(), identity.LegacyUserID, req.EmailCode, req.Password); err != nil {
+	if err := h.controlLocalMFA.Disable(c.Request.Context(), identity.LegacyUserID, req.EmailCode, req.Password); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -731,293 +751,86 @@ func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
 	response.Success(c, payload)
 }
 
-func (h *AuthHandler) OAuthStart(c *gin.Context) {
+func (h *AuthHandler) EmbedToken(c *gin.Context) {
 	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
 
-	provider := strings.TrimSpace(c.Param("provider"))
-	redirectTo := sanitizeFrontendRedirectPath(c.Query("redirect"))
-	if redirectTo == "" {
-		redirectTo = controlDefaultFrontendRedirect
-	}
-
-	var (
-		authURL      string
-		issuer       string
-		codeVerifier *string
-		nonce        *string
-		err          error
-	)
-
-	switch provider {
-	case "linuxdo":
-		cfg, cfgErr := h.getLinuxDoOAuthConfig(c.Request.Context())
-		if cfgErr != nil {
-			response.ErrorFrom(c, cfgErr)
-			return
-		}
-		issuer = firstNonEmpty(strings.TrimSpace(cfg.AuthorizeURL), provider)
-
-		var verifier string
-		challenge := ""
-		if cfg.UsePKCE {
-			verifier, err = oauth.GenerateCodeVerifier()
-			if err != nil {
-				response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_PKCE_GEN_FAILED", "failed to generate pkce verifier").WithCause(err))
-				return
-			}
-			challenge = oauth.GenerateCodeChallenge(verifier)
-			codeVerifier = &verifier
-		}
-
-		flow, state, err := h.controlSessionAuth.CreateAuthFlow(c.Request.Context(), provider, "login", issuer, redirectTo, codeVerifier, nil)
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-		h.setAuthFlowCookie(c, flow.FlowID)
-
-		authURL, err = buildLinuxDoAuthorizeURL(cfg, state, challenge, strings.TrimSpace(cfg.RedirectURL))
-		if err != nil {
-			response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_BUILD_URL_FAILED", "failed to build oauth authorization url").WithCause(err))
-			return
-		}
-	case "oidc":
-		cfg, cfgErr := h.getOIDCOAuthConfig(c.Request.Context())
-		if cfgErr != nil {
-			response.ErrorFrom(c, cfgErr)
-			return
-		}
-		issuer = firstNonEmpty(strings.TrimSpace(cfg.IssuerURL), provider)
-
-		var verifier string
-		challenge := ""
-		if cfg.UsePKCE {
-			verifier, err = oauth.GenerateCodeVerifier()
-			if err != nil {
-				response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_PKCE_GEN_FAILED", "failed to generate pkce verifier").WithCause(err))
-				return
-			}
-			challenge = oauth.GenerateCodeChallenge(verifier)
-			codeVerifier = &verifier
-		}
-
-		if cfg.ValidateIDToken {
-			value, nonceErr := oauth.GenerateState()
-			if nonceErr != nil {
-				response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_NONCE_GEN_FAILED", "failed to generate oauth nonce").WithCause(nonceErr))
-				return
-			}
-			nonce = &value
-		}
-
-		flow, state, err := h.controlSessionAuth.CreateAuthFlow(c.Request.Context(), provider, "login", issuer, redirectTo, codeVerifier, nonce)
-		if err != nil {
-			response.ErrorFrom(c, err)
-			return
-		}
-		h.setAuthFlowCookie(c, flow.FlowID)
-
-		authURL, err = buildOIDCAuthorizeURL(cfg, state, derefString(nonce), challenge, strings.TrimSpace(cfg.RedirectURL))
-		if err != nil {
-			response.ErrorFrom(c, infraerrors.InternalServer("OAUTH_BUILD_URL_FAILED", "failed to build oauth authorization url").WithCause(err))
-			return
-		}
-	default:
-		response.NotFound(c, "OAuth provider not found")
+	identity, err := h.currentIdentity(c)
+	if err != nil {
+		response.ErrorFrom(c, err)
 		return
 	}
 
-	c.Redirect(http.StatusFound, authURL)
+	token, err := h.controlSessionAuth.IssueEmbedToken(c.Request.Context(), identity)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+
+	response.Success(c, gin.H{
+		"token":      token.Token,
+		"expires_at": token.ExpiresAt,
+	})
+}
+
+func (h *AuthHandler) OAuthStart(c *gin.Context) {
+	if h.externalIdentityProviders == nil {
+		response.InternalError(c, "control auth service is not configured")
+		return
+	}
+
+	result, err := h.externalIdentityProviders.StartLogin(c.Request.Context(), &service.ControlExternalLoginStartRequest{
+		Provider:   strings.TrimSpace(c.Param("provider")),
+		RedirectTo: sanitizeFrontendRedirectPath(c.Query("redirect")),
+	})
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	h.setAuthFlowCookie(c, result.FlowID)
+	c.Redirect(http.StatusFound, result.AuthURL)
 }
 
 func (h *AuthHandler) OAuthCallback(c *gin.Context) {
-	if h.controlSessionAuth == nil {
+	if h.externalIdentityProviders == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
 
-	provider := strings.TrimSpace(c.Param("provider"))
 	flowID := h.cookieValue(c, service.ControlAuthFlowCookieName)
 	h.clearAuthFlowCookie(c)
-
-	var (
-		redirectTo       = controlDefaultFrontendRedirect
-		frontendCallback string
-		result           *service.ControlExternalLoginResult
-		err              error
-	)
-
-	switch provider {
-	case "linuxdo":
-		cfg, cfgErr := h.getLinuxDoOAuthConfig(c.Request.Context())
-		if cfgErr != nil {
-			response.ErrorFrom(c, cfgErr)
-			return
-		}
-		frontendCallback = h.oauthFrontendCallback(provider, cfg.FrontendRedirectURL)
-
-		if providerErr := strings.TrimSpace(c.Query("error")); providerErr != "" {
-			h.redirectOAuthQueryError(c, frontendCallback, "provider_error", providerErr, c.Query("error_description"), redirectTo)
-			return
-		}
-		code := strings.TrimSpace(c.Query("code"))
-		state := strings.TrimSpace(c.Query("state"))
-		if flowID == "" || code == "" || state == "" {
-			h.redirectOAuthQueryError(c, frontendCallback, "invalid_state", "missing code/state", "", redirectTo)
-			return
-		}
-
-		flow, flowErr := h.controlSessionAuth.ConsumeAuthFlow(c.Request.Context(), flowID, state)
-		if flowErr != nil {
-			h.redirectOAuthQueryError(c, frontendCallback, "invalid_state", "invalid oauth state", "", redirectTo)
-			return
-		}
-		redirectTo = firstNonEmpty(sanitizeFrontendRedirectPath(flow.RedirectTo), controlDefaultFrontendRedirect)
-
-		tokenResp, exchangeErr := linuxDoExchangeCode(c.Request.Context(), cfg, code, strings.TrimSpace(cfg.RedirectURL), derefString(flow.CodeVerifier))
-		if exchangeErr != nil {
-			h.redirectOAuthQueryError(c, frontendCallback, "token_exchange_failed", "failed to exchange oauth code", singleLine(exchangeErr.Error()), redirectTo)
-			return
-		}
-		email, username, subject, userInfoErr := linuxDoFetchUserInfo(c.Request.Context(), cfg, tokenResp)
-		if userInfoErr != nil {
-			h.redirectOAuthQueryError(c, frontendCallback, "userinfo_failed", "failed to fetch user info", "", redirectTo)
-			return
-		}
-		registrationEmail := strings.TrimSpace(email)
-		if subject != "" {
-			email = linuxDoSyntheticEmail(subject)
-		}
-
-		result, err = h.controlSessionAuth.CompleteExternalLogin(c.Request.Context(), &service.ControlExternalLoginRequest{
-			Identity: &service.ExternalIdentityProfile{
-				Provider:          provider,
-				Issuer:            firstNonEmpty(strings.TrimSpace(flow.Issuer), strings.TrimSpace(cfg.AuthorizeURL), provider),
-				Subject:           subject,
-				LoginHint:         email,
-				RegistrationEmail: registrationEmail,
-				Username:          username,
-			},
-			RedirectTo: redirectTo,
-			AMR:        provider,
-		})
-	case "oidc":
-		cfg, cfgErr := h.getOIDCOAuthConfig(c.Request.Context())
-		if cfgErr != nil {
-			response.ErrorFrom(c, cfgErr)
-			return
-		}
-		frontendCallback = h.oauthFrontendCallback(provider, cfg.FrontendRedirectURL)
-
-		if providerErr := strings.TrimSpace(c.Query("error")); providerErr != "" {
-			h.redirectOAuthQueryError(c, frontendCallback, "provider_error", providerErr, c.Query("error_description"), redirectTo)
-			return
-		}
-		code := strings.TrimSpace(c.Query("code"))
-		state := strings.TrimSpace(c.Query("state"))
-		if flowID == "" || code == "" || state == "" {
-			h.redirectOAuthQueryError(c, frontendCallback, "invalid_state", "missing code/state", "", redirectTo)
-			return
-		}
-
-		flow, flowErr := h.controlSessionAuth.ConsumeAuthFlow(c.Request.Context(), flowID, state)
-		if flowErr != nil {
-			h.redirectOAuthQueryError(c, frontendCallback, "invalid_state", "invalid oauth state", "", redirectTo)
-			return
-		}
-		redirectTo = firstNonEmpty(sanitizeFrontendRedirectPath(flow.RedirectTo), controlDefaultFrontendRedirect)
-
-		tokenResp, exchangeErr := oidcExchangeCode(c.Request.Context(), cfg, code, strings.TrimSpace(cfg.RedirectURL), derefString(flow.CodeVerifier))
-		if exchangeErr != nil {
-			h.redirectOAuthQueryError(c, frontendCallback, "token_exchange_failed", "failed to exchange oauth code", singleLine(exchangeErr.Error()), redirectTo)
-			return
-		}
-
-		idClaims := &oidcIDTokenClaims{}
-		if cfg.ValidateIDToken {
-			if strings.TrimSpace(tokenResp.IDToken) == "" {
-				h.redirectOAuthQueryError(c, frontendCallback, "missing_id_token", "missing id_token", "", redirectTo)
-				return
-			}
-			idClaims, err = oidcParseAndValidateIDToken(c.Request.Context(), cfg, tokenResp.IDToken, derefString(flow.Nonce))
-			if err != nil {
-				h.redirectOAuthQueryError(c, frontendCallback, "invalid_id_token", "failed to validate id_token", "", redirectTo)
-				return
-			}
-		}
-
-		userInfoClaims, userInfoErr := oidcFetchUserInfo(c.Request.Context(), cfg, tokenResp)
-		if userInfoErr != nil {
-			h.redirectOAuthQueryError(c, frontendCallback, "userinfo_failed", "failed to fetch user info", "", redirectTo)
-			return
-		}
-
-		subject := strings.TrimSpace(idClaims.Subject)
-		if subject == "" {
-			subject = strings.TrimSpace(userInfoClaims.Subject)
-		}
-		if subject == "" {
-			h.redirectOAuthQueryError(c, frontendCallback, "missing_subject", "missing subject claim", "", redirectTo)
-			return
-		}
-		issuer := strings.TrimSpace(idClaims.Issuer)
-		if issuer == "" {
-			issuer = firstNonEmpty(strings.TrimSpace(flow.Issuer), strings.TrimSpace(cfg.IssuerURL), provider)
-		}
-		emailVerified := userInfoClaims.EmailVerified
-		if emailVerified == nil {
-			emailVerified = idClaims.EmailVerified
-		}
-		if cfg.RequireEmailVerified && (emailVerified == nil || !*emailVerified) {
-			h.redirectOAuthQueryError(c, frontendCallback, "email_not_verified", "email is not verified", "", redirectTo)
-			return
-		}
-
-		loginEmail := oidcSelectLoginEmail(oidcIdentityKey(issuer, subject))
-		registrationEmail := strings.TrimSpace(firstNonEmpty(userInfoClaims.Email, idClaims.Email))
-		username := firstNonEmpty(
-			userInfoClaims.Username,
-			idClaims.PreferredUsername,
-			idClaims.Name,
-			oidcFallbackUsername(subject),
-		)
-
-		result, err = h.controlSessionAuth.CompleteExternalLogin(c.Request.Context(), &service.ControlExternalLoginRequest{
-			Identity: &service.ExternalIdentityProfile{
-				Provider:          provider,
-				Issuer:            issuer,
-				Subject:           subject,
-				LoginHint:         loginEmail,
-				RegistrationEmail: registrationEmail,
-				Username:          username,
-			},
-			RedirectTo: redirectTo,
-			AMR:        provider,
-		})
-	default:
-		response.NotFound(c, "OAuth provider not found")
-		return
+	callbackResult, err := h.externalIdentityProviders.CompleteLogin(c.Request.Context(), &service.ControlExternalLoginCallbackRequest{
+		Provider:             strings.TrimSpace(c.Param("provider")),
+		FlowID:               flowID,
+		Code:                 strings.TrimSpace(c.Query("code")),
+		State:                strings.TrimSpace(c.Query("state")),
+		ProviderError:        strings.TrimSpace(c.Query("error")),
+		ProviderErrorMessage: strings.TrimSpace(c.Query("error_description")),
+	})
+	frontendCallback := controlDefaultFrontendRedirect
+	redirectTo := controlDefaultFrontendRedirect
+	if callbackResult != nil {
+		frontendCallback = firstNonEmpty(callbackResult.FrontendCallback, frontendCallback)
+		redirectTo = firstNonEmpty(callbackResult.RedirectTo, redirectTo)
 	}
-
 	if err != nil {
 		h.redirectOAuthQueryError(c, frontendCallback, "login_failed", infraerrors.Reason(err), infraerrors.Message(err), redirectTo)
 		return
 	}
-	if result == nil {
+	if callbackResult == nil || callbackResult.Result == nil {
 		h.redirectOAuthQueryError(c, frontendCallback, "login_failed", "oauth login failed", "", redirectTo)
 		return
 	}
 
-	if result.Challenge != nil {
-		h.setPendingRegistrationCookie(c, result.Challenge.ChallengeID, result.Challenge.ExpiresAt)
+	if callbackResult.Result.Challenge != nil {
+		h.setPendingRegistrationCookie(c, callbackResult.Result.Challenge.ChallengeID, callbackResult.Result.Challenge.ExpiresAt)
 		h.redirectToFrontend(c, frontendCallback, redirectTo, true)
 		return
 	}
 
-	if _, err := h.setSessionCookies(c, result.Tokens); err != nil {
+	if _, err := h.setSessionCookies(c, callbackResult.Result.Tokens); err != nil {
 		h.redirectOAuthQueryError(c, frontendCallback, "login_failed", "failed to establish session", "", redirectTo)
 		return
 	}
@@ -1046,20 +859,16 @@ func (h *AuthHandler) buildBootstrapPayload(ctx context.Context, identity *servi
 		Authenticated:    identity != nil,
 		RefreshAvailable: refreshAvailable,
 	}
+	if h.externalIdentityProviders != nil {
+		payload.AuthProviders = h.externalIdentityProviders.Providers(ctx)
+	}
 
 	if identity == nil {
 		return payload, nil
 	}
-	if identity.User == nil {
-		user, err := h.userService.GetByID(ctx, identity.LegacyUserID)
-		if err != nil {
-			return nil, err
-		}
-		identity.User = user
-	}
 
 	payload.Subject = h.newBootstrapSubject(identity)
-	payload.Profile = dto.UserFromService(identity.User)
+	payload.Profile = h.bootstrapProfile(ctx, identity)
 	payload.Roles = append([]string(nil), identity.Roles...)
 	payload.PrimaryRole = identity.PrimaryRole
 	payload.Session = &bootstrapSessionResponse{
@@ -1069,15 +878,15 @@ func (h *AuthHandler) buildBootstrapPayload(ctx context.Context, identity *servi
 		LastSeenAt:        identity.SessionLastSeenAt,
 	}
 
-	if h.totpService != nil {
-		status, err := h.totpService.GetStatus(ctx, identity.LegacyUserID)
+	if h.controlLocalMFA != nil && h.mfaSelfServiceEnabled(ctx) && identity.LegacyUserID > 0 {
+		status, err := h.controlLocalMFA.GetStatus(ctx, identity.LegacyUserID)
 		if err != nil {
 			return nil, err
 		}
 		payload.MFA = &bootstrapMFAResponse{
 			TotpEnabled:        status.Enabled,
 			FeatureEnabled:     status.FeatureEnabled,
-			VerificationMethod: h.totpService.GetVerificationMethod(ctx),
+			VerificationMethod: h.controlLocalMFA.GetVerificationMethod(ctx),
 		}
 		if status.EnabledAt != nil {
 			ts := status.EnabledAt.Unix()
@@ -1354,7 +1163,7 @@ func (h *AuthHandler) newBootstrapSubject(identity *service.AuthenticatedIdentit
 }
 
 func (h *AuthHandler) pendingRegistrationPayload(c *gin.Context) *bootstrapPendingRegistrationResponse {
-	if h.controlLocalAuth == nil {
+	if h.controlRegistration == nil {
 		return nil
 	}
 
@@ -1363,7 +1172,7 @@ func (h *AuthHandler) pendingRegistrationPayload(c *gin.Context) *bootstrapPendi
 		return nil
 	}
 
-	challenge, err := h.controlLocalAuth.GetRegistrationChallenge(c.Request.Context(), challengeID)
+	challenge, err := h.controlRegistration.GetRegistrationChallenge(c.Request.Context(), challengeID)
 	if err != nil || challenge == nil || challenge.ConsumedAt != nil || time.Now().After(challenge.ExpiresAt) {
 		h.clearPendingRegistrationCookie(c)
 		return nil
@@ -1378,6 +1187,35 @@ func (h *AuthHandler) pendingRegistrationPayload(c *gin.Context) *bootstrapPendi
 		RedirectTo:        challenge.RedirectTo,
 		ExpiresAt:         challenge.ExpiresAt,
 	}
+}
+
+func (h *AuthHandler) bootstrapProfile(ctx context.Context, identity *service.AuthenticatedIdentity) *dto.User {
+	if identity == nil {
+		return nil
+	}
+	if h.userService != nil && identity.LegacyUserID > 0 {
+		if user, err := h.userService.GetByID(ctx, identity.LegacyUserID); err == nil && user != nil {
+			return dto.UserFromService(user)
+		}
+	}
+	if identity.Profile == nil {
+		return nil
+	}
+	return &dto.User{
+		ID:          identity.LegacyUserID,
+		Email:       identity.Profile.Email,
+		Username:    identity.Profile.Username,
+		Role:        identity.PrimaryRole,
+		Concurrency: identity.Concurrency,
+	}
+}
+
+func (h *AuthHandler) mfaSelfServiceEnabled(ctx context.Context) bool {
+	if h.controlSessionAuth == nil {
+		return false
+	}
+	capabilities := h.controlSessionAuth.AuthCapabilities(ctx)
+	return capabilities != nil && capabilities.MFASelfServiceEnabled
 }
 
 func extractBearerToken(c *gin.Context) string {

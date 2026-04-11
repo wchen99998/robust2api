@@ -18,7 +18,7 @@ func (s *ControlAuthService) SyncUserIdentity(ctx context.Context, userID int64)
 	if err != nil {
 		return nil, err
 	}
-	return s.authRepo.EnsureSubjectShadow(ctx, user)
+	return s.authRepo.SyncLocalCredentialState(ctx, user)
 }
 
 func (s *ControlAuthService) RegistrationPreflight(ctx context.Context, email, promoCode, invitationCode string) (*RegistrationPreflightResult, error) {
@@ -93,8 +93,11 @@ func (s *ControlAuthService) RegistrationPreflight(ctx context.Context, email, p
 
 func (s *ControlAuthService) SendRegistrationEmailCode(ctx context.Context, email string) error {
 	email = strings.TrimSpace(email)
-	if !s.isRegistrationAllowed(ctx) {
+	if !s.registrationEnabled(ctx) {
 		return ErrRegDisabled
+	}
+	if !s.emailVerificationEnabled(ctx) {
+		return ErrEmailVerificationOff
 	}
 	if isReservedEmail(email) {
 		return ErrEmailReserved
@@ -131,7 +134,7 @@ func (s *ControlAuthService) Register(ctx context.Context, input *ControlRegistr
 	if input == nil {
 		return nil, nil, infraerrors.BadRequest("INVALID_REQUEST", "registration payload is required")
 	}
-	if !s.isRegistrationAllowed(ctx) {
+	if !s.registrationEnabled(ctx) {
 		return nil, nil, ErrRegDisabled
 	}
 
@@ -165,6 +168,9 @@ func (s *ControlAuthService) Register(ctx context.Context, input *ControlRegistr
 	txCtx := dbent.NewTxContext(ctx, tx)
 
 	if s.settingService != nil && s.settingService.IsEmailVerifyEnabled(ctx) {
+		if !s.emailVerificationEnabled(ctx) {
+			return nil, nil, ErrEmailVerificationOff
+		}
 		if strings.TrimSpace(input.VerificationCode) == "" {
 			return nil, nil, ErrEmailVerifyRequired
 		}
@@ -201,9 +207,9 @@ func (s *ControlAuthService) Register(ctx context.Context, input *ControlRegistr
 		return nil, nil, fmt.Errorf("create user: %w", err)
 	}
 
-	bundle, err := s.authRepo.EnsureSubjectShadow(txCtx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(txCtx, user)
 	if err != nil {
-		return nil, nil, fmt.Errorf("sync subject shadow: %w", err)
+		return nil, nil, fmt.Errorf("sync local identity: %w", err)
 	}
 	if invitation != nil {
 		if err := s.redeemRepo.Use(txCtx, invitation.ID, user.ID); err != nil {
@@ -229,8 +235,8 @@ func (s *ControlAuthService) Register(ctx context.Context, input *ControlRegistr
 }
 
 func (s *ControlAuthService) RequestPasswordReset(ctx context.Context, email string) error {
-	if s.settingService == nil || !s.settingService.IsPasswordResetEnabled(ctx) {
-		return infraerrors.Forbidden("PASSWORD_RESET_DISABLED", "password reset is not enabled")
+	if !s.passwordResetEnabled(ctx) {
+		return ErrPasswordResetDisabled
 	}
 	if s.emailService == nil {
 		return ErrServiceUnavailable
@@ -242,7 +248,7 @@ func (s *ControlAuthService) RequestPasswordReset(ctx context.Context, email str
 		return nil
 	}
 
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -264,8 +270,8 @@ func (s *ControlAuthService) RequestPasswordReset(ctx context.Context, email str
 }
 
 func (s *ControlAuthService) ResetPassword(ctx context.Context, email, token, newPassword string) error {
-	if s.settingService == nil || !s.settingService.IsPasswordResetEnabled(ctx) {
-		return infraerrors.Forbidden("PASSWORD_RESET_DISABLED", "password reset is not enabled")
+	if !s.passwordResetEnabled(ctx) {
+		return ErrPasswordResetDisabled
 	}
 
 	record, err := s.authRepo.ConsumePasswordResetToken(ctx, strings.TrimSpace(email), hashToken(strings.TrimSpace(token)), time.Now())
@@ -296,7 +302,7 @@ func (s *ControlAuthService) ResetPassword(ctx context.Context, email, token, ne
 		return err
 	}
 
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(ctx, user)
 	if err != nil {
 		return err
 	}
@@ -309,6 +315,9 @@ func (s *ControlAuthService) ResetPassword(ctx context.Context, email, token, ne
 func (s *ControlAuthService) ChangePassword(ctx context.Context, identity *AuthenticatedIdentity, currentPassword, newPassword string) (*AuthenticatedIdentity, *ControlSessionTokens, error) {
 	if identity == nil {
 		return nil, nil, ErrInvalidToken
+	}
+	if !s.passwordChangeEnabled(ctx) {
+		return nil, nil, ErrPasswordChangeDisabled
 	}
 	user, err := s.userRepo.GetByID(ctx, identity.LegacyUserID)
 	if err != nil {
@@ -327,7 +336,7 @@ func (s *ControlAuthService) ChangePassword(ctx context.Context, identity *Authe
 		return nil, nil, err
 	}
 
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(ctx, user)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -352,7 +361,7 @@ func (s *ControlAuthService) UpdateProfile(ctx context.Context, identity *Authen
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
+	bundle, err := s.authRepo.EnsureSubjectAccount(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -406,7 +415,7 @@ func (s *ControlAuthService) CompleteExternalLogin(ctx context.Context, input *C
 
 	loginEmail := strings.TrimSpace(identityProfile.LoginHint)
 
-	if !s.isRegistrationAllowed(ctx) {
+	if s.settingService != nil && s.settingService.IsBackendModeEnabled(ctx) {
 		return nil, ErrRegDisabled
 	}
 	if registrationEmail := strings.TrimSpace(identityProfile.RegistrationEmail); registrationEmail != "" {
@@ -528,7 +537,7 @@ func (s *ControlAuthService) registerOAuthSubject(ctx context.Context, input *oa
 		return nil, nil, ErrEmailExists
 	}
 
-	bundle, err := s.authRepo.EnsureSubjectShadow(txCtx, user)
+	bundle, err := s.authRepo.EnsureSubjectAccount(txCtx, user)
 	if err != nil {
 		return nil, nil, err
 	}

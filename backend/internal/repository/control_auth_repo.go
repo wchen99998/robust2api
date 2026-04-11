@@ -24,7 +24,7 @@ func NewControlAuthRepository(client *dbent.Client, sqlDB *sql.DB) service.Contr
 	}
 }
 
-func (r *controlAuthRepository) EnsureSubjectShadow(ctx context.Context, user *service.User) (*service.IdentityBundle, error) {
+func (r *controlAuthRepository) EnsureSubjectAccount(ctx context.Context, user *service.User) (*service.IdentityBundle, error) {
 	if user == nil {
 		return nil, fmt.Errorf("nil user")
 	}
@@ -56,36 +56,14 @@ func (r *controlAuthRepository) EnsureSubjectShadow(ctx context.Context, user *s
 		}
 	}
 
-	changedAuthVersion := false
-	currentAuthVersion := subject.AuthVersion
-
-	passwordChanged, err := r.syncPasswordCredential(ctx, exec, subject.SubjectID, user.PasswordHash)
-	if err != nil {
-		return nil, err
-	}
-	if passwordChanged {
-		currentAuthVersion++
-		changedAuthVersion = true
-	}
-
-	totpChanged, err := r.syncTOTPFactor(ctx, exec, subject.SubjectID, user)
-	if err != nil {
-		return nil, err
-	}
-	if totpChanged {
-		currentAuthVersion++
-		changedAuthVersion = true
-	}
-
 	if _, err := exec.ExecContext(
 		ctx,
 		`UPDATE auth_subjects
 		    SET email = $2,
 		        status = $3,
-		        auth_version = $4,
 		        updated_at = NOW()
 		  WHERE subject_id = $1`,
-		subject.SubjectID, user.Email, user.Status, currentAuthVersion,
+		subject.SubjectID, user.Email, user.Status,
 	); err != nil {
 		return nil, fmt.Errorf("update auth_subject: %w", err)
 	}
@@ -117,33 +95,65 @@ func (r *controlAuthRepository) EnsureSubjectShadow(ctx context.Context, user *s
 
 	subject.Email = user.Email
 	subject.Status = user.Status
-	subject.AuthVersion = currentAuthVersion
+	return r.loadIdentityBundle(ctx, exec, subject)
+}
 
-	profile, err := r.getProfile(ctx, exec, subject.SubjectID)
+func (r *controlAuthRepository) SyncLocalCredentialState(ctx context.Context, user *service.User) (*service.IdentityBundle, error) {
+	if user == nil {
+		return nil, fmt.Errorf("nil user")
+	}
+
+	exec, err := sqlExecutorFromContext(ctx, r.sql)
 	if err != nil {
 		return nil, err
 	}
-	totp, err := r.getTOTPFactor(ctx, exec, subject.SubjectID)
-	if err != nil && !errors.Is(err, service.ErrSubjectNotFound) {
+
+	bundle, err := r.EnsureSubjectAccount(ctx, user)
+	if err != nil {
 		return nil, err
 	}
-	if errors.Is(err, service.ErrSubjectNotFound) {
-		totp = &service.TOTPFactorRecord{
-			SubjectID: subject.SubjectID,
-			Enabled:   false,
-		}
+	if bundle == nil || bundle.Subject == nil {
+		return nil, service.ErrSubjectNotFound
+	}
+
+	subject := bundle.Subject
+	currentAuthVersion := subject.AuthVersion
+	changedAuthVersion := false
+
+	passwordChanged, err := r.syncPasswordCredential(ctx, exec, subject.SubjectID, user.PasswordHash)
+	if err != nil {
+		return nil, err
+	}
+	if passwordChanged {
+		currentAuthVersion++
+		changedAuthVersion = true
+	}
+
+	totpChanged, err := r.syncTOTPFactor(ctx, exec, subject.SubjectID, user)
+	if err != nil {
+		return nil, err
+	}
+	if totpChanged {
+		currentAuthVersion++
+		changedAuthVersion = true
 	}
 
 	if changedAuthVersion {
+		if _, err := exec.ExecContext(
+			ctx,
+			`UPDATE auth_subjects
+			    SET auth_version = $2,
+			        updated_at = NOW()
+			  WHERE subject_id = $1`,
+			subject.SubjectID, currentAuthVersion,
+		); err != nil {
+			return nil, fmt.Errorf("update auth_subject auth_version: %w", err)
+		}
+		subject.AuthVersion = currentAuthVersion
 		subject.UpdatedAt = time.Now()
 	}
 
-	return &service.IdentityBundle{
-		Subject: subject,
-		Profile: profile,
-		Roles:   []string{user.Role},
-		TOTP:    totp,
-	}, nil
+	return r.loadIdentityBundle(ctx, exec, subject)
 }
 
 func (r *controlAuthRepository) GetIdentityBundleBySubjectID(ctx context.Context, subjectID string) (*service.IdentityBundle, error) {

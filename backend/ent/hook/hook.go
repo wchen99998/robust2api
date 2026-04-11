@@ -69,6 +69,138 @@ func (f AnnouncementReadFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.V
 	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AnnouncementReadMutation", m)
 }
 
+// The AuthEmailVerificationFunc type is an adapter to allow the use of ordinary
+// function as AuthEmailVerification mutator.
+type AuthEmailVerificationFunc func(context.Context, *ent.AuthEmailVerificationMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthEmailVerificationFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthEmailVerificationMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthEmailVerificationMutation", m)
+}
+
+// The AuthFederatedIdentityFunc type is an adapter to allow the use of ordinary
+// function as AuthFederatedIdentity mutator.
+type AuthFederatedIdentityFunc func(context.Context, *ent.AuthFederatedIdentityMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthFederatedIdentityFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthFederatedIdentityMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthFederatedIdentityMutation", m)
+}
+
+// The AuthFlowFunc type is an adapter to allow the use of ordinary
+// function as AuthFlow mutator.
+type AuthFlowFunc func(context.Context, *ent.AuthFlowMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthFlowFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthFlowMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthFlowMutation", m)
+}
+
+// The AuthMFATOTPFactorFunc type is an adapter to allow the use of ordinary
+// function as AuthMFATOTPFactor mutator.
+type AuthMFATOTPFactorFunc func(context.Context, *ent.AuthMFATOTPFactorMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthMFATOTPFactorFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthMFATOTPFactorMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthMFATOTPFactorMutation", m)
+}
+
+// The AuthPasswordCredentialFunc type is an adapter to allow the use of ordinary
+// function as AuthPasswordCredential mutator.
+type AuthPasswordCredentialFunc func(context.Context, *ent.AuthPasswordCredentialMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthPasswordCredentialFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthPasswordCredentialMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthPasswordCredentialMutation", m)
+}
+
+// The AuthPasswordResetTokenFunc type is an adapter to allow the use of ordinary
+// function as AuthPasswordResetToken mutator.
+type AuthPasswordResetTokenFunc func(context.Context, *ent.AuthPasswordResetTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthPasswordResetTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthPasswordResetTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthPasswordResetTokenMutation", m)
+}
+
+// The AuthRefreshTokenFunc type is an adapter to allow the use of ordinary
+// function as AuthRefreshToken mutator.
+type AuthRefreshTokenFunc func(context.Context, *ent.AuthRefreshTokenMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthRefreshTokenFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthRefreshTokenMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthRefreshTokenMutation", m)
+}
+
+// The AuthRegistrationChallengeFunc type is an adapter to allow the use of ordinary
+// function as AuthRegistrationChallenge mutator.
+type AuthRegistrationChallengeFunc func(context.Context, *ent.AuthRegistrationChallengeMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthRegistrationChallengeFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthRegistrationChallengeMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthRegistrationChallengeMutation", m)
+}
+
+// The AuthSessionFunc type is an adapter to allow the use of ordinary
+// function as AuthSession mutator.
+type AuthSessionFunc func(context.Context, *ent.AuthSessionMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthSessionFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthSessionMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthSessionMutation", m)
+}
+
+// The AuthSubjectFunc type is an adapter to allow the use of ordinary
+// function as AuthSubject mutator.
+type AuthSubjectFunc func(context.Context, *ent.AuthSubjectMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f AuthSubjectFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.AuthSubjectMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.AuthSubjectMutation", m)
+}
+
+// The ControlUserProfileFunc type is an adapter to allow the use of ordinary
+// function as ControlUserProfile mutator.
+type ControlUserProfileFunc func(context.Context, *ent.ControlUserProfileMutation) (ent.Value, error)
+
+// Mutate calls f(ctx, m).
+func (f ControlUserProfileFunc) Mutate(ctx context.Context, m ent.Mutation) (ent.Value, error) {
+	if mv, ok := m.(*ent.ControlUserProfileMutation); ok {
+		return f(ctx, mv)
+	}
+	return nil, fmt.Errorf("unexpected mutation type %T. expect *ent.ControlUserProfileMutation", m)
+}
+
 // The ErrorPassthroughRuleFunc type is an adapter to allow the use of ordinary
 // function as ErrorPassthroughRule mutator.
 type ErrorPassthroughRuleFunc func(context.Context, *ent.ErrorPassthroughRuleMutation) (ent.Value, error)

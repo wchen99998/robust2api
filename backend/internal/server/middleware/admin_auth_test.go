@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newAdminTestRouter(controlAuthService *service.ControlAuthService) *gin.Engine {
+func newAdminTestRouter(controlAuthService service.ControlAccessTokenAuthenticator) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()

@@ -29,8 +29,8 @@
 
         <div class="space-y-5 enter-stage enter-stage-delay-2">
           <ProfileEditForm :initial-username="user?.username || ''" />
-          <ProfilePasswordForm />
-          <ProfileTotpCard />
+          <ProfilePasswordForm v-if="passwordChangeEnabled" />
+          <ProfileTotpCard v-if="mfaSelfServiceEnabled" />
         </div>
       </div>
     </div>
@@ -52,6 +52,12 @@ const { t } = useI18n()
 const authStore = useAuthStore()
 const user = computed(() => authStore.user)
 const contactInfo = ref('')
+const passwordChangeEnabled = computed(
+  () => authStore.authCapabilities?.password_change_enabled ?? true
+)
+const mfaSelfServiceEnabled = computed(
+  () => authStore.authCapabilities?.mfa_self_service_enabled ?? true
+)
 
 onMounted(async () => {
   try { const s = await authAPI.getPublicSettings(); contactInfo.value = s.contact_info || '' } catch (error) { console.error('Failed to load contact info:', error) }

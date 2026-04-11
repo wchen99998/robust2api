@@ -10,6 +10,7 @@ import (
 	"entgo.io/ent"
 	"entgo.io/ent/dialect/sql"
 	"github.com/Wei-Shaw/sub2api/ent/user"
+	"github.com/google/uuid"
 )
 
 // User is the model entity for the User schema.
@@ -39,6 +40,8 @@ type User struct {
 	Username string `json:"username,omitempty"`
 	// Notes holds the value of the "notes" field.
 	Notes string `json:"notes,omitempty"`
+	// SubjectID holds the value of the "subject_id" field.
+	SubjectID *uuid.UUID `json:"subject_id,omitempty"`
 	// TotpSecretEncrypted holds the value of the "totp_secret_encrypted" field.
 	TotpSecretEncrypted *string `json:"totp_secret_encrypted,omitempty"`
 	// TotpEnabled holds the value of the "totp_enabled" field.
@@ -173,6 +176,8 @@ func (*User) scanValues(columns []string) ([]any, error) {
 	values := make([]any, len(columns))
 	for i := range columns {
 		switch columns[i] {
+		case user.FieldSubjectID:
+			values[i] = &sql.NullScanner{S: new(uuid.UUID)}
 		case user.FieldTotpEnabled:
 			values[i] = new(sql.NullBool)
 		case user.FieldBalance:
@@ -270,6 +275,13 @@ func (_m *User) assignValues(columns []string, values []any) error {
 				return fmt.Errorf("unexpected type %T for field notes", values[i])
 			} else if value.Valid {
 				_m.Notes = value.String
+			}
+		case user.FieldSubjectID:
+			if value, ok := values[i].(*sql.NullScanner); !ok {
+				return fmt.Errorf("unexpected type %T for field subject_id", values[i])
+			} else if value.Valid {
+				_m.SubjectID = new(uuid.UUID)
+				*_m.SubjectID = *value.S.(*uuid.UUID)
 			}
 		case user.FieldTotpSecretEncrypted:
 			if value, ok := values[i].(*sql.NullString); !ok {
@@ -411,6 +423,11 @@ func (_m *User) String() string {
 	builder.WriteString(", ")
 	builder.WriteString("notes=")
 	builder.WriteString(_m.Notes)
+	builder.WriteString(", ")
+	if v := _m.SubjectID; v != nil {
+		builder.WriteString("subject_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
+	}
 	builder.WriteString(", ")
 	if v := _m.TotpSecretEncrypted; v != nil {
 		builder.WriteString("totp_secret_encrypted=")

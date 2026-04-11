@@ -39,6 +39,24 @@ const fakeBootstrap = {
   csrf_token: 'csrf-token',
   run_mode: 'simple' as const,
   public_settings: {} as any,
+  auth_capabilities: {
+    provider: 'local',
+    password_login_enabled: true,
+    registration_enabled: true,
+    email_verification_enabled: true,
+    password_reset_enabled: true,
+    password_change_enabled: true,
+    mfa_self_service_enabled: true,
+    profile_self_service_enabled: true
+  },
+  auth_providers: [
+    {
+      id: 'oidc',
+      type: 'oidc',
+      display_name: 'Auth0',
+      start_path: '/api/v1/oauth/oidc/start'
+    }
+  ],
   auth_state: { authenticated: true },
   me: { user: fakeUser, roles: ['user'] }
 }
@@ -61,6 +79,8 @@ describe('useAuthStore', () => {
     expect(store.csrfToken).toBe('csrf-token')
     expect(store.runMode).toBe('simple')
     expect(store.token).toBe('access-token-1')
+    expect(store.authCapabilities?.password_change_enabled).toBe(true)
+    expect(store.authProviders[0]?.id).toBe('oidc')
   })
 
   it('login handles normal bootstrap payload', async () => {

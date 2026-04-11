@@ -17,6 +17,7 @@ import type {
   BootstrapPendingRegistration,
   BootstrapSession,
   BootstrapAuthCapabilities,
+  BootstrapAuthProvider,
   RegistrationPreflightRequest,
   RegistrationPreflightResponse
 } from '@/types'
@@ -197,17 +198,82 @@ export function normalizeBootstrapResponse(raw: unknown): BootstrapResponse {
   const authCapabilitiesRaw = isObjectRecord(payload.auth_capabilities)
     ? payload.auth_capabilities
     : null
+  const providerHint =
+    typeof authCapabilitiesRaw?.provider === 'string' ? authCapabilitiesRaw.provider : 'local'
   const authCapabilities: BootstrapAuthCapabilities | undefined = authCapabilitiesRaw
     ? {
-        provider:
-          typeof authCapabilitiesRaw.provider === 'string'
-            ? authCapabilitiesRaw.provider
-            : 'local',
-        password_login_enabled: Boolean(authCapabilitiesRaw.password_login_enabled),
-        password_reset_enabled: Boolean(authCapabilitiesRaw.password_reset_enabled),
-        mfa_self_service_enabled: Boolean(authCapabilitiesRaw.mfa_self_service_enabled)
+        provider: providerHint,
+        password_login_enabled:
+          typeof authCapabilitiesRaw.password_login_enabled === 'boolean'
+            ? authCapabilitiesRaw.password_login_enabled
+            : true,
+        registration_enabled:
+          typeof authCapabilitiesRaw.registration_enabled === 'boolean'
+            ? authCapabilitiesRaw.registration_enabled
+            : Boolean((publicSettingsRaw as Record<string, unknown>).registration_enabled),
+        email_verification_enabled:
+          typeof authCapabilitiesRaw.email_verification_enabled === 'boolean'
+            ? authCapabilitiesRaw.email_verification_enabled
+            : Boolean((publicSettingsRaw as Record<string, unknown>).email_verify_enabled),
+        password_reset_enabled:
+          typeof authCapabilitiesRaw.password_reset_enabled === 'boolean'
+            ? authCapabilitiesRaw.password_reset_enabled
+            : Boolean((publicSettingsRaw as Record<string, unknown>).password_reset_enabled),
+        password_change_enabled:
+          typeof authCapabilitiesRaw.password_change_enabled === 'boolean'
+            ? authCapabilitiesRaw.password_change_enabled
+            : true,
+        mfa_self_service_enabled:
+          typeof authCapabilitiesRaw.mfa_self_service_enabled === 'boolean'
+            ? authCapabilitiesRaw.mfa_self_service_enabled
+            : true,
+        profile_self_service_enabled:
+          typeof authCapabilitiesRaw.profile_self_service_enabled === 'boolean'
+            ? authCapabilitiesRaw.profile_self_service_enabled
+            : true
       }
     : undefined
+  const providersRaw = Array.isArray(payload.auth_providers) ? payload.auth_providers : []
+  const authProviders: BootstrapAuthProvider[] = providersRaw
+    .map((item) => {
+      if (!isObjectRecord(item)) return null
+      const id = typeof item.id === 'string' ? item.id.trim() : ''
+      const startPath = typeof item.start_path === 'string' ? item.start_path.trim() : ''
+      if (!id || !startPath) return null
+      return {
+        id,
+        type: typeof item.type === 'string' ? item.type : 'oauth',
+        display_name:
+          typeof item.display_name === 'string' && item.display_name.trim()
+            ? item.display_name
+            : id,
+        start_path: startPath
+      }
+    })
+    .filter((item): item is BootstrapAuthProvider => item !== null)
+
+  if (authProviders.length === 0) {
+    if ((publicSettingsRaw as Record<string, unknown>).linuxdo_oauth_enabled) {
+      authProviders.push({
+        id: 'linuxdo',
+        type: 'oauth',
+        display_name: 'Linux.do',
+        start_path: '/api/v1/oauth/linuxdo/start'
+      })
+    }
+    if ((publicSettingsRaw as Record<string, unknown>).oidc_oauth_enabled) {
+      const oidcName =
+        typeof (publicSettingsRaw as Record<string, unknown>).oidc_oauth_provider_name === 'string'
+          ? String((publicSettingsRaw as Record<string, unknown>).oidc_oauth_provider_name).trim()
+          : ''
+      authProviders.push({
+        id: 'oidc',
+        type: 'oidc',
+        display_name: oidcName || 'OIDC',
+        start_path: '/api/v1/oauth/oidc/start'
+      })
+    }
+  }
 
   return {
     access_token: accessToken,
@@ -215,6 +281,7 @@ export function normalizeBootstrapResponse(raw: unknown): BootstrapResponse {
     run_mode: explicitRunMode,
     public_settings: normalizePublicSettings(publicSettingsRaw),
     auth_capabilities: authCapabilities,
+    auth_providers: authProviders,
     auth_state: {
       authenticated: Boolean(
         payload.authenticated ??

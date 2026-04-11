@@ -302,7 +302,7 @@ func TestValidateLinuxDoFrontendRedirectURL(t *testing.T) {
 	cfg.LinuxDo.Enabled = true
 	cfg.LinuxDo.ClientID = "test-client"
 	cfg.LinuxDo.ClientSecret = "test-secret"
-	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/auth/oauth/linuxdo/callback"
+	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/oauth/linuxdo/callback"
 	cfg.LinuxDo.TokenAuthMethod = "client_secret_post"
 	cfg.LinuxDo.UsePKCE = false
 
@@ -327,7 +327,7 @@ func TestValidateLinuxDoPKCERequiredForPublicClient(t *testing.T) {
 	cfg.LinuxDo.Enabled = true
 	cfg.LinuxDo.ClientID = "test-client"
 	cfg.LinuxDo.ClientSecret = ""
-	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/auth/oauth/linuxdo/callback"
+	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/oauth/linuxdo/callback"
 	cfg.LinuxDo.FrontendRedirectURL = "/auth/linuxdo/callback"
 	cfg.LinuxDo.TokenAuthMethod = "none"
 	cfg.LinuxDo.UsePKCE = false
@@ -779,7 +779,7 @@ func TestValidateConfigWithLinuxDoEnabled(t *testing.T) {
 	cfg.LinuxDo.AuthorizeURL = "https://example.com/oauth2/authorize"
 	cfg.LinuxDo.TokenURL = "https://example.com/oauth2/token"
 	cfg.LinuxDo.UserInfoURL = "https://example.com/oauth2/userinfo"
-	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/auth/oauth/linuxdo/callback"
+	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/oauth/linuxdo/callback"
 	cfg.LinuxDo.FrontendRedirectURL = "/auth/linuxdo/callback"
 	cfg.LinuxDo.TokenAuthMethod = "client_secret_post"
 

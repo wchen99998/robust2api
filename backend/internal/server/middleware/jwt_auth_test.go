@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newJWTTestEnv(controlAuthService *service.ControlAuthService) *gin.Engine {
+func newJWTTestEnv(controlAuthService service.ControlAccessTokenAuthenticator) *gin.Engine {
 	gin.SetMode(gin.TestMode)
 
 	mw := NewJWTAuthMiddleware(controlAuthService)

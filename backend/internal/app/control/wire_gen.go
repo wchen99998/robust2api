@@ -84,7 +84,7 @@ func initialize(buildInfo BuildInfo) (*Application, error) {
 	redeemCache := repository.NewRedeemCache(redisClient)
 	redeemService := service.NewRedeemService(redeemCodeRepository, userRepository, subscriptionService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator)
 	serviceBuildInfo := provideServiceBuildInfo(buildInfo)
-	authHandler := handler.NewAuthHandler(configConfig, authService, controlAuthService, controlAuthService, userService, settingService, promoService, redeemService, totpService, serviceBuildInfo)
+	authHandler := handler.NewAuthHandler(configConfig, authService, controlAuthService, controlAuthService, controlAuthService, controlAuthService, totpService, userService, settingService, promoService, redeemService, totpService, serviceBuildInfo)
 	userHandler := handler.NewUserHandler(userService)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageLogRepository := repository.NewUsageLogRepository(client, db)

@@ -27,9 +27,21 @@ describe('auth API normalization', () => {
         auth_capabilities: {
           provider: 'local',
           password_login_enabled: true,
+          registration_enabled: true,
+          email_verification_enabled: true,
           password_reset_enabled: false,
-          mfa_self_service_enabled: true
+          password_change_enabled: true,
+          mfa_self_service_enabled: true,
+          profile_self_service_enabled: true
         },
+        auth_providers: [
+          {
+            id: 'oidc',
+            type: 'oidc',
+            display_name: 'Company SSO',
+            start_path: '/api/v1/oauth/oidc/start'
+          }
+        ],
         settings: {
           registration_enabled: true
         },
@@ -77,6 +89,8 @@ describe('auth API normalization', () => {
     expect(data.run_mode).toBe('simple')
     expect(data.auth_capabilities?.provider).toBe('local')
     expect(data.auth_capabilities?.mfa_self_service_enabled).toBe(true)
+    expect(data.auth_capabilities?.registration_enabled).toBe(true)
+    expect(data.auth_providers?.[0].id).toBe('oidc')
     expect(data.auth_state.authenticated).toBe(true)
     expect(data.auth_state.refresh_available).toBe(true)
     expect(data.me?.subject_id).toBe('subject-1')
@@ -85,6 +99,26 @@ describe('auth API normalization', () => {
     expect(data.me?.user?.role).toBe('admin')
     expect(data.me?.user?.run_mode).toBe('simple')
     expect(data.pending_registration?.challenge_id).toBe('challenge-1')
+  })
+
+  it('derives auth providers from legacy public settings flags when auth_providers is absent', async () => {
+    const { bootstrap } = await import('@/api/auth')
+    mockGet.mockResolvedValue({
+      data: {
+        authenticated: false,
+        settings: {
+          linuxdo_oauth_enabled: true,
+          oidc_oauth_enabled: true,
+          oidc_oauth_provider_name: 'Auth0',
+          registration_enabled: true
+        }
+      }
+    })
+
+    const data = await bootstrap()
+
+    expect(data.auth_providers?.map((provider) => provider.id)).toEqual(['linuxdo', 'oidc'])
+    expect(data.auth_providers?.[1].display_name).toBe('Auth0')
   })
 
   it('maps login TOTP masked email from masked_email field', async () => {

@@ -22,10 +22,10 @@ This document provides practical examples of how to use the authentication views
 // What happens:
 // - Form validation runs (client-side)
 // - If valid, authStore.login() is called
-// - API request to POST /api/auth/login
+// - API request to POST /api/v1/session/login
 // - On success:
-//   - Token stored in localStorage
-//   - User data stored in state
+//   - Secure session cookies are set by control
+//   - Bootstrap data is stored in state
 //   - Success toast: "Login successful! Welcome back."
 //   - Redirect to /dashboard (or intended route)
 // - On error:
@@ -57,10 +57,10 @@ This document provides practical examples of how to use the authentication views
 //   - Password: 8+ chars, letters + numbers
 //   - Passwords match
 // - If valid, authStore.register() is called
-// - API request to POST /api/auth/register
+// - API request to POST /api/v1/registration
 // - On success:
-//   - Token stored in localStorage
-//   - User data stored in state
+//   - Secure session cookies are set by control
+//   - Bootstrap data is stored in state
 //   - Success toast: "Account created successfully! Welcome to Sub2API."
 //   - Redirect to /dashboard
 // - On error:

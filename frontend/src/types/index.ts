@@ -156,8 +156,19 @@ export interface BootstrapAuthState {
 export interface BootstrapAuthCapabilities {
   provider: string
   password_login_enabled: boolean
+  registration_enabled: boolean
+  email_verification_enabled: boolean
   password_reset_enabled: boolean
+  password_change_enabled: boolean
   mfa_self_service_enabled: boolean
+  profile_self_service_enabled: boolean
+}
+
+export interface BootstrapAuthProvider {
+  id: string
+  type: string
+  display_name: string
+  start_path: string
 }
 
 export interface BootstrapSession {
@@ -194,9 +205,15 @@ export interface BootstrapResponse {
   run_mode?: 'standard' | 'simple'
   public_settings: PublicSettings
   auth_capabilities?: BootstrapAuthCapabilities
+  auth_providers?: BootstrapAuthProvider[]
   auth_state: BootstrapAuthState
   me?: BootstrapMe | null
   pending_registration?: BootstrapPendingRegistration | null
+}
+
+export interface EmbedTokenResponse {
+  token: string
+  expires_at: string
 }
 
 // ==================== Subscription Types ====================

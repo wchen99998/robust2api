@@ -147,7 +147,8 @@ type IdentityBundle struct {
 }
 
 type ControlAuthRepository interface {
-	EnsureSubjectShadow(ctx context.Context, user *User) (*IdentityBundle, error)
+	EnsureSubjectAccount(ctx context.Context, user *User) (*IdentityBundle, error)
+	SyncLocalCredentialState(ctx context.Context, user *User) (*IdentityBundle, error)
 	GetIdentityBundleBySubjectID(ctx context.Context, subjectID string) (*IdentityBundle, error)
 	GetIdentityBundleByLegacyUserID(ctx context.Context, userID int64) (*IdentityBundle, error)
 	GetIdentityBundleByFederatedIdentity(ctx context.Context, provider, issuer, externalSubject string) (*IdentityBundle, error)
@@ -215,6 +216,11 @@ type ControlLoginResult struct {
 	Tokens           *ControlSessionTokens
 }
 
+type ControlEmbedToken struct {
+	Token     string
+	ExpiresAt time.Time
+}
+
 type AuthenticatedIdentity struct {
 	SubjectID         string
 	SessionID         string
@@ -223,10 +229,36 @@ type AuthenticatedIdentity struct {
 	AuthVersion       int64
 	Roles             []string
 	PrimaryRole       string
-	User              *User
+	Profile           *SubjectProfileRecord
+	Concurrency       int
 	SessionExpiresAt  time.Time
 	SessionAbsoluteAt time.Time
 	SessionLastSeenAt time.Time
+}
+
+type ControlExternalLoginStartRequest struct {
+	Provider   string
+	RedirectTo string
+}
+
+type ControlExternalLoginStartResult struct {
+	AuthURL string
+	FlowID  string
+}
+
+type ControlExternalLoginCallbackRequest struct {
+	Provider             string
+	FlowID               string
+	Code                 string
+	State                string
+	ProviderError        string
+	ProviderErrorMessage string
+}
+
+type ControlExternalLoginCallbackResult struct {
+	FrontendCallback string
+	RedirectTo       string
+	Result           *ControlExternalLoginResult
 }
 
 type RegistrationPreflightResult struct {

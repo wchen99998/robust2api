@@ -298,6 +298,8 @@ export default {
     passwordRequired: 'Password is required',
     passwordMinLength: 'Password must be at least 6 characters',
     loginFailed: 'Login failed. Please check your credentials and try again.',
+    passwordLoginDisabled: 'Email and password login is disabled for this deployment. Use a sign-in provider.',
+    noSignInMethods: 'No sign-in methods are currently available. Please contact the administrator.',
     registrationFailed: 'Registration failed. Please try again.',
     emailSuffixNotAllowed: 'This email domain is not allowed for registration.',
     emailSuffixNotAllowedWithAllowed:
@@ -317,6 +319,9 @@ export default {
     clickToResend: 'Click to resend code',
     resendCode: 'Resend verification code',
     sendCodeDesc: "We'll send a verification code to",
+    emailVerificationDisabled: 'Email verification is unavailable',
+    emailVerificationManagedExternally:
+      'This deployment uses an external identity provider for verification.',
     codeSentSuccess: 'Verification code sent! Please check your inbox.',
     verifying: 'Verifying...',
     verifyAndCreate: 'Verify & Create Account',
@@ -381,6 +386,9 @@ export default {
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset Your Password',
     forgotPasswordHint: 'Enter your email address and we will send you a link to reset your password.',
+    forgotPasswordDisabled: 'Password reset is unavailable',
+    passwordResetManagedExternally:
+      'Password reset is managed by your identity provider. Use the provider reset flow.',
     showPassword: 'Show password',
     hidePassword: 'Hide password',
     sendResetLink: 'Send Reset Link',
@@ -393,6 +401,7 @@ export default {
     // Reset password
     resetPasswordTitle: 'Set New Password',
     resetPasswordHint: 'Enter your new password below.',
+    resetPasswordDisabled: 'Password reset is unavailable',
     newPassword: 'New Password',
     newPasswordPlaceholder: 'Enter your new password',
     confirmPassword: 'Confirm Password',

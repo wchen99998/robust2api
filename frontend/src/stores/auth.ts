@@ -11,7 +11,9 @@ import type {
   LoginRequest,
   RegisterRequest,
   BootstrapResponse,
-  BootstrapPendingRegistration
+  BootstrapPendingRegistration,
+  BootstrapAuthCapabilities,
+  BootstrapAuthProvider
 } from '@/types'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -22,6 +24,8 @@ export const useAuthStore = defineStore('auth', () => {
   const initializing = ref<Promise<void> | null>(null)
   const csrfToken = ref<string>('')
   const pendingRegistration = ref<BootstrapPendingRegistration | null>(null)
+  const authCapabilities = ref<BootstrapAuthCapabilities | null>(null)
+  const authProviders = ref<BootstrapAuthProvider[]>([])
 
   const isAuthenticated = computed(() => Boolean(user.value))
   const isAdmin = computed(() => user.value?.role === 'admin')
@@ -40,6 +44,8 @@ export const useAuthStore = defineStore('auth', () => {
     runMode.value = 'standard'
     csrfToken.value = ''
     pendingRegistration.value = null
+    authCapabilities.value = null
+    authProviders.value = []
     clearLegacyAuthStorage()
   }
 
@@ -58,6 +64,8 @@ export const useAuthStore = defineStore('auth', () => {
     runMode.value = effectiveRunMode
     csrfToken.value = response.csrf_token || ''
     pendingRegistration.value = response.pending_registration ?? null
+    authCapabilities.value = response.auth_capabilities ?? null
+    authProviders.value = response.auth_providers ?? []
     if (!currentUser) {
       token.value = null
       clearLegacyAuthStorage()
@@ -177,6 +185,8 @@ export const useAuthStore = defineStore('auth', () => {
     token,
     csrfToken: readonly(csrfToken),
     pendingRegistration: readonly(pendingRegistration),
+    authCapabilities: readonly(authCapabilities),
+    authProviders: readonly(authProviders),
     runMode: readonly(runMode),
     isAuthenticated,
     isAdmin,

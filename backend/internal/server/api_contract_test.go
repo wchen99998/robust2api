@@ -53,9 +53,14 @@ func TestAPIContracts(t *testing.T) {
 					"auth_capabilities": {
 						"provider": "local",
 						"password_login_enabled": true,
+						"registration_enabled": true,
+						"email_verification_enabled": false,
 						"password_reset_enabled": false,
-						"mfa_self_service_enabled": false
+						"password_change_enabled": true,
+						"mfa_self_service_enabled": false,
+						"profile_self_service_enabled": true
 					},
+					"auth_providers": [],
 					"csrf_token": "csrf-test-token",
 					"run_mode": "standard",
 					"settings": {
@@ -675,8 +680,19 @@ func newContractDeps(t *testing.T) *contractDeps {
 			"data": gin.H{
 				"authenticated":     false,
 				"refresh_available": false,
-				"csrf_token":        "csrf-test-token",
-				"run_mode":          cfg.RunMode,
+				"auth_capabilities": gin.H{
+					"provider":                     service.ControlAuthModeLocal,
+					"password_login_enabled":       true,
+					"registration_enabled":         true,
+					"email_verification_enabled":   false,
+					"password_reset_enabled":       false,
+					"password_change_enabled":      true,
+					"mfa_self_service_enabled":     false,
+					"profile_self_service_enabled": true,
+				},
+				"auth_providers": []any{},
+				"csrf_token":     "csrf-test-token",
+				"run_mode":       cfg.RunMode,
 				"settings": gin.H{
 					"site_name": "Sub2API",
 				},

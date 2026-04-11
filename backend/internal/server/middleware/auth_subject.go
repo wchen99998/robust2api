@@ -3,8 +3,10 @@ package middleware
 import "github.com/gin-gonic/gin"
 
 // AuthSubject is the minimal authenticated identity stored in gin context.
-// Decision: {UserID int64, Concurrency int}
+// UserID remains the linked app-domain user id for compatibility with existing handlers.
 type AuthSubject struct {
+	SubjectID    string
+	SessionID    string
 	UserID      int64
 	Concurrency int
 }

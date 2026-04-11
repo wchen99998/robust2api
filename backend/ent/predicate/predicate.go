@@ -21,6 +21,39 @@ type Announcement func(*sql.Selector)
 // AnnouncementRead is the predicate function for announcementread builders.
 type AnnouncementRead func(*sql.Selector)
 
+// AuthEmailVerification is the predicate function for authemailverification builders.
+type AuthEmailVerification func(*sql.Selector)
+
+// AuthFederatedIdentity is the predicate function for authfederatedidentity builders.
+type AuthFederatedIdentity func(*sql.Selector)
+
+// AuthFlow is the predicate function for authflow builders.
+type AuthFlow func(*sql.Selector)
+
+// AuthMFATOTPFactor is the predicate function for authmfatotpfactor builders.
+type AuthMFATOTPFactor func(*sql.Selector)
+
+// AuthPasswordCredential is the predicate function for authpasswordcredential builders.
+type AuthPasswordCredential func(*sql.Selector)
+
+// AuthPasswordResetToken is the predicate function for authpasswordresettoken builders.
+type AuthPasswordResetToken func(*sql.Selector)
+
+// AuthRefreshToken is the predicate function for authrefreshtoken builders.
+type AuthRefreshToken func(*sql.Selector)
+
+// AuthRegistrationChallenge is the predicate function for authregistrationchallenge builders.
+type AuthRegistrationChallenge func(*sql.Selector)
+
+// AuthSession is the predicate function for authsession builders.
+type AuthSession func(*sql.Selector)
+
+// AuthSubject is the predicate function for authsubject builders.
+type AuthSubject func(*sql.Selector)
+
+// ControlUserProfile is the predicate function for controluserprofile builders.
+type ControlUserProfile func(*sql.Selector)
+
 // ErrorPassthroughRule is the predicate function for errorpassthroughrule builders.
 type ErrorPassthroughRule func(*sql.Selector)
 

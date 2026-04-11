@@ -71,7 +71,7 @@ import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { completeOAuthRegistration, getPublicSettings } from '@/api/auth'
+import { bootstrap, completeOAuthRegistration } from '@/api/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -99,10 +99,10 @@ function sanitizeRedirectPath(path: string | null | undefined): string {
 
 async function loadProviderName() {
   try {
-    const settings = await getPublicSettings()
-    const name = settings.oidc_oauth_provider_name?.trim()
-    if (name) {
-      providerName.value = name
+    const boot = await bootstrap()
+    const oidcProvider = (boot.auth_providers || []).find((provider) => provider.id === 'oidc')
+    if (oidcProvider?.display_name) {
+      providerName.value = oidcProvider.display_name
     }
   } catch {
     // Keep the fallback provider name.

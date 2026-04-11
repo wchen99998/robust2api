@@ -41,6 +41,7 @@ const (
 	controlRefreshIdleTTL           = 7 * 24 * time.Hour
 	controlRefreshAbsoluteTTL       = 30 * 24 * time.Hour
 	controlSessionSnapshotTTL       = 5 * time.Minute
+	controlEmbedTokenTTL            = 2 * time.Minute
 	controlOAuthFlowTTL             = 10 * time.Minute
 	controlRegistrationChallengeTTL = 15 * time.Minute
 	controlEmailVerificationTTL     = 15 * time.Minute
@@ -57,6 +58,11 @@ var (
 	ErrLoginChallengeNotFound = infraerrors.BadRequest("LOGIN_CHALLENGE_INVALID", "invalid or expired login challenge")
 	ErrCSRFTokenRequired      = infraerrors.Forbidden("CSRF_TOKEN_REQUIRED", "csrf token is required")
 	ErrCSRFTokenInvalid       = infraerrors.Forbidden("CSRF_TOKEN_INVALID", "csrf token is invalid")
+	ErrPasswordLoginDisabled  = infraerrors.Forbidden("PASSWORD_LOGIN_DISABLED", "password login is disabled")
+	ErrEmailVerificationOff   = infraerrors.Forbidden("EMAIL_VERIFICATION_DISABLED", "email verification is disabled")
+	ErrPasswordResetDisabled  = infraerrors.Forbidden("PASSWORD_RESET_DISABLED", "password reset is disabled")
+	ErrPasswordChangeDisabled = infraerrors.Forbidden("PASSWORD_CHANGE_DISABLED", "password change is disabled")
+	ErrMFASelfServiceDisabled = infraerrors.Forbidden("MFA_SELF_SERVICE_DISABLED", "mfa self-service is disabled")
 )
 
 type controlSigningKey struct {
@@ -204,18 +210,66 @@ func (s *ControlAuthService) JWKS() *ControlJWKS {
 }
 
 func (s *ControlAuthService) AuthCapabilities(ctx context.Context) *ControlAuthCapabilities {
-	passwordResetEnabled := false
-	mfaSelfServiceEnabled := false
-	if s != nil && s.settingService != nil {
-		passwordResetEnabled = s.settingService.IsPasswordResetEnabled(ctx)
-		mfaSelfServiceEnabled = s.settingService.IsTotpEnabled(ctx)
-	}
 	return &ControlAuthCapabilities{
-		Provider:              ControlAuthProviderLocal,
-		PasswordLoginEnabled:  true,
-		PasswordResetEnabled:  passwordResetEnabled,
-		MFASelfServiceEnabled: mfaSelfServiceEnabled,
+		Provider:                  s.authMode(),
+		PasswordLoginEnabled:      s.passwordLoginEnabled(ctx),
+		RegistrationEnabled:       s.registrationEnabled(ctx),
+		EmailVerificationEnabled:  s.emailVerificationEnabled(ctx),
+		PasswordResetEnabled:      s.passwordResetEnabled(ctx),
+		PasswordChangeEnabled:     s.passwordChangeEnabled(ctx),
+		MFASelfServiceEnabled:     s.mfaSelfServiceEnabled(ctx),
+		ProfileSelfServiceEnabled: true,
 	}
+}
+
+func (s *ControlAuthService) authMode() string {
+	if s != nil && s.cfg != nil {
+		mode := strings.TrimSpace(s.cfg.ControlAuth.Mode)
+		if mode != "" {
+			return mode
+		}
+	}
+	return ControlAuthModeLocal
+}
+
+func (s *ControlAuthService) localCredentialMode() bool {
+	return s.authMode() == ControlAuthModeLocal
+}
+
+func (s *ControlAuthService) passwordLoginEnabled(ctx context.Context) bool {
+	return s.localCredentialMode()
+}
+
+func (s *ControlAuthService) registrationEnabled(ctx context.Context) bool {
+	if !s.localCredentialMode() {
+		return false
+	}
+	return s.isRegistrationAllowed(ctx)
+}
+
+func (s *ControlAuthService) emailVerificationEnabled(ctx context.Context) bool {
+	if !s.localCredentialMode() || s.settingService == nil {
+		return false
+	}
+	return s.settingService.IsEmailVerifyEnabled(ctx)
+}
+
+func (s *ControlAuthService) passwordResetEnabled(ctx context.Context) bool {
+	if !s.localCredentialMode() || s.settingService == nil {
+		return false
+	}
+	return s.settingService.IsPasswordResetEnabled(ctx)
+}
+
+func (s *ControlAuthService) passwordChangeEnabled(ctx context.Context) bool {
+	return s.localCredentialMode()
+}
+
+func (s *ControlAuthService) mfaSelfServiceEnabled(ctx context.Context) bool {
+	if !s.localCredentialMode() || s.settingService == nil {
+		return false
+	}
+	return s.settingService.IsTotpEnabled(ctx)
 }
 
 func (s *ControlAuthService) loadSigningKeys(ctx context.Context) error {
@@ -360,25 +414,20 @@ func (s *ControlAuthService) AuthenticateAccessToken(ctx context.Context, tokenS
 	if bundle.Subject.SubjectID != claims.Subject || bundle.Subject.LegacyUserID != snapshot.LegacyUserID {
 		return nil, ErrTokenRevoked
 	}
-	if bundle.Subject.AuthVersion != claims.AuthVersion || !strings.EqualFold(bundle.Subject.Status, StatusActive) {
+	if bundle.Subject.AuthVersion != claims.AuthVersion {
 		return nil, ErrTokenRevoked
 	}
-
-	user, err := s.userRepo.GetByID(ctx, bundle.Subject.LegacyUserID)
-	if err != nil {
-		if errors.Is(err, ErrUserNotFound) {
-			return nil, ErrTokenRevoked
-		}
-		return nil, fmt.Errorf("get user for session: %w", err)
-	}
-	if !user.IsActive() {
+	if !strings.EqualFold(bundle.Subject.Status, StatusActive) {
 		return nil, ErrUserNotActive
 	}
 
-	return buildAuthenticatedIdentity(bundle, snapshot, user), nil
+	return buildAuthenticatedIdentity(bundle, snapshot, s.tryGetLinkedUser(ctx, bundle.Subject.LegacyUserID)), nil
 }
 
 func (s *ControlAuthService) Login(ctx context.Context, email, password, turnstileToken, remoteIP string) (*ControlLoginResult, error) {
+	if !s.passwordLoginEnabled(ctx) {
+		return nil, ErrPasswordLoginDisabled
+	}
 	if s.authService != nil {
 		if err := s.authService.VerifyTurnstile(ctx, turnstileToken, remoteIP); err != nil {
 			return nil, err
@@ -402,7 +451,7 @@ func (s *ControlAuthService) Login(ctx context.Context, email, password, turnsti
 		return nil, infraerrors.Forbidden("BACKEND_MODE_ONLY_ADMIN", "backend mode is active. only admin login is allowed")
 	}
 
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -430,6 +479,9 @@ func (s *ControlAuthService) Login(ctx context.Context, email, password, turnsti
 }
 
 func (s *ControlAuthService) CompleteLoginTOTP(ctx context.Context, challengeID, totpCode string) (*ControlLoginResult, error) {
+	if !s.passwordLoginEnabled(ctx) {
+		return nil, ErrPasswordLoginDisabled
+	}
 	if s.totpService == nil {
 		return nil, ErrTotpNotEnabled
 	}
@@ -451,7 +503,7 @@ func (s *ControlAuthService) CompleteLoginTOTP(ctx context.Context, challengeID,
 		return nil, ErrUserNotActive
 	}
 
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(ctx, user)
 	if err != nil {
 		return nil, err
 	}
@@ -500,18 +552,17 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 		return nil, nil, ErrRefreshTokenExpired
 	}
 
-	user, err := s.userRepo.GetByID(ctx, sessionRecord.LegacyUserID)
+	bundle, err := s.authRepo.GetIdentityBundleBySubjectID(txCtx, sessionRecord.SubjectID)
 	if err != nil {
-		if errors.Is(err, ErrUserNotFound) {
+		if errors.Is(err, ErrSubjectNotFound) {
 			return nil, nil, ErrRefreshTokenInvalid
 		}
 		return nil, nil, err
 	}
-	bundle, err := s.authRepo.EnsureSubjectShadow(txCtx, user)
-	if err != nil {
-		return nil, nil, err
+	if bundle == nil || bundle.Subject == nil || bundle.Subject.LegacyUserID != sessionRecord.LegacyUserID {
+		return nil, nil, ErrRefreshTokenInvalid
 	}
-	if bundle.Subject.AuthVersion != sessionRecord.AuthVersion || !strings.EqualFold(bundle.Subject.Status, StatusActive) || !user.IsActive() {
+	if bundle.Subject.AuthVersion != sessionRecord.AuthVersion || !strings.EqualFold(bundle.Subject.Status, StatusActive) {
 		_ = s.authRepo.RevokeSession(txCtx, sessionRecord.SessionID, now)
 		if err := tx.Commit(); err != nil {
 			return nil, nil, fmt.Errorf("commit refresh revocation: %w", err)
@@ -558,7 +609,7 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 	if err != nil {
 		return nil, nil, err
 	}
-	identity := buildAuthenticatedIdentity(bundle, snapshot, user)
+	identity := buildAuthenticatedIdentity(bundle, snapshot, s.tryGetLinkedUser(ctx, bundle.Subject.LegacyUserID))
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("commit refresh transaction: %w", err)
 	}
@@ -604,15 +655,14 @@ func (s *ControlAuthService) RotateCurrentSession(ctx context.Context, identity 
 		return nil, nil, ErrInvalidToken
 	}
 
-	user, err := s.userRepo.GetByID(ctx, identity.LegacyUserID)
-	if err != nil {
-		return nil, nil, err
+	user := s.tryGetLinkedUser(ctx, identity.LegacyUserID)
+	var bundle *IdentityBundle
+	var err error
+	if user != nil {
+		bundle, err = s.authRepo.SyncLocalCredentialState(ctx, user)
+	} else {
+		bundle, err = s.authRepo.GetIdentityBundleBySubjectID(ctx, identity.SubjectID)
 	}
-	if !user.IsActive() {
-		return nil, nil, ErrUserNotActive
-	}
-
-	bundle, err := s.authRepo.EnsureSubjectShadow(ctx, user)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -635,6 +685,20 @@ func (s *ControlAuthService) RotateCurrentSession(ctx context.Context, identity 
 	}
 
 	return s.createAuthenticatedSession(ctx, bundle, user, nextAMR)
+}
+
+func (s *ControlAuthService) IssueEmbedToken(ctx context.Context, identity *AuthenticatedIdentity) (*ControlEmbedToken, error) {
+	if identity == nil {
+		return nil, ErrInvalidToken
+	}
+	token, expiresAt, err := s.signSessionToken(identity.SubjectID, identity.SessionID, identity.AuthVersion, identity.AMR, controlEmbedTokenTTL, time.Now())
+	if err != nil {
+		return nil, err
+	}
+	return &ControlEmbedToken{
+		Token:     token,
+		ExpiresAt: expiresAt,
+	}, nil
 }
 
 func (s *ControlAuthService) GetRegistrationChallenge(ctx context.Context, challengeID string) (*RegistrationChallengeRecord, error) {
@@ -709,8 +773,15 @@ func (s *ControlAuthService) createAuthenticatedSession(ctx context.Context, bun
 }
 
 func (s *ControlAuthService) newSessionRecords(bundle *IdentityBundle, user *User, amr string, now time.Time) (*SessionRecord, *RefreshTokenRecord, string, error) {
-	if bundle == nil || bundle.Subject == nil || user == nil {
+	if bundle == nil || bundle.Subject == nil {
 		return nil, nil, "", fmt.Errorf("identity bundle is required")
+	}
+	legacyUserID := bundle.Subject.LegacyUserID
+	if user != nil && user.ID > 0 {
+		legacyUserID = user.ID
+	}
+	if legacyUserID <= 0 {
+		return nil, nil, "", fmt.Errorf("linked app user is required")
 	}
 	refreshToken, err := randomHexString(32)
 	if err != nil {
@@ -725,7 +796,7 @@ func (s *ControlAuthService) newSessionRecords(bundle *IdentityBundle, user *Use
 		TokenHash:         hashToken(refreshToken),
 		SessionID:         sessionID,
 		SubjectID:         bundle.Subject.SubjectID,
-		LegacyUserID:      user.ID,
+		LegacyUserID:      legacyUserID,
 		CreatedAt:         now,
 		IdleExpiresAt:     idleExpiry,
 		AbsoluteExpiresAt: absoluteExpiry,
@@ -733,7 +804,7 @@ func (s *ControlAuthService) newSessionRecords(bundle *IdentityBundle, user *Use
 	sessionRecord := &SessionRecord{
 		SessionID:               sessionID,
 		SubjectID:               bundle.Subject.SubjectID,
-		LegacyUserID:            user.ID,
+		LegacyUserID:            legacyUserID,
 		Status:                  StatusActive,
 		AMR:                     amr,
 		LastSeenAt:              now,
@@ -746,11 +817,15 @@ func (s *ControlAuthService) newSessionRecords(bundle *IdentityBundle, user *Use
 }
 
 func (s *ControlAuthService) signAccessToken(subjectID, sessionID string, authVersion int64, amr string, now time.Time) (string, time.Time, error) {
+	return s.signSessionToken(subjectID, sessionID, authVersion, amr, controlAccessTokenTTL, now)
+}
+
+func (s *ControlAuthService) signSessionToken(subjectID, sessionID string, authVersion int64, amr string, ttl time.Duration, now time.Time) (string, time.Time, error) {
 	if s == nil || s.activeSigningKey == nil || s.activeSigningKey.privateKey == nil {
 		return "", time.Time{}, fmt.Errorf("signing key not initialized")
 	}
 
-	expiresAt := now.Add(controlAccessTokenTTL)
+	expiresAt := now.Add(ttl)
 	claims := &controlAccessClaims{
 		SessionID:   sessionID,
 		AuthVersion: authVersion,
@@ -816,6 +891,20 @@ func (s *ControlAuthService) tryStoreSessionSnapshot(ctx context.Context, snapsh
 	}
 }
 
+func (s *ControlAuthService) tryGetLinkedUser(ctx context.Context, legacyUserID int64) *User {
+	if s == nil || s.userRepo == nil || legacyUserID <= 0 {
+		return nil
+	}
+	user, err := s.userRepo.GetByID(ctx, legacyUserID)
+	if err != nil {
+		if !errors.Is(err, ErrUserNotFound) {
+			logger.LegacyPrintf("service.control_auth", "linked user lookup failed: user=%d err=%v", legacyUserID, err)
+		}
+		return nil
+	}
+	return user
+}
+
 func (s *ControlAuthService) frontendBaseURL(ctx context.Context) string {
 	if s.settingService != nil {
 		if value := strings.TrimSpace(s.settingService.GetFrontendURL(ctx)); value != "" {
@@ -849,27 +938,34 @@ func sessionRecordToSnapshot(record *SessionRecord) *SessionSnapshot {
 }
 
 func buildAuthenticatedIdentity(bundle *IdentityBundle, snapshot *SessionSnapshot, user *User) *AuthenticatedIdentity {
-	if bundle == nil || bundle.Subject == nil || snapshot == nil || user == nil {
+	if bundle == nil || bundle.Subject == nil || snapshot == nil {
 		return nil
 	}
 
 	roles := append([]string(nil), bundle.Roles...)
 	primaryRole := RoleUser
-	if user.IsAdmin() {
+	if user != nil && user.IsAdmin() {
 		primaryRole = RoleAdmin
 	}
 	if len(roles) > 0 {
 		primaryRole = roles[0]
 	}
+	legacyUserID := bundle.Subject.LegacyUserID
+	concurrency := 0
+	if user != nil {
+		legacyUserID = user.ID
+		concurrency = user.Concurrency
+	}
 	return &AuthenticatedIdentity{
 		SubjectID:         bundle.Subject.SubjectID,
 		SessionID:         snapshot.SessionID,
-		LegacyUserID:      user.ID,
+		LegacyUserID:      legacyUserID,
 		AMR:               snapshot.AMR,
 		AuthVersion:       bundle.Subject.AuthVersion,
 		Roles:             roles,
 		PrimaryRole:       primaryRole,
-		User:              user,
+		Profile:           bundle.Profile,
+		Concurrency:       concurrency,
 		SessionExpiresAt:  snapshot.ExpiresAt,
 		SessionAbsoluteAt: snapshot.AbsoluteExpiresAt,
 		SessionLastSeenAt: snapshot.LastSeenAt,

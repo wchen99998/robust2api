@@ -11,8 +11,26 @@
         </p>
       </div>
 
+      <div v-if="passwordResetDisabled" class="space-y-6">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800/50 dark:bg-amber-900/20">
+          <div class="flex flex-col items-center gap-4 text-center">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/50">
+              <Icon name="exclamationCircle" size="lg" class="text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-amber-800 dark:text-amber-200">
+                {{ t('auth.resetPasswordDisabled') }}
+              </h3>
+              <p class="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                {{ t('auth.passwordResetManagedExternally') }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Invalid Link State -->
-      <div v-if="isInvalidLink" class="space-y-6">
+      <div v-else-if="isInvalidLink" class="space-y-6">
         <div class="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800/50 dark:bg-red-900/20">
           <div class="flex flex-col items-center gap-4 text-center">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-800/50">
@@ -229,7 +247,7 @@ import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import { useAppStore } from '@/stores'
-import { resetPassword } from '@/api/auth'
+import { bootstrap, resetPassword } from '@/api/auth'
 
 const { t } = useI18n()
 
@@ -245,6 +263,7 @@ const isSuccess = ref<boolean>(false)
 const errorMessage = ref<string>('')
 const showPassword = ref<boolean>(false)
 const showConfirmPassword = ref<boolean>(false)
+const passwordResetDisabled = ref(false)
 
 // URL parameters
 const email = ref<string>('')
@@ -269,6 +288,15 @@ onMounted(() => {
   // Get email and token from URL query parameters
   email.value = (route.query.email as string) || ''
   token.value = (route.query.token as string) || ''
+})
+
+onMounted(async () => {
+  try {
+    const boot = await bootstrap()
+    passwordResetDisabled.value = !(boot.auth_capabilities?.password_reset_enabled ?? true)
+  } catch {
+    passwordResetDisabled.value = false
+  }
 })
 
 // ==================== Validation ====================
@@ -303,6 +331,9 @@ function validateForm(): boolean {
 // ==================== Form Handlers ====================
 
 async function handleSubmit(): Promise<void> {
+  if (passwordResetDisabled.value) {
+    return
+  }
   errorMessage.value = ''
 
   if (!validateForm()) {
