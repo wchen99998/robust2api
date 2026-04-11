@@ -316,7 +316,9 @@ Control-plane secret name: existing control secret or chart-managed control secr
 Bootstrap Job name.
 */}}
 {{- define "sub2api.bootstrapJobName" -}}
-{{- printf "%s-bootstrap" (include "sub2api.fullname" .) | trunc 63 | trimSuffix "-" }}
+{{- $base := printf "%s-bootstrap" (include "sub2api.fullname" .) -}}
+{{- $suffix := include "sub2api.bootstrapInputsChecksum" . | trunc 8 -}}
+{{- printf "%s-%s" $base $suffix | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
