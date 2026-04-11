@@ -101,19 +101,24 @@ type ControlPasswordChangeResult struct {
 	Tokens   *ControlSessionTokens
 }
 
-type ControlOAuthLoginInput struct {
+// ExternalIdentityProfile is the normalized identity payload emitted by an external IdP or social provider.
+// Future Auth0/Clerk adapters should construct this type directly rather than depending on provider-specific callback fields.
+type ExternalIdentityProfile struct {
 	Provider          string
 	Issuer            string
-	ExternalSubject   string
-	LoginEmail        string
+	Subject           string
+	LoginHint         string
 	RegistrationEmail string
 	Username          string
-	InvitationCode    string
-	RedirectTo        string
-	AMR               string
 }
 
-type ControlOAuthLoginResult struct {
+type ControlExternalLoginRequest struct {
+	Identity   *ExternalIdentityProfile
+	RedirectTo string
+	AMR        string
+}
+
+type ControlExternalLoginResult struct {
 	Identity  *AuthenticatedIdentity
 	Tokens    *ControlSessionTokens
 	Challenge *RegistrationChallengeRecord

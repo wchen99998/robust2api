@@ -34,7 +34,7 @@ type ControlSessionAuthService interface {
 	RotateCurrentSession(ctx context.Context, identity *AuthenticatedIdentity, amr string) (*AuthenticatedIdentity, *ControlSessionTokens, error)
 	CreateAuthFlow(ctx context.Context, provider, purpose, issuer, redirectTo string, codeVerifier, nonce *string) (*AuthFlowRecord, string, error)
 	ConsumeAuthFlow(ctx context.Context, flowID, state string) (*AuthFlowRecord, error)
-	HandleOAuthLogin(ctx context.Context, input *ControlOAuthLoginInput) (*ControlOAuthLoginResult, error)
+	CompleteExternalLogin(ctx context.Context, input *ControlExternalLoginRequest) (*ControlExternalLoginResult, error)
 }
 
 // ControlLocalIdentityService captures the currently local-only registration and credential lifecycle.

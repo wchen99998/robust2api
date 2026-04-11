@@ -846,7 +846,7 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 	var (
 		redirectTo       = controlDefaultFrontendRedirect
 		frontendCallback string
-		result           *service.ControlOAuthLoginResult
+		result           *service.ControlExternalLoginResult
 		err              error
 	)
 
@@ -892,15 +892,17 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 			email = linuxDoSyntheticEmail(subject)
 		}
 
-		result, err = h.controlSessionAuth.HandleOAuthLogin(c.Request.Context(), &service.ControlOAuthLoginInput{
-			Provider:          provider,
-			Issuer:            firstNonEmpty(strings.TrimSpace(flow.Issuer), strings.TrimSpace(cfg.AuthorizeURL), provider),
-			ExternalSubject:   subject,
-			LoginEmail:        email,
-			RegistrationEmail: registrationEmail,
-			Username:          username,
-			RedirectTo:        redirectTo,
-			AMR:               provider,
+		result, err = h.controlSessionAuth.CompleteExternalLogin(c.Request.Context(), &service.ControlExternalLoginRequest{
+			Identity: &service.ExternalIdentityProfile{
+				Provider:          provider,
+				Issuer:            firstNonEmpty(strings.TrimSpace(flow.Issuer), strings.TrimSpace(cfg.AuthorizeURL), provider),
+				Subject:           subject,
+				LoginHint:         email,
+				RegistrationEmail: registrationEmail,
+				Username:          username,
+			},
+			RedirectTo: redirectTo,
+			AMR:        provider,
 		})
 	case "oidc":
 		cfg, cfgErr := h.getOIDCOAuthConfig(c.Request.Context())
@@ -983,15 +985,17 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 			oidcFallbackUsername(subject),
 		)
 
-		result, err = h.controlSessionAuth.HandleOAuthLogin(c.Request.Context(), &service.ControlOAuthLoginInput{
-			Provider:          provider,
-			Issuer:            issuer,
-			ExternalSubject:   subject,
-			LoginEmail:        loginEmail,
-			RegistrationEmail: registrationEmail,
-			Username:          username,
-			RedirectTo:        redirectTo,
-			AMR:               provider,
+		result, err = h.controlSessionAuth.CompleteExternalLogin(c.Request.Context(), &service.ControlExternalLoginRequest{
+			Identity: &service.ExternalIdentityProfile{
+				Provider:          provider,
+				Issuer:            issuer,
+				Subject:           subject,
+				LoginHint:         loginEmail,
+				RegistrationEmail: registrationEmail,
+				Username:          username,
+			},
+			RedirectTo: redirectTo,
+			AMR:        provider,
 		})
 	default:
 		response.NotFound(c, "OAuth provider not found")

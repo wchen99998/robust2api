@@ -369,18 +369,23 @@ func (s *ControlAuthService) UpdateProfile(ctx context.Context, identity *Authen
 	}, user), nil
 }
 
-func (s *ControlAuthService) HandleOAuthLogin(ctx context.Context, input *ControlOAuthLoginInput) (*ControlOAuthLoginResult, error) {
+func (s *ControlAuthService) CompleteExternalLogin(ctx context.Context, input *ControlExternalLoginRequest) (*ControlExternalLoginResult, error) {
 	if input == nil {
-		return nil, infraerrors.BadRequest("INVALID_REQUEST", "oauth login input is required")
+		return nil, infraerrors.BadRequest("INVALID_REQUEST", "external login input is required")
+	}
+	if input.Identity == nil {
+		return nil, infraerrors.BadRequest("INVALID_REQUEST", "external identity is required")
 	}
 
-	issuer := strings.TrimSpace(input.Issuer)
-	externalSubject := strings.TrimSpace(input.ExternalSubject)
+	identityProfile := input.Identity
+	provider := strings.TrimSpace(identityProfile.Provider)
+	issuer := strings.TrimSpace(identityProfile.Issuer)
+	externalSubject := strings.TrimSpace(identityProfile.Subject)
 	if issuer == "" || externalSubject == "" {
-		return nil, infraerrors.BadRequest("OAUTH_IDENTITY_INVALID", "oauth identity is incomplete")
+		return nil, infraerrors.BadRequest("OAUTH_IDENTITY_INVALID", "external identity is incomplete")
 	}
 
-	bundle, err := s.authRepo.GetIdentityBundleByFederatedIdentity(ctx, input.Provider, issuer, externalSubject)
+	bundle, err := s.authRepo.GetIdentityBundleByFederatedIdentity(ctx, provider, issuer, externalSubject)
 	switch {
 	case err == nil && bundle != nil && bundle.Subject != nil:
 		user, err := s.userRepo.GetByID(ctx, bundle.Subject.LegacyUserID)
@@ -394,17 +399,17 @@ func (s *ControlAuthService) HandleOAuthLogin(ctx context.Context, input *Contro
 		if err != nil {
 			return nil, err
 		}
-		return &ControlOAuthLoginResult{Identity: identity, Tokens: tokens}, nil
+		return &ControlExternalLoginResult{Identity: identity, Tokens: tokens}, nil
 	case err != nil && !errors.Is(err, ErrFederatedIdentityNotFound):
 		return nil, err
 	}
 
-	loginEmail := strings.TrimSpace(input.LoginEmail)
+	loginEmail := strings.TrimSpace(identityProfile.LoginHint)
 
 	if !s.isRegistrationAllowed(ctx) {
 		return nil, ErrRegDisabled
 	}
-	if registrationEmail := strings.TrimSpace(input.RegistrationEmail); registrationEmail != "" {
+	if registrationEmail := strings.TrimSpace(identityProfile.RegistrationEmail); registrationEmail != "" {
 		if err := s.validateRegistrationEmailPolicy(ctx, registrationEmail); err != nil {
 			return nil, err
 		}
@@ -413,34 +418,34 @@ func (s *ControlAuthService) HandleOAuthLogin(ctx context.Context, input *Contro
 	if s.settingService != nil && s.settingService.IsInvitationCodeEnabled(ctx) {
 		challenge := &RegistrationChallengeRecord{
 			ChallengeID:       newUUIDString(),
-			Provider:          input.Provider,
+			Provider:          provider,
 			Issuer:            issuer,
 			ExternalSubject:   externalSubject,
 			Email:             loginEmail,
-			RegistrationEmail: strings.TrimSpace(input.RegistrationEmail),
-			Username:          strings.TrimSpace(input.Username),
+			RegistrationEmail: strings.TrimSpace(identityProfile.RegistrationEmail),
+			Username:          strings.TrimSpace(identityProfile.Username),
 			RedirectTo:        strings.TrimSpace(input.RedirectTo),
 			ExpiresAt:         time.Now().Add(controlRegistrationChallengeTTL),
 		}
 		if err := s.authRepo.CreateRegistrationChallenge(ctx, challenge); err != nil {
 			return nil, err
 		}
-		return &ControlOAuthLoginResult{Challenge: challenge}, nil
+		return &ControlExternalLoginResult{Challenge: challenge}, nil
 	}
 
 	identity, tokens, err := s.registerOAuthSubject(ctx, &oauthRegistrationInput{
-		Provider:          input.Provider,
+		Provider:          provider,
 		Issuer:            issuer,
 		ExternalSubject:   externalSubject,
 		LoginEmail:        loginEmail,
-		RegistrationEmail: strings.TrimSpace(input.RegistrationEmail),
-		Username:          strings.TrimSpace(input.Username),
+		RegistrationEmail: strings.TrimSpace(identityProfile.RegistrationEmail),
+		Username:          strings.TrimSpace(identityProfile.Username),
 		AMR:               input.AMR,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &ControlOAuthLoginResult{Identity: identity, Tokens: tokens}, nil
+	return &ControlExternalLoginResult{Identity: identity, Tokens: tokens}, nil
 }
 
 func (s *ControlAuthService) CompleteOAuthRegistration(ctx context.Context, challengeID, invitationCode string) (*AuthenticatedIdentity, *ControlSessionTokens, error) {
