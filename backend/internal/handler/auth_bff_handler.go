@@ -169,6 +169,11 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 		response.ErrorFrom(c, authErr)
 		return
 	}
+	if h.isBackendModeNonAdmin(c.Request.Context(), identity) {
+		h.clearSessionCookies(c)
+		identity = nil
+		refreshAvailable = false
+	}
 
 	payload, err := h.buildBootstrapPayload(c.Request.Context(), identity, csrfToken, refreshAvailable)
 	if err != nil {
@@ -243,6 +248,9 @@ func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.rejectBackendModeNonAdmin(c, result.Identity) {
+		return
+	}
 
 	csrfToken, err := h.setSessionCookies(c, result.Tokens)
 	if err != nil {
@@ -289,6 +297,9 @@ func (h *AuthHandler) SessionsLogoutAll(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
+		return
+	}
 	if err := h.controlSessionAuth.LogoutAllSessions(c.Request.Context(), identity); err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -311,6 +322,11 @@ func (h *AuthHandler) SessionRefresh(c *gin.Context) {
 			h.clearSessionCookies(c)
 		}
 		response.ErrorFrom(c, err)
+		return
+	}
+	if h.isBackendModeNonAdmin(c.Request.Context(), identity) {
+		h.clearSessionCookies(c)
+		response.ErrorFrom(c, infraerrors.Forbidden("BACKEND_MODE_ONLY_ADMIN", "backend mode is active. only admin login is allowed"))
 		return
 	}
 
@@ -508,6 +524,9 @@ func (h *AuthHandler) PatchMe(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
+		return
+	}
 
 	updatedIdentity, err := h.controlProfile.UpdateProfile(c.Request.Context(), identity, req.Username)
 	if err != nil {
@@ -538,6 +557,9 @@ func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
 	identity, err := h.currentIdentity(c)
 	if err != nil {
 		response.ErrorFrom(c, err)
+		return
+	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
 		return
 	}
 
@@ -576,6 +598,9 @@ func (h *AuthHandler) GetMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
+		return
+	}
 
 	status, err := h.controlLocalMFA.GetStatus(c.Request.Context(), identity.LegacyUserID)
 	if err != nil {
@@ -610,6 +635,9 @@ func (h *AuthHandler) SendMyTOTPCode(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
+		return
+	}
 
 	if err := h.controlLocalMFA.SendVerifyCode(c.Request.Context(), identity.LegacyUserID); err != nil {
 		response.ErrorFrom(c, err)
@@ -636,6 +664,9 @@ func (h *AuthHandler) SetupMyTOTP(c *gin.Context) {
 	identity, err := h.currentIdentity(c)
 	if err != nil {
 		response.ErrorFrom(c, err)
+		return
+	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
 		return
 	}
 
@@ -666,6 +697,9 @@ func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
 	identity, err := h.currentIdentity(c)
 	if err != nil {
 		response.ErrorFrom(c, err)
+		return
+	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
 		return
 	}
 	if err := h.controlLocalMFA.CompleteSetup(c.Request.Context(), identity.LegacyUserID, req.TOTPCode, req.SetupToken); err != nil {
@@ -714,6 +748,9 @@ func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
+		return
+	}
 	if err := h.controlLocalMFA.Disable(c.Request.Context(), identity.LegacyUserID, req.EmailCode, req.Password); err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -748,6 +785,9 @@ func (h *AuthHandler) EmbedToken(c *gin.Context) {
 	identity, err := h.currentIdentity(c)
 	if err != nil {
 		response.ErrorFrom(c, err)
+		return
+	}
+	if h.rejectBackendModeNonAdmin(c, identity) {
 		return
 	}
 
@@ -1216,6 +1256,21 @@ func derefString(value *string) string {
 		return ""
 	}
 	return strings.TrimSpace(*value)
+}
+
+func (h *AuthHandler) isBackendModeNonAdmin(ctx context.Context, identity *service.AuthenticatedIdentity) bool {
+	if identity == nil || h.settingSvc == nil || !h.settingSvc.IsBackendModeEnabled(ctx) {
+		return false
+	}
+	return strings.TrimSpace(identity.PrimaryRole) != service.RoleAdmin
+}
+
+func (h *AuthHandler) rejectBackendModeNonAdmin(c *gin.Context, identity *service.AuthenticatedIdentity) bool {
+	if !h.isBackendModeNonAdmin(c.Request.Context(), identity) {
+		return false
+	}
+	response.ErrorFrom(c, infraerrors.Forbidden("BACKEND_MODE_ONLY_ADMIN", "backend mode is active. only admin login is allowed"))
+	return true
 }
 
 func randomHex(byteLength int) (string, error) {

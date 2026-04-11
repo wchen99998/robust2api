@@ -199,6 +199,48 @@ func TestBackendModeAuthGuard(t *testing.T) {
 			wantStatus: http.StatusOK,
 		},
 		{
+			name:       "enabled_allows_bootstrap",
+			enabled:    "true",
+			path:       "/api/v1/bootstrap",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_session_login",
+			enabled:    "true",
+			path:       "/api/v1/session/login",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_session_login_totp",
+			enabled:    "true",
+			path:       "/api/v1/session/login/totp",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_session_logout",
+			enabled:    "true",
+			path:       "/api/v1/session/logout",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_session_refresh",
+			enabled:    "true",
+			path:       "/api/v1/session/refresh",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_oidc_oauth_start",
+			enabled:    "true",
+			path:       "/api/v1/oauth/oidc/start",
+			wantStatus: http.StatusOK,
+		},
+		{
+			name:       "enabled_allows_oidc_oauth_callback",
+			enabled:    "true",
+			path:       "/api/v1/oauth/oidc/callback",
+			wantStatus: http.StatusOK,
+		},
+		{
 			name:       "enabled_blocks_register",
 			enabled:    "true",
 			path:       "/api/v1/auth/register",
@@ -208,6 +250,18 @@ func TestBackendModeAuthGuard(t *testing.T) {
 			name:       "enabled_blocks_forgot_password",
 			enabled:    "true",
 			path:       "/api/v1/auth/forgot-password",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "enabled_blocks_bff_registration",
+			enabled:    "true",
+			path:       "/api/v1/registration",
+			wantStatus: http.StatusForbidden,
+		},
+		{
+			name:       "enabled_blocks_bff_password_forgot",
+			enabled:    "true",
+			path:       "/api/v1/password/forgot",
 			wantStatus: http.StatusForbidden,
 		},
 	}

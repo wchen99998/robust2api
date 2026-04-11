@@ -80,6 +80,86 @@ func RegisterAuthRoutes(
 		)
 	}
 
+	// Session-based browser auth endpoints used by the control-auth BFF.
+	bff := v1.Group("")
+	bff.Use(servermiddleware.BackendModeAuthGuard(settingService))
+	{
+		bff.GET("/bootstrap", h.Auth.Bootstrap)
+		bff.GET("/jwks", h.Auth.JWKS)
+
+		session := bff.Group("/session")
+		{
+			session.POST("/login", rateLimiter.LimitWithOptions("control-session-login", 20, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.SessionLogin)
+			session.POST("/login/totp", rateLimiter.LimitWithOptions("control-session-login-totp", 20, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.SessionLoginTOTP)
+			session.POST("/logout", h.Auth.SessionLogout)
+			session.POST("/refresh", rateLimiter.LimitWithOptions("control-session-refresh", 30, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.SessionRefresh)
+		}
+
+		registration := bff.Group("/registration")
+		{
+			registration.POST("/preflight", rateLimiter.LimitWithOptions("control-registration-preflight", 10, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.RegistrationPreflight)
+			registration.POST("/email-code", rateLimiter.LimitWithOptions("control-registration-email-code", 5, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.RegistrationEmailCode)
+			registration.POST("", rateLimiter.LimitWithOptions("control-registration", 5, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.Registration)
+			registration.POST("/complete", rateLimiter.LimitWithOptions("control-registration-complete", 10, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.RegistrationComplete)
+		}
+
+		password := bff.Group("/password")
+		{
+			password.POST("/forgot", rateLimiter.LimitWithOptions("control-password-forgot", 5, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.PasswordForgot)
+			password.POST("/reset", rateLimiter.LimitWithOptions("control-password-reset", 10, time.Minute, middleware.RateLimitOptions{
+				FailureMode: middleware.RateLimitFailClose,
+			}), h.Auth.PasswordReset)
+		}
+
+		oauth := bff.Group("/oauth")
+		{
+			oauth.GET("/:provider/start", h.Auth.OAuthStart)
+			oauth.GET("/:provider/callback", h.Auth.OAuthCallback)
+		}
+	}
+
+	// Authenticated BFF self-service routes. The handlers validate the control session from
+	// cookies or Authorization headers directly because they do not use the legacy JWT surface.
+	selfService := v1.Group("")
+	{
+		session := selfService.Group("/session")
+		{
+			session.POST("/logout-all", h.Auth.SessionsLogoutAll)
+		}
+
+		me := selfService.Group("/me")
+		{
+			me.PATCH("", h.Auth.PatchMe)
+			me.POST("/password", h.Auth.ChangeMyPassword)
+			me.POST("/embed-token", h.Auth.EmbedToken)
+
+			totp := me.Group("/mfa/totp")
+			{
+				totp.GET("", h.Auth.GetMyTOTP)
+				totp.POST("/send-code", h.Auth.SendMyTOTPCode)
+				totp.POST("/setup", h.Auth.SetupMyTOTP)
+				totp.POST("/enable", h.Auth.EnableMyTOTP)
+				totp.POST("/disable", h.Auth.DisableMyTOTP)
+			}
+		}
+	}
+
 	// 公开设置（无需认证）
 	settings := v1.Group("/settings")
 	{
