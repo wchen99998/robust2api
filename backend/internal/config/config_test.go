@@ -38,6 +38,34 @@ func TestNormalizeRunMode(t *testing.T) {
 	}
 }
 
+func TestNormalizeControlAuthMode(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"", "local"},
+		{"local", "local"},
+		{"EXTERNAL_OIDC", "external_oidc"},
+		{"external-auth0", "external-auth0"},
+	}
+
+	for _, tt := range tests {
+		result := NormalizeControlAuthMode(tt.input)
+		if result != tt.expected {
+			t.Errorf("NormalizeControlAuthMode(%q) = %q, want %q", tt.input, result, tt.expected)
+		}
+	}
+}
+
+func TestLoadRejectsUnknownControlAuthMode(t *testing.T) {
+	resetViperWithJWTSecret(t)
+	t.Setenv("CONTROL_AUTH_MODE", "external-auth0")
+
+	_, err := load(RoleControl)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "control_auth.mode must be one of")
+}
+
 func TestLoadDefaultSchedulingConfig(t *testing.T) {
 	resetViperWithJWTSecret(t)
 
@@ -302,7 +330,7 @@ func TestValidateLinuxDoFrontendRedirectURL(t *testing.T) {
 	cfg.LinuxDo.Enabled = true
 	cfg.LinuxDo.ClientID = "test-client"
 	cfg.LinuxDo.ClientSecret = "test-secret"
-	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/auth/oauth/linuxdo/callback"
+	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/oauth/linuxdo/callback"
 	cfg.LinuxDo.TokenAuthMethod = "client_secret_post"
 	cfg.LinuxDo.UsePKCE = false
 
@@ -327,7 +355,7 @@ func TestValidateLinuxDoPKCERequiredForPublicClient(t *testing.T) {
 	cfg.LinuxDo.Enabled = true
 	cfg.LinuxDo.ClientID = "test-client"
 	cfg.LinuxDo.ClientSecret = ""
-	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/auth/oauth/linuxdo/callback"
+	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/oauth/linuxdo/callback"
 	cfg.LinuxDo.FrontendRedirectURL = "/auth/linuxdo/callback"
 	cfg.LinuxDo.TokenAuthMethod = "none"
 	cfg.LinuxDo.UsePKCE = false
@@ -779,7 +807,7 @@ func TestValidateConfigWithLinuxDoEnabled(t *testing.T) {
 	cfg.LinuxDo.AuthorizeURL = "https://example.com/oauth2/authorize"
 	cfg.LinuxDo.TokenURL = "https://example.com/oauth2/token"
 	cfg.LinuxDo.UserInfoURL = "https://example.com/oauth2/userinfo"
-	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/auth/oauth/linuxdo/callback"
+	cfg.LinuxDo.RedirectURL = "https://example.com/api/v1/oauth/linuxdo/callback"
 	cfg.LinuxDo.FrontendRedirectURL = "/auth/linuxdo/callback"
 	cfg.LinuxDo.TokenAuthMethod = "client_secret_post"
 

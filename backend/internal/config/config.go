@@ -78,6 +78,7 @@ type Config struct {
 	Totp                    TotpConfig                    `mapstructure:"totp"`
 	LinuxDo                 LinuxDoConnectConfig          `mapstructure:"linuxdo_connect"`
 	OIDC                    OIDCConnectConfig             `mapstructure:"oidc_connect"`
+	ControlAuth             ControlAuthConfig             `mapstructure:"control_auth"`
 	Default                 DefaultConfig                 `mapstructure:"default"`
 	RateLimit               RateLimitConfig               `mapstructure:"rate_limit"`
 	Pricing                 PricingConfig                 `mapstructure:"pricing"`
@@ -101,6 +102,10 @@ type Config struct {
 	Worker                  struct {
 		HealthPort string `mapstructure:"health_port"`
 	} `mapstructure:"worker"`
+}
+
+type ControlAuthConfig struct {
+	Mode string `mapstructure:"mode"`
 }
 
 type LogConfig struct {
@@ -327,25 +332,25 @@ type ProxyProbeConfig struct {
 }
 
 type BillingConfig struct {
-	CircuitBreaker CircuitBreakerConfig  `mapstructure:"circuit_breaker"`
-	Stream         BillingStreamConfig   `mapstructure:"stream"`
-	DBPool         BillingDBPoolConfig   `mapstructure:"db_pool"`
-	HealthPort     string                `mapstructure:"health_port"`
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+	Stream         BillingStreamConfig  `mapstructure:"stream"`
+	DBPool         BillingDBPoolConfig  `mapstructure:"db_pool"`
+	HealthPort     string               `mapstructure:"health_port"`
 }
 
 // BillingStreamConfig configures the Redis Stream used as a message broker
 // between the gateway (publisher) and the billing service (consumer).
 type BillingStreamConfig struct {
-	Key                     string `mapstructure:"key"`
-	ConsumerGroup           string `mapstructure:"consumer_group"`
-	MaxLen                  int64  `mapstructure:"max_len"`
-	DLQKey                  string `mapstructure:"dlq_key"`
-	BatchSize               int    `mapstructure:"batch_size"`
-	BlockTimeoutSeconds     int    `mapstructure:"block_timeout_seconds"`
-	PendingRecoverySeconds  int    `mapstructure:"pending_recovery_seconds"`
-	MaxRetryCount           int    `mapstructure:"max_retry_count"`
-	Workers                 int    `mapstructure:"workers"`
-	PublishRetries          int    `mapstructure:"publish_retries"`
+	Key                    string `mapstructure:"key"`
+	ConsumerGroup          string `mapstructure:"consumer_group"`
+	MaxLen                 int64  `mapstructure:"max_len"`
+	DLQKey                 string `mapstructure:"dlq_key"`
+	BatchSize              int    `mapstructure:"batch_size"`
+	BlockTimeoutSeconds    int    `mapstructure:"block_timeout_seconds"`
+	PendingRecoverySeconds int    `mapstructure:"pending_recovery_seconds"`
+	MaxRetryCount          int    `mapstructure:"max_retry_count"`
+	Workers                int    `mapstructure:"workers"`
+	PublishRetries         int    `mapstructure:"publish_retries"`
 }
 
 // BillingDBPoolConfig configures the dedicated DB connection pool for billing writes.
@@ -948,6 +953,18 @@ func NormalizeRunMode(value string) string {
 	}
 }
 
+func NormalizeControlAuthMode(value string) string {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	switch normalized {
+	case "":
+		return "local"
+	case "local", "external_oidc", "external_auth0", "external_clerk":
+		return normalized
+	default:
+		return normalized
+	}
+}
+
 // Load reads and validates the application configuration using generic validation.
 func Load() (*Config, error) {
 	return load(RoleGeneric)
@@ -1006,6 +1023,7 @@ func load(role Role) (*Config, error) {
 	}
 
 	cfg.RunMode = NormalizeRunMode(cfg.RunMode)
+	cfg.ControlAuth.Mode = NormalizeControlAuthMode(cfg.ControlAuth.Mode)
 	cfg.Server.Mode = strings.ToLower(strings.TrimSpace(cfg.Server.Mode))
 	if cfg.Server.Mode == "" {
 		cfg.Server.Mode = "debug"
@@ -1229,6 +1247,9 @@ func setDefaults() {
 	viper.SetDefault("oidc_connect.userinfo_email_path", "")
 	viper.SetDefault("oidc_connect.userinfo_id_path", "")
 	viper.SetDefault("oidc_connect.userinfo_username_path", "")
+
+	// Control auth portability mode
+	viper.SetDefault("control_auth.mode", "local")
 
 	// Gateway Codex instructions template
 	viper.SetDefault("gateway.forced_codex_instructions_template_file", "")
@@ -1771,6 +1792,19 @@ func (c *Config) ValidateForRole(role Role) error {
 		warnIfInsecureURL("oidc_connect.jwks_url", c.OIDC.JWKSURL)
 		warnIfInsecureURL("oidc_connect.redirect_url", c.OIDC.RedirectURL)
 		warnIfInsecureURL("oidc_connect.frontend_redirect_url", c.OIDC.FrontendRedirectURL)
+	}
+	if requiresControlPlaneValidation(role) {
+		switch c.ControlAuth.Mode {
+		case "local", "":
+		case "external_oidc", "external_auth0":
+			if !c.OIDC.Enabled {
+				return fmt.Errorf("control_auth.mode=%s requires oidc_connect.enabled=true", c.ControlAuth.Mode)
+			}
+		case "external_clerk":
+			return fmt.Errorf("control_auth.mode=external_clerk is reserved but not implemented in this phase")
+		default:
+			return fmt.Errorf("control_auth.mode must be one of: local/external_oidc/external_auth0/external_clerk")
+		}
 	}
 	if c.Billing.CircuitBreaker.Enabled {
 		if c.Billing.CircuitBreaker.FailureThreshold <= 0 {

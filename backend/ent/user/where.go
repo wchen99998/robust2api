@@ -8,6 +8,7 @@ import (
 	"entgo.io/ent/dialect/sql"
 	"entgo.io/ent/dialect/sql/sqlgraph"
 	"github.com/Wei-Shaw/sub2api/ent/predicate"
+	"github.com/google/uuid"
 )
 
 // ID filters vertices based on their ID field.
@@ -108,6 +109,11 @@ func Username(v string) predicate.User {
 // Notes applies equality check predicate on the "notes" field. It's identical to NotesEQ.
 func Notes(v string) predicate.User {
 	return predicate.User(sql.FieldEQ(FieldNotes, v))
+}
+
+// SubjectID applies equality check predicate on the "subject_id" field. It's identical to SubjectIDEQ.
+func SubjectID(v uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSubjectID, v))
 }
 
 // TotpSecretEncrypted applies equality check predicate on the "totp_secret_encrypted" field. It's identical to TotpSecretEncryptedEQ.
@@ -723,6 +729,56 @@ func NotesEqualFold(v string) predicate.User {
 // NotesContainsFold applies the ContainsFold predicate on the "notes" field.
 func NotesContainsFold(v string) predicate.User {
 	return predicate.User(sql.FieldContainsFold(FieldNotes, v))
+}
+
+// SubjectIDEQ applies the EQ predicate on the "subject_id" field.
+func SubjectIDEQ(v uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldEQ(FieldSubjectID, v))
+}
+
+// SubjectIDNEQ applies the NEQ predicate on the "subject_id" field.
+func SubjectIDNEQ(v uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldNEQ(FieldSubjectID, v))
+}
+
+// SubjectIDIn applies the In predicate on the "subject_id" field.
+func SubjectIDIn(vs ...uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldIn(FieldSubjectID, vs...))
+}
+
+// SubjectIDNotIn applies the NotIn predicate on the "subject_id" field.
+func SubjectIDNotIn(vs ...uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldNotIn(FieldSubjectID, vs...))
+}
+
+// SubjectIDGT applies the GT predicate on the "subject_id" field.
+func SubjectIDGT(v uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldGT(FieldSubjectID, v))
+}
+
+// SubjectIDGTE applies the GTE predicate on the "subject_id" field.
+func SubjectIDGTE(v uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldGTE(FieldSubjectID, v))
+}
+
+// SubjectIDLT applies the LT predicate on the "subject_id" field.
+func SubjectIDLT(v uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldLT(FieldSubjectID, v))
+}
+
+// SubjectIDLTE applies the LTE predicate on the "subject_id" field.
+func SubjectIDLTE(v uuid.UUID) predicate.User {
+	return predicate.User(sql.FieldLTE(FieldSubjectID, v))
+}
+
+// SubjectIDIsNil applies the IsNil predicate on the "subject_id" field.
+func SubjectIDIsNil() predicate.User {
+	return predicate.User(sql.FieldIsNull(FieldSubjectID))
+}
+
+// SubjectIDNotNil applies the NotNil predicate on the "subject_id" field.
+func SubjectIDNotNil() predicate.User {
+	return predicate.User(sql.FieldNotNull(FieldSubjectID))
 }
 
 // TotpSecretEncryptedEQ applies the EQ predicate on the "totp_secret_encrypted" field.

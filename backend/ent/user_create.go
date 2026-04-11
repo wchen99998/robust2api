@@ -20,6 +20,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/google/uuid"
 )
 
 // UserCreate is the builder for creating a User entity.
@@ -164,6 +165,20 @@ func (_c *UserCreate) SetNotes(v string) *UserCreate {
 func (_c *UserCreate) SetNillableNotes(v *string) *UserCreate {
 	if v != nil {
 		_c.SetNotes(*v)
+	}
+	return _c
+}
+
+// SetSubjectID sets the "subject_id" field.
+func (_c *UserCreate) SetSubjectID(v uuid.UUID) *UserCreate {
+	_c.mutation.SetSubjectID(v)
+	return _c
+}
+
+// SetNillableSubjectID sets the "subject_id" field if the given value is not nil.
+func (_c *UserCreate) SetNillableSubjectID(v *uuid.UUID) *UserCreate {
+	if v != nil {
+		_c.SetSubjectID(*v)
 	}
 	return _c
 }
@@ -558,6 +573,10 @@ func (_c *UserCreate) createSpec() (*User, *sqlgraph.CreateSpec) {
 		_spec.SetField(user.FieldNotes, field.TypeString, value)
 		_node.Notes = value
 	}
+	if value, ok := _c.mutation.SubjectID(); ok {
+		_spec.SetField(user.FieldSubjectID, field.TypeUUID, value)
+		_node.SubjectID = &value
+	}
 	if value, ok := _c.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)
 		_node.TotpSecretEncrypted = &value
@@ -908,6 +927,24 @@ func (u *UserUpsert) UpdateNotes() *UserUpsert {
 	return u
 }
 
+// SetSubjectID sets the "subject_id" field.
+func (u *UserUpsert) SetSubjectID(v uuid.UUID) *UserUpsert {
+	u.Set(user.FieldSubjectID, v)
+	return u
+}
+
+// UpdateSubjectID sets the "subject_id" field to the value that was provided on create.
+func (u *UserUpsert) UpdateSubjectID() *UserUpsert {
+	u.SetExcluded(user.FieldSubjectID)
+	return u
+}
+
+// ClearSubjectID clears the value of the "subject_id" field.
+func (u *UserUpsert) ClearSubjectID() *UserUpsert {
+	u.SetNull(user.FieldSubjectID)
+	return u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (u *UserUpsert) SetTotpSecretEncrypted(v string) *UserUpsert {
 	u.Set(user.FieldTotpSecretEncrypted, v)
@@ -1159,6 +1196,27 @@ func (u *UserUpsertOne) SetNotes(v string) *UserUpsertOne {
 func (u *UserUpsertOne) UpdateNotes() *UserUpsertOne {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateNotes()
+	})
+}
+
+// SetSubjectID sets the "subject_id" field.
+func (u *UserUpsertOne) SetSubjectID(v uuid.UUID) *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.SetSubjectID(v)
+	})
+}
+
+// UpdateSubjectID sets the "subject_id" field to the value that was provided on create.
+func (u *UserUpsertOne) UpdateSubjectID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateSubjectID()
+	})
+}
+
+// ClearSubjectID clears the value of the "subject_id" field.
+func (u *UserUpsertOne) ClearSubjectID() *UserUpsertOne {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearSubjectID()
 	})
 }
 
@@ -1587,6 +1645,27 @@ func (u *UserUpsertBulk) SetNotes(v string) *UserUpsertBulk {
 func (u *UserUpsertBulk) UpdateNotes() *UserUpsertBulk {
 	return u.Update(func(s *UserUpsert) {
 		s.UpdateNotes()
+	})
+}
+
+// SetSubjectID sets the "subject_id" field.
+func (u *UserUpsertBulk) SetSubjectID(v uuid.UUID) *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.SetSubjectID(v)
+	})
+}
+
+// UpdateSubjectID sets the "subject_id" field to the value that was provided on create.
+func (u *UserUpsertBulk) UpdateSubjectID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.UpdateSubjectID()
+	})
+}
+
+// ClearSubjectID clears the value of the "subject_id" field.
+func (u *UserUpsertBulk) ClearSubjectID() *UserUpsertBulk {
+	return u.Update(func(s *UserUpsert) {
+		s.ClearSubjectID()
 	})
 }
 

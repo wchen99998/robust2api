@@ -3,6 +3,7 @@ package schema
 import (
 	"github.com/Wei-Shaw/sub2api/ent/schema/mixins"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/google/uuid"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -61,6 +62,10 @@ func (User) Fields() []ent.Field {
 		field.String("notes").
 			SchemaType(map[string]string{dialect.Postgres: "text"}).
 			Default(""),
+		field.UUID("subject_id", uuid.UUID{}).
+			Optional().
+			Nillable().
+			SchemaType(map[string]string{dialect.Postgres: "uuid"}),
 
 		// TOTP 双因素认证字段
 		field.String("totp_secret_encrypted").
