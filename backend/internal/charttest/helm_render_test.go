@@ -108,8 +108,8 @@ func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testi
 	gatewayStrategy := nestedMap(t, gatewayDeployment, "spec", "strategy")
 	require.Equal(t, "RollingUpdate", stringValue(gatewayStrategy["type"]))
 	gatewayRollingUpdate := nestedMap(t, gatewayStrategy, "rollingUpdate")
-	require.Equal(t, "0", stringValue(gatewayRollingUpdate["maxUnavailable"]))
-	require.Equal(t, "1", stringValue(gatewayRollingUpdate["maxSurge"]))
+	require.Equal(t, 0, intValue(t, gatewayRollingUpdate["maxUnavailable"]))
+	require.Equal(t, 1, intValue(t, gatewayRollingUpdate["maxSurge"]))
 
 	controlValuesPath := productionValuesPath(t, "sub2api-control")
 	controlSecretsPath := writeValuesFile(t, map[string]any{
@@ -761,6 +761,24 @@ func boolValue(value any) bool {
 		return b
 	}
 	return false
+}
+
+func intValue(t *testing.T, value any) int {
+	t.Helper()
+
+	switch v := value.(type) {
+	case int:
+		return v
+	case int64:
+		return int(v)
+	case uint64:
+		return int(v)
+	case float64:
+		return int(v)
+	default:
+		t.Fatalf("expected numeric value, got %T", value)
+		return 0
+	}
 }
 
 func dependencyNames(release helmRelease) []string {
