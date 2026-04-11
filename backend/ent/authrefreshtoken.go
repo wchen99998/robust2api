@@ -171,24 +171,43 @@ func (_m *AuthRefreshToken) Unwrap() *AuthRefreshToken {
 
 // String implements the fmt.Stringer.
 func (_m *AuthRefreshToken) String() string {
-	fields := []string{
-		fmt.Sprintf("id=%v", _m.ID),
-		"created_at=" + _m.CreatedAt.Format(time.ANSIC),
-		"updated_at=" + _m.UpdatedAt.Format(time.ANSIC),
-		fmt.Sprintf("sid=%v", _m.Sid),
-		fmt.Sprintf("subject_id=%v", _m.SubjectID),
-		fmt.Sprintf("legacy_user_id=%v", _m.LegacyUserID),
-		"idle_expires_at=" + _m.IdleExpiresAt.Format(time.ANSIC),
-		"absolute_expires_at=" + _m.AbsoluteExpiresAt.Format(time.ANSIC),
-	}
+	var builder strings.Builder
+	builder.WriteString("AuthRefreshToken(")
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("created_at=")
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("updated_at=")
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("sid=")
+	builder.WriteString(fmt.Sprintf("%v", _m.Sid))
+	builder.WriteString(", ")
+	builder.WriteString("subject_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.SubjectID))
+	builder.WriteString(", ")
+	builder.WriteString("legacy_user_id=")
+	builder.WriteString(fmt.Sprintf("%v", _m.LegacyUserID))
+	builder.WriteString(", ")
+	builder.WriteString("idle_expires_at=")
+	builder.WriteString(_m.IdleExpiresAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("absolute_expires_at=")
+	builder.WriteString(_m.AbsoluteExpiresAt.Format(time.ANSIC))
+	builder.WriteString(", ")
 	if v := _m.RotatedAt; v != nil {
-		fields = append(fields, "rotated_at="+v.Format(time.ANSIC))
+		builder.WriteString("rotated_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
+	builder.WriteString(", ")
 	if v := _m.RevokedAt; v != nil {
-		fields = append(fields, "revoked_at="+v.Format(time.ANSIC))
+		builder.WriteString("revoked_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
-	fields = append(fields, "replaced_by_token_hash=<sensitive>")
-	return "AuthRefreshToken(" + strings.Join(fields, ", ") + ")"
+	builder.WriteString(", ")
+	builder.WriteString("replaced_by_token_hash=<sensitive>")
+	builder.WriteByte(')')
+	return builder.String()
 }
 
 // AuthRefreshTokens is a parsable slice of AuthRefreshToken.

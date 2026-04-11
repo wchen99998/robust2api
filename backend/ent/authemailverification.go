@@ -154,24 +154,37 @@ func (_m *AuthEmailVerification) Unwrap() *AuthEmailVerification {
 
 // String implements the fmt.Stringer.
 func (_m *AuthEmailVerification) String() string {
-	fields := []string{
-		fmt.Sprintf("id=%v", _m.ID),
-		"created_at=" + _m.CreatedAt.Format(time.ANSIC),
-		"updated_at=" + _m.UpdatedAt.Format(time.ANSIC),
-	}
+	var builder strings.Builder
+	builder.WriteString("AuthEmailVerification(")
+	builder.WriteString(fmt.Sprintf("id=%v, ", _m.ID))
+	builder.WriteString("created_at=")
+	builder.WriteString(_m.CreatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
+	builder.WriteString("updated_at=")
+	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
+	builder.WriteString(", ")
 	if v := _m.SubjectID; v != nil {
-		fields = append(fields, fmt.Sprintf("subject_id=%v", *v))
+		builder.WriteString("subject_id=")
+		builder.WriteString(fmt.Sprintf("%v", *v))
 	}
-	fields = append(fields,
-		"purpose="+_m.Purpose,
-		"email="+_m.Email,
-		"code_hash=<sensitive>",
-		"expires_at="+_m.ExpiresAt.Format(time.ANSIC),
-	)
+	builder.WriteString(", ")
+	builder.WriteString("purpose=")
+	builder.WriteString(_m.Purpose)
+	builder.WriteString(", ")
+	builder.WriteString("email=")
+	builder.WriteString(_m.Email)
+	builder.WriteString(", ")
+	builder.WriteString("code_hash=<sensitive>")
+	builder.WriteString(", ")
+	builder.WriteString("expires_at=")
+	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))
+	builder.WriteString(", ")
 	if v := _m.ConsumedAt; v != nil {
-		fields = append(fields, "consumed_at="+v.Format(time.ANSIC))
+		builder.WriteString("consumed_at=")
+		builder.WriteString(v.Format(time.ANSIC))
 	}
-	return "AuthEmailVerification(" + strings.Join(fields, ", ") + ")"
+	builder.WriteByte(')')
+	return builder.String()
 }
 
 // AuthEmailVerifications is a parsable slice of AuthEmailVerification.
