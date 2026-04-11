@@ -16,25 +16,58 @@ import (
 
 // AuthHandler handles authentication-related requests
 type AuthHandler struct {
-	cfg           *config.Config
-	authService   *service.AuthService
-	userService   *service.UserService
-	settingSvc    *service.SettingService
-	promoService  *service.PromoService
-	redeemService *service.RedeemService
-	totpService   *service.TotpService
+	cfg                       *config.Config
+	authService               *service.AuthService
+	controlSessionAuth        service.ControlSessionAuthService
+	controlLocalCredentials   service.ControlLocalCredentialService
+	controlRegistration       service.ControlRegistrationService
+	controlProfile            service.ControlProfileService
+	controlLocalMFA           service.ControlLocalMFAService
+	externalIdentityProviders service.ExternalIdentityProviderRegistry
+	userService               *service.UserService
+	settingSvc                *service.SettingService
+	promoService              *service.PromoService
+	redeemService             *service.RedeemService
+	totpService               *service.TotpService
+	version                   string
 }
 
 // NewAuthHandler creates a new AuthHandler
-func NewAuthHandler(cfg *config.Config, authService *service.AuthService, userService *service.UserService, settingService *service.SettingService, promoService *service.PromoService, redeemService *service.RedeemService, totpService *service.TotpService) *AuthHandler {
+func NewAuthHandler(
+	cfg *config.Config,
+	authService *service.AuthService,
+	controlSessionAuth service.ControlSessionAuthService,
+	controlLocalCredentials service.ControlLocalCredentialService,
+	controlRegistration service.ControlRegistrationService,
+	controlProfile service.ControlProfileService,
+	controlLocalMFA service.ControlLocalMFAService,
+	userService *service.UserService,
+	settingService *service.SettingService,
+	promoService *service.PromoService,
+	redeemService *service.RedeemService,
+	totpService *service.TotpService,
+	buildInfo service.BuildInfo,
+) *AuthHandler {
 	return &AuthHandler{
-		cfg:           cfg,
-		authService:   authService,
+		cfg:                     cfg,
+		authService:             authService,
+		controlSessionAuth:      controlSessionAuth,
+		controlLocalCredentials: controlLocalCredentials,
+		controlRegistration:     controlRegistration,
+		controlProfile:          controlProfile,
+		controlLocalMFA:         controlLocalMFA,
+		externalIdentityProviders: newControlExternalIdentityProviderRegistry(
+			cfg,
+			settingService,
+			controlSessionAuth,
+			controlRegistration,
+		),
 		userService:   userService,
 		settingSvc:    settingService,
 		promoService:  promoService,
 		redeemService: redeemService,
 		totpService:   totpService,
+		version:       buildInfo.Version,
 	}
 }
 
@@ -104,8 +137,7 @@ func (h *AuthHandler) respondWithTokenPair(c *gin.Context, user *service.User) {
 	})
 }
 
-// Register handles user registration
-// POST /api/v1/auth/register
+// Register handles the deprecated legacy user registration flow.
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -128,8 +160,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	h.respondWithTokenPair(c, user)
 }
 
-// SendVerifyCode 发送邮箱验证码
-// POST /api/v1/auth/send-verify-code
+// SendVerifyCode handles the deprecated legacy registration verification flow.
 func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 	var req SendVerifyCodeRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -155,8 +186,7 @@ func (h *AuthHandler) SendVerifyCode(c *gin.Context) {
 	})
 }
 
-// Login handles user login
-// POST /api/v1/auth/login
+// Login handles the deprecated legacy email/password login flow.
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -216,8 +246,7 @@ type Login2FARequest struct {
 	TotpCode  string `json:"totp_code" binding:"required,len=6"`
 }
 
-// Login2FA completes the login with 2FA verification
-// POST /api/v1/auth/login/2fa
+// Login2FA verifies TOTP in the deprecated legacy sign-in flow.
 func (h *AuthHandler) Login2FA(c *gin.Context) {
 	var req Login2FARequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -275,8 +304,7 @@ func (h *AuthHandler) Login2FA(c *gin.Context) {
 	h.respondWithTokenPair(c, user)
 }
 
-// GetCurrentUser handles getting current authenticated user
-// GET /api/v1/auth/me
+// GetCurrentUser returns current user information for the deprecated legacy auth surface.
 func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
@@ -316,8 +344,7 @@ type ValidatePromoCodeResponse struct {
 	Message     string  `json:"message,omitempty"`
 }
 
-// ValidatePromoCode 验证优惠码（公开接口，注册前调用）
-// POST /api/v1/auth/validate-promo-code
+// ValidatePromoCode validates promo codes for the deprecated legacy auth surface.
 func (h *AuthHandler) ValidatePromoCode(c *gin.Context) {
 	// 检查优惠码功能是否启用
 	if h.settingSvc != nil && !h.settingSvc.IsPromoCodeEnabled(c.Request.Context()) {
@@ -383,8 +410,7 @@ type ValidateInvitationCodeResponse struct {
 	ErrorCode string `json:"error_code,omitempty"`
 }
 
-// ValidateInvitationCode 验证邀请码（公开接口，注册前调用）
-// POST /api/v1/auth/validate-invitation-code
+// ValidateInvitationCode validates invitation codes for the deprecated legacy auth surface.
 func (h *AuthHandler) ValidateInvitationCode(c *gin.Context) {
 	// 检查邀请码功能是否启用
 	if h.settingSvc == nil || !h.settingSvc.IsInvitationCodeEnabled(c.Request.Context()) {
@@ -444,8 +470,7 @@ type ForgotPasswordResponse struct {
 	Message string `json:"message"`
 }
 
-// ForgotPassword 请求密码重置
-// POST /api/v1/auth/forgot-password
+// ForgotPassword requests password reset for the deprecated legacy auth surface.
 func (h *AuthHandler) ForgotPassword(c *gin.Context) {
 	var req ForgotPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -490,8 +515,7 @@ type ResetPasswordResponse struct {
 	Message string `json:"message"`
 }
 
-// ResetPassword 重置密码
-// POST /api/v1/auth/reset-password
+// ResetPassword completes password reset for the deprecated legacy auth surface.
 func (h *AuthHandler) ResetPassword(c *gin.Context) {
 	var req ResetPasswordRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -525,8 +549,7 @@ type RefreshTokenResponse struct {
 	TokenType    string `json:"token_type"`
 }
 
-// RefreshToken 刷新Token
-// POST /api/v1/auth/refresh
+// RefreshToken refreshes tokens for the deprecated legacy auth surface.
 func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	var req RefreshTokenRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -564,8 +587,7 @@ type LogoutResponse struct {
 	Message string `json:"message"`
 }
 
-// Logout 用户登出
-// POST /api/v1/auth/logout
+// Logout revokes the current session for the deprecated legacy auth surface.
 func (h *AuthHandler) Logout(c *gin.Context) {
 	var req LogoutRequest
 	// 允许空请求体（向后兼容）
@@ -589,8 +611,7 @@ type RevokeAllSessionsResponse struct {
 	Message string `json:"message"`
 }
 
-// RevokeAllSessions 撤销当前用户的所有会话
-// POST /api/v1/auth/revoke-all-sessions
+// RevokeAllSessions revokes all sessions for the deprecated legacy auth surface.
 func (h *AuthHandler) RevokeAllSessions(c *gin.Context) {
 	subject, ok := middleware2.GetAuthSubjectFromContext(c)
 	if !ok {
