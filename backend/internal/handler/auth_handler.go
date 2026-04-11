@@ -18,7 +18,8 @@ import (
 type AuthHandler struct {
 	cfg                *config.Config
 	authService        *service.AuthService
-	controlAuthService service.ControlBrowserAuthService
+	controlSessionAuth service.ControlSessionAuthService
+	controlLocalAuth   service.ControlLocalIdentityService
 	userService        *service.UserService
 	settingSvc         *service.SettingService
 	promoService       *service.PromoService
@@ -31,7 +32,8 @@ type AuthHandler struct {
 func NewAuthHandler(
 	cfg *config.Config,
 	authService *service.AuthService,
-	controlAuthService service.ControlBrowserAuthService,
+	controlSessionAuth service.ControlSessionAuthService,
+	controlLocalAuth service.ControlLocalIdentityService,
 	userService *service.UserService,
 	settingService *service.SettingService,
 	promoService *service.PromoService,
@@ -42,7 +44,8 @@ func NewAuthHandler(
 	return &AuthHandler{
 		cfg:                cfg,
 		authService:        authService,
-		controlAuthService: controlAuthService,
+		controlSessionAuth: controlSessionAuth,
+		controlLocalAuth:   controlLocalAuth,
 		userService:        userService,
 		settingSvc:         settingService,
 		promoService:       promoService,

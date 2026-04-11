@@ -205,7 +205,7 @@ import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, isTotp2FARequired } from '@/api/auth'
+import { bootstrap, isTotp2FARequired } from '@/api/auth'
 import type { TotpLoginResponse } from '@/types'
 
 const { t } = useI18n()
@@ -264,14 +264,17 @@ onMounted(async () => {
   }
 
   try {
-    const settings = await getPublicSettings()
+    const boot = await bootstrap()
+    const settings = boot.public_settings
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
     oidcOAuthEnabled.value = settings.oidc_oauth_enabled
     oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
     backendModeEnabled.value = settings.backend_mode_enabled
-    passwordResetEnabled.value = settings.password_reset_enabled
+    passwordResetEnabled.value =
+      settings.password_reset_enabled &&
+      (boot.auth_capabilities?.password_reset_enabled ?? true)
   } catch (error) {
     console.error('Failed to load public settings:', error)
   }

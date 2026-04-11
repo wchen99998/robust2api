@@ -149,7 +149,7 @@ type meTotpDisableRequest struct {
 }
 
 func (h *AuthHandler) Bootstrap(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -189,7 +189,7 @@ func (h *AuthHandler) Bootstrap(c *gin.Context) {
 }
 
 func (h *AuthHandler) SessionLogin(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -200,7 +200,7 @@ func (h *AuthHandler) SessionLogin(c *gin.Context) {
 		return
 	}
 
-	result, err := h.controlAuthService.Login(c.Request.Context(), req.Email, req.Password, req.TurnstileToken, ip.GetClientIP(c))
+	result, err := h.controlSessionAuth.Login(c.Request.Context(), req.Email, req.Password, req.TurnstileToken, ip.GetClientIP(c))
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -232,7 +232,7 @@ func (h *AuthHandler) SessionLogin(c *gin.Context) {
 }
 
 func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -243,7 +243,7 @@ func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
 		return
 	}
 
-	result, err := h.controlAuthService.CompleteLoginTOTP(c.Request.Context(), req.LoginChallengeID, req.TOTPCode)
+	result, err := h.controlSessionAuth.CompleteLoginTOTP(c.Request.Context(), req.LoginChallengeID, req.TOTPCode)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -265,7 +265,7 @@ func (h *AuthHandler) SessionLoginTOTP(c *gin.Context) {
 }
 
 func (h *AuthHandler) SessionLogout(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -275,7 +275,7 @@ func (h *AuthHandler) SessionLogout(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if err := h.controlAuthService.LogoutSession(c.Request.Context(), identity.SessionID); err != nil {
+	if err := h.controlSessionAuth.LogoutSession(c.Request.Context(), identity.SessionID); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -285,7 +285,7 @@ func (h *AuthHandler) SessionLogout(c *gin.Context) {
 }
 
 func (h *AuthHandler) SessionsLogoutAll(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -295,7 +295,7 @@ func (h *AuthHandler) SessionsLogoutAll(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	if err := h.controlAuthService.LogoutAllSessions(c.Request.Context(), identity); err != nil {
+	if err := h.controlSessionAuth.LogoutAllSessions(c.Request.Context(), identity); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -305,13 +305,13 @@ func (h *AuthHandler) SessionsLogoutAll(c *gin.Context) {
 }
 
 func (h *AuthHandler) SessionRefresh(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
 
 	refreshToken := h.cookieValue(c, service.ControlRefreshCookieName)
-	identity, tokens, err := h.controlAuthService.RefreshSession(c.Request.Context(), refreshToken)
+	identity, tokens, err := h.controlSessionAuth.RefreshSession(c.Request.Context(), refreshToken)
 	if err != nil {
 		if errors.Is(err, service.ErrRefreshTokenInvalid) || errors.Is(err, service.ErrRefreshTokenExpired) || errors.Is(err, service.ErrRefreshTokenReused) || errors.Is(err, service.ErrTokenRevoked) {
 			h.clearSessionCookies(c)
@@ -336,7 +336,7 @@ func (h *AuthHandler) SessionRefresh(c *gin.Context) {
 }
 
 func (h *AuthHandler) RegistrationPreflight(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -347,7 +347,7 @@ func (h *AuthHandler) RegistrationPreflight(c *gin.Context) {
 		return
 	}
 
-	result, err := h.controlAuthService.RegistrationPreflight(c.Request.Context(), req.Email, req.PromoCode, req.InvitationCode)
+	result, err := h.controlLocalAuth.RegistrationPreflight(c.Request.Context(), req.Email, req.PromoCode, req.InvitationCode)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -356,7 +356,7 @@ func (h *AuthHandler) RegistrationPreflight(c *gin.Context) {
 }
 
 func (h *AuthHandler) RegistrationEmailCode(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -367,7 +367,7 @@ func (h *AuthHandler) RegistrationEmailCode(c *gin.Context) {
 		return
 	}
 
-	if err := h.controlAuthService.SendRegistrationEmailCode(c.Request.Context(), req.Email); err != nil {
+	if err := h.controlLocalAuth.SendRegistrationEmailCode(c.Request.Context(), req.Email); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -375,7 +375,7 @@ func (h *AuthHandler) RegistrationEmailCode(c *gin.Context) {
 }
 
 func (h *AuthHandler) Registration(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil || h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -386,7 +386,7 @@ func (h *AuthHandler) Registration(c *gin.Context) {
 		return
 	}
 
-	identity, tokens, err := h.controlAuthService.Register(c.Request.Context(), &service.ControlRegistrationInput{
+	identity, tokens, err := h.controlLocalAuth.Register(c.Request.Context(), &service.ControlRegistrationInput{
 		Email:            req.Email,
 		Password:         req.Password,
 		VerificationCode: req.VerificationCode,
@@ -416,7 +416,7 @@ func (h *AuthHandler) Registration(c *gin.Context) {
 }
 
 func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil || h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -433,7 +433,7 @@ func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
 		return
 	}
 
-	identity, tokens, err := h.controlAuthService.CompleteOAuthRegistration(c.Request.Context(), challengeID, req.InvitationCode)
+	identity, tokens, err := h.controlLocalAuth.CompleteOAuthRegistration(c.Request.Context(), challengeID, req.InvitationCode)
 	if err != nil {
 		if errors.Is(err, service.ErrRegistrationChallengeNotFound) {
 			h.clearPendingRegistrationCookie(c)
@@ -459,7 +459,7 @@ func (h *AuthHandler) RegistrationComplete(c *gin.Context) {
 }
 
 func (h *AuthHandler) PasswordForgot(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -470,7 +470,7 @@ func (h *AuthHandler) PasswordForgot(c *gin.Context) {
 		return
 	}
 
-	if err := h.controlAuthService.RequestPasswordReset(c.Request.Context(), req.Email); err != nil {
+	if err := h.controlLocalAuth.RequestPasswordReset(c.Request.Context(), req.Email); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -480,7 +480,7 @@ func (h *AuthHandler) PasswordForgot(c *gin.Context) {
 }
 
 func (h *AuthHandler) PasswordReset(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -491,7 +491,7 @@ func (h *AuthHandler) PasswordReset(c *gin.Context) {
 		return
 	}
 
-	if err := h.controlAuthService.ResetPassword(c.Request.Context(), req.Email, req.Token, req.NewPassword); err != nil {
+	if err := h.controlLocalAuth.ResetPassword(c.Request.Context(), req.Email, req.Token, req.NewPassword); err != nil {
 		response.ErrorFrom(c, err)
 		return
 	}
@@ -501,7 +501,7 @@ func (h *AuthHandler) PasswordReset(c *gin.Context) {
 }
 
 func (h *AuthHandler) PatchMe(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -518,7 +518,7 @@ func (h *AuthHandler) PatchMe(c *gin.Context) {
 		return
 	}
 
-	updatedIdentity, err := h.controlAuthService.UpdateProfile(c.Request.Context(), identity, req.Username)
+	updatedIdentity, err := h.controlLocalAuth.UpdateProfile(c.Request.Context(), identity, req.Username)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -533,7 +533,7 @@ func (h *AuthHandler) PatchMe(c *gin.Context) {
 }
 
 func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil || h.controlLocalAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -550,7 +550,7 @@ func (h *AuthHandler) ChangeMyPassword(c *gin.Context) {
 		return
 	}
 
-	nextIdentity, tokens, err := h.controlAuthService.ChangePassword(c.Request.Context(), identity, req.OldPassword, req.NewPassword)
+	nextIdentity, tokens, err := h.controlLocalAuth.ChangePassword(c.Request.Context(), identity, req.OldPassword, req.NewPassword)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -646,7 +646,7 @@ func (h *AuthHandler) SetupMyTOTP(c *gin.Context) {
 }
 
 func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
-	if h.totpService == nil || h.controlAuthService == nil {
+	if h.totpService == nil || h.controlSessionAuth == nil {
 		response.InternalError(c, "totp service is not configured")
 		return
 	}
@@ -667,7 +667,7 @@ func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
 		return
 	}
 
-	nextIdentity, tokens, err := h.controlAuthService.RotateCurrentSession(c.Request.Context(), identity, identity.AMR)
+	nextIdentity, tokens, err := h.controlSessionAuth.RotateCurrentSession(c.Request.Context(), identity, identity.AMR)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -689,7 +689,7 @@ func (h *AuthHandler) EnableMyTOTP(c *gin.Context) {
 }
 
 func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
-	if h.totpService == nil || h.controlAuthService == nil {
+	if h.totpService == nil || h.controlSessionAuth == nil {
 		response.InternalError(c, "totp service is not configured")
 		return
 	}
@@ -710,7 +710,7 @@ func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
 		return
 	}
 
-	nextIdentity, tokens, err := h.controlAuthService.RotateCurrentSession(c.Request.Context(), identity, identity.AMR)
+	nextIdentity, tokens, err := h.controlSessionAuth.RotateCurrentSession(c.Request.Context(), identity, identity.AMR)
 	if err != nil {
 		response.ErrorFrom(c, err)
 		return
@@ -732,7 +732,7 @@ func (h *AuthHandler) DisableMyTOTP(c *gin.Context) {
 }
 
 func (h *AuthHandler) OAuthStart(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -772,7 +772,7 @@ func (h *AuthHandler) OAuthStart(c *gin.Context) {
 			codeVerifier = &verifier
 		}
 
-		flow, state, err := h.controlAuthService.CreateAuthFlow(c.Request.Context(), provider, "login", issuer, redirectTo, codeVerifier, nil)
+		flow, state, err := h.controlSessionAuth.CreateAuthFlow(c.Request.Context(), provider, "login", issuer, redirectTo, codeVerifier, nil)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
@@ -813,7 +813,7 @@ func (h *AuthHandler) OAuthStart(c *gin.Context) {
 			nonce = &value
 		}
 
-		flow, state, err := h.controlAuthService.CreateAuthFlow(c.Request.Context(), provider, "login", issuer, redirectTo, codeVerifier, nonce)
+		flow, state, err := h.controlSessionAuth.CreateAuthFlow(c.Request.Context(), provider, "login", issuer, redirectTo, codeVerifier, nonce)
 		if err != nil {
 			response.ErrorFrom(c, err)
 			return
@@ -834,7 +834,7 @@ func (h *AuthHandler) OAuthStart(c *gin.Context) {
 }
 
 func (h *AuthHandler) OAuthCallback(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
@@ -870,7 +870,7 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 			return
 		}
 
-		flow, flowErr := h.controlAuthService.ConsumeAuthFlow(c.Request.Context(), flowID, state)
+		flow, flowErr := h.controlSessionAuth.ConsumeAuthFlow(c.Request.Context(), flowID, state)
 		if flowErr != nil {
 			h.redirectOAuthQueryError(c, frontendCallback, "invalid_state", "invalid oauth state", "", redirectTo)
 			return
@@ -892,7 +892,7 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 			email = linuxDoSyntheticEmail(subject)
 		}
 
-		result, err = h.controlAuthService.HandleOAuthLogin(c.Request.Context(), &service.ControlOAuthLoginInput{
+		result, err = h.controlSessionAuth.HandleOAuthLogin(c.Request.Context(), &service.ControlOAuthLoginInput{
 			Provider:          provider,
 			Issuer:            firstNonEmpty(strings.TrimSpace(flow.Issuer), strings.TrimSpace(cfg.AuthorizeURL), provider),
 			ExternalSubject:   subject,
@@ -921,7 +921,7 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 			return
 		}
 
-		flow, flowErr := h.controlAuthService.ConsumeAuthFlow(c.Request.Context(), flowID, state)
+		flow, flowErr := h.controlSessionAuth.ConsumeAuthFlow(c.Request.Context(), flowID, state)
 		if flowErr != nil {
 			h.redirectOAuthQueryError(c, frontendCallback, "invalid_state", "invalid oauth state", "", redirectTo)
 			return
@@ -983,7 +983,7 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 			oidcFallbackUsername(subject),
 		)
 
-		result, err = h.controlAuthService.HandleOAuthLogin(c.Request.Context(), &service.ControlOAuthLoginInput{
+		result, err = h.controlSessionAuth.HandleOAuthLogin(c.Request.Context(), &service.ControlOAuthLoginInput{
 			Provider:          provider,
 			Issuer:            issuer,
 			ExternalSubject:   subject,
@@ -1021,11 +1021,11 @@ func (h *AuthHandler) OAuthCallback(c *gin.Context) {
 }
 
 func (h *AuthHandler) JWKS(c *gin.Context) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		response.InternalError(c, "control auth service is not configured")
 		return
 	}
-	c.JSON(http.StatusOK, h.controlAuthService.JWKS())
+	c.JSON(http.StatusOK, h.controlSessionAuth.JWKS())
 }
 
 func (h *AuthHandler) buildBootstrapPayload(ctx context.Context, identity *service.AuthenticatedIdentity, csrfToken string, refreshAvailable bool) (*bootstrapResponse, error) {
@@ -1036,7 +1036,7 @@ func (h *AuthHandler) buildBootstrapPayload(ctx context.Context, identity *servi
 
 	payload := &bootstrapResponse{
 		Settings:         settings,
-		AuthCapabilities: h.controlAuthService.AuthCapabilities(ctx),
+		AuthCapabilities: h.controlSessionAuth.AuthCapabilities(ctx),
 		CSRFToken:        csrfToken,
 		RunMode:          h.currentRunMode(),
 		Authenticated:    identity != nil,
@@ -1126,7 +1126,7 @@ func (h *AuthHandler) publicSettings(ctx context.Context) (dto.PublicSettings, e
 }
 
 func (h *AuthHandler) currentIdentity(c *gin.Context) (*service.AuthenticatedIdentity, error) {
-	if h.controlAuthService == nil {
+	if h.controlSessionAuth == nil {
 		return nil, infraerrors.InternalServer("CONTROL_AUTH_NOT_READY", "control auth service is not configured")
 	}
 	token := extractBearerToken(c)
@@ -1136,7 +1136,7 @@ func (h *AuthHandler) currentIdentity(c *gin.Context) (*service.AuthenticatedIde
 	if token == "" {
 		return nil, service.ErrInvalidToken
 	}
-	return h.controlAuthService.AuthenticateAccessToken(c.Request.Context(), token)
+	return h.controlSessionAuth.AuthenticateAccessToken(c.Request.Context(), token)
 }
 
 func (h *AuthHandler) currentAccessToken(c *gin.Context) string {
@@ -1350,7 +1350,7 @@ func (h *AuthHandler) newBootstrapSubject(identity *service.AuthenticatedIdentit
 }
 
 func (h *AuthHandler) pendingRegistrationPayload(c *gin.Context) *bootstrapPendingRegistrationResponse {
-	if h.controlAuthService == nil {
+	if h.controlLocalAuth == nil {
 		return nil
 	}
 
@@ -1359,7 +1359,7 @@ func (h *AuthHandler) pendingRegistrationPayload(c *gin.Context) *bootstrapPendi
 		return nil
 	}
 
-	challenge, err := h.controlAuthService.GetRegistrationChallenge(c.Request.Context(), challengeID)
+	challenge, err := h.controlLocalAuth.GetRegistrationChallenge(c.Request.Context(), challengeID)
 	if err != nil || challenge == nil || challenge.ConsumedAt != nil || time.Now().After(challenge.ExpiresAt) {
 		h.clearPendingRegistrationCookie(c)
 		return nil

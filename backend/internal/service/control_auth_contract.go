@@ -20,9 +20,9 @@ type ControlAccessTokenAuthenticator interface {
 	AuthenticateAccessToken(ctx context.Context, tokenString string) (*AuthenticatedIdentity, error)
 }
 
-// ControlBrowserAuthService captures the browser-facing auth contract consumed by handlers.
-// It is intentionally interface-based so the local implementation can later be swapped for an external IdP adapter.
-type ControlBrowserAuthService interface {
+// ControlSessionAuthService captures the session and external-provider-facing auth concerns.
+// Future Auth0/Clerk-style adapters should primarily target this interface.
+type ControlSessionAuthService interface {
 	ControlAccessTokenAuthenticator
 	JWKS() *ControlJWKS
 	AuthCapabilities(ctx context.Context) *ControlAuthCapabilities
@@ -31,6 +31,15 @@ type ControlBrowserAuthService interface {
 	LogoutSession(ctx context.Context, sessionID string) error
 	LogoutAllSessions(ctx context.Context, identity *AuthenticatedIdentity) error
 	RefreshSession(ctx context.Context, rawRefreshToken string) (*AuthenticatedIdentity, *ControlSessionTokens, error)
+	RotateCurrentSession(ctx context.Context, identity *AuthenticatedIdentity, amr string) (*AuthenticatedIdentity, *ControlSessionTokens, error)
+	CreateAuthFlow(ctx context.Context, provider, purpose, issuer, redirectTo string, codeVerifier, nonce *string) (*AuthFlowRecord, string, error)
+	ConsumeAuthFlow(ctx context.Context, flowID, state string) (*AuthFlowRecord, error)
+	HandleOAuthLogin(ctx context.Context, input *ControlOAuthLoginInput) (*ControlOAuthLoginResult, error)
+}
+
+// ControlLocalIdentityService captures the currently local-only registration and credential lifecycle.
+// These behaviors may be disabled or replaced when an external IdP owns passwords, reset, or signup.
+type ControlLocalIdentityService interface {
 	RegistrationPreflight(ctx context.Context, email, promoCode, invitationCode string) (*RegistrationPreflightResult, error)
 	SendRegistrationEmailCode(ctx context.Context, email string) error
 	Register(ctx context.Context, input *ControlRegistrationInput) (*AuthenticatedIdentity, *ControlSessionTokens, error)
@@ -39,9 +48,11 @@ type ControlBrowserAuthService interface {
 	ResetPassword(ctx context.Context, email, token, newPassword string) error
 	UpdateProfile(ctx context.Context, identity *AuthenticatedIdentity, username *string) (*AuthenticatedIdentity, error)
 	ChangePassword(ctx context.Context, identity *AuthenticatedIdentity, currentPassword, newPassword string) (*AuthenticatedIdentity, *ControlSessionTokens, error)
-	RotateCurrentSession(ctx context.Context, identity *AuthenticatedIdentity, amr string) (*AuthenticatedIdentity, *ControlSessionTokens, error)
-	CreateAuthFlow(ctx context.Context, provider, purpose, issuer, redirectTo string, codeVerifier, nonce *string) (*AuthFlowRecord, string, error)
-	ConsumeAuthFlow(ctx context.Context, flowID, state string) (*AuthFlowRecord, error)
-	HandleOAuthLogin(ctx context.Context, input *ControlOAuthLoginInput) (*ControlOAuthLoginResult, error)
 	GetRegistrationChallenge(ctx context.Context, challengeID string) (*RegistrationChallengeRecord, error)
+}
+
+// ControlBrowserAuthService is the current aggregate contract backed by the local auth runtime.
+type ControlBrowserAuthService interface {
+	ControlSessionAuthService
+	ControlLocalIdentityService
 }
