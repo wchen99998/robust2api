@@ -68,16 +68,23 @@ func initialize(buildInfo BuildInfo) (*Application, error) {
 	promoService := service.NewPromoService(promoCodeRepository, userRepository, billingCacheService, client, apiKeyAuthCacheInvalidator)
 	subscriptionService := service.NewSubscriptionService(groupRepository, userSubscriptionRepository, billingCacheService, client, configConfig)
 	authService := service.NewAuthService(client, userRepository, redeemCodeRepository, refreshTokenCache, configConfig, settingService, emailService, turnstileService, emailQueueService, promoService, subscriptionService)
-	userService := service.NewUserService(userRepository, apiKeyAuthCacheInvalidator, billingCache)
-	redeemCache := repository.NewRedeemCache(redisClient)
-	redeemService := service.NewRedeemService(redeemCodeRepository, userRepository, subscriptionService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator)
+	controlAuthRepository := repository.NewControlAuthRepository(client, db)
+	sessionSnapshotCache := repository.NewSessionSnapshotCache(redisClient)
 	secretEncryptor, err := repository.NewAESEncryptor(configConfig)
 	if err != nil {
 		return nil, err
 	}
 	totpCache := repository.NewTotpCache(redisClient)
 	totpService := service.NewTotpService(userRepository, secretEncryptor, totpCache, settingService, emailService, emailQueueService)
-	authHandler := handler.NewAuthHandler(configConfig, authService, userService, settingService, promoService, redeemService, totpService)
+	controlAuthService, err := service.NewControlAuthService(client, configConfig, userRepository, controlAuthRepository, sessionSnapshotCache, settingService, authService, totpService, emailService, promoCodeRepository, redeemCodeRepository, subscriptionService)
+	if err != nil {
+		return nil, err
+	}
+	userService := service.NewUserService(userRepository, apiKeyAuthCacheInvalidator, billingCache)
+	redeemCache := repository.NewRedeemCache(redisClient)
+	redeemService := service.NewRedeemService(redeemCodeRepository, userRepository, subscriptionService, redeemCache, billingCacheService, client, apiKeyAuthCacheInvalidator)
+	serviceBuildInfo := provideServiceBuildInfo(buildInfo)
+	authHandler := handler.NewAuthHandler(configConfig, authService, controlAuthService, controlAuthService, controlAuthService, controlAuthService, totpService, userService, settingService, promoService, redeemService, totpService, serviceBuildInfo)
 	userHandler := handler.NewUserHandler(userService)
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageLogRepository := repository.NewUsageLogRepository(client, db)
@@ -185,7 +192,6 @@ func initialize(buildInfo BuildInfo) (*Application, error) {
 	billingService := service.ProvideBillingService(configConfig, pricingService, runtimeCacheInvalidationBus)
 	channelHandler := admin.NewChannelHandler(channelService, billingService)
 	adminHandlers := handler.ProvideAdminHandlers(dashboardHandler, adminUserHandler, groupHandler, accountHandler, adminAnnouncementHandler, oAuthHandler, openAIOAuthHandler, geminiOAuthHandler, antigravityOAuthHandler, proxyHandler, adminRedeemHandler, promoHandler, settingHandler, adminSubscriptionHandler, adminUsageHandler, userAttributeHandler, errorPassthroughHandler, tlsFingerprintProfileHandler, adminAPIKeyHandler, scheduledTestHandler, channelHandler)
-	serviceBuildInfo := provideServiceBuildInfo(buildInfo)
 	handlerSettingHandler := handler.ProvideSettingHandler(settingService, serviceBuildInfo)
 	totpHandler := handler.NewTotpHandler(totpService)
 	controlCacheInvalidationSubscribers := service.ProvideControlCacheInvalidationSubscribers(runtimeCacheInvalidationBus, settingService, channelService, pricingService)

@@ -52,6 +52,15 @@ func TestAuthRoutesRateLimitFailCloseWhenRedisUnavailable(t *testing.T) {
 		"/api/v1/auth/login",
 		"/api/v1/auth/login/2fa",
 		"/api/v1/auth/send-verify-code",
+		"/api/v1/session/login",
+		"/api/v1/session/login/totp",
+		"/api/v1/session/refresh",
+		"/api/v1/registration/preflight",
+		"/api/v1/registration",
+		"/api/v1/registration/email-code",
+		"/api/v1/registration/complete",
+		"/api/v1/password/forgot",
+		"/api/v1/password/reset",
 	}
 
 	for _, path := range paths {
@@ -64,5 +73,34 @@ func TestAuthRoutesRateLimitFailCloseWhenRedisUnavailable(t *testing.T) {
 
 		require.Equal(t, http.StatusTooManyRequests, w.Code, "path=%s", path)
 		require.Contains(t, w.Body.String(), "rate limit exceeded", "path=%s", path)
+	}
+}
+
+func TestAuthRoutesRegisterBFFEndpoints(t *testing.T) {
+	router := newAuthRoutesTestRouter(nil)
+	paths := []struct {
+		method string
+		path   string
+	}{
+		{method: http.MethodGet, path: "/api/v1/bootstrap"},
+		{method: http.MethodGet, path: "/api/v1/jwks"},
+		{method: http.MethodPost, path: "/api/v1/session/logout"},
+		{method: http.MethodPost, path: "/api/v1/session/logout-all"},
+		{method: http.MethodGet, path: "/api/v1/oauth/oidc/start"},
+		{method: http.MethodGet, path: "/api/v1/oauth/oidc/callback"},
+		{method: http.MethodPatch, path: "/api/v1/me"},
+		{method: http.MethodGet, path: "/api/v1/me/mfa/totp"},
+		{method: http.MethodPost, path: "/api/v1/me/mfa/totp/setup"},
+		{method: http.MethodPost, path: "/api/v1/me/embed-token"},
+	}
+
+	for _, tc := range paths {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+
+		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s", tc.path)
 	}
 }

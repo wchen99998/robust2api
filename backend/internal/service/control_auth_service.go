@@ -255,6 +255,19 @@ func (s *ControlAuthService) getCurrentUserByID(ctx context.Context, userID int6
 	return controlAuthUserEntityToService(entity), nil
 }
 
+func (s *ControlAuthService) getLinkedUserByID(ctx context.Context, userID int64) (*User, error) {
+	if userID <= 0 {
+		return nil, ErrUserNotFound
+	}
+	if s.entClientForContext(ctx) != nil {
+		return s.getCurrentUserByID(ctx, userID)
+	}
+	if s.userRepo == nil {
+		return nil, fmt.Errorf("nil user repository")
+	}
+	return s.userRepo.GetByID(ctx, userID)
+}
+
 func (s *ControlAuthService) getCurrentUserByEmail(ctx context.Context, email string) (*User, error) {
 	email = strings.TrimSpace(email)
 	if email == "" {
@@ -513,7 +526,7 @@ func (s *ControlAuthService) AuthenticateAccessToken(ctx context.Context, tokenS
 		return nil, ErrTokenRevoked
 	}
 
-	user, err := s.getCurrentUserByID(ctx, bundle.Subject.LegacyUserID)
+	user, err := s.getLinkedUserByID(ctx, bundle.Subject.LegacyUserID)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return nil, ErrTokenRevoked

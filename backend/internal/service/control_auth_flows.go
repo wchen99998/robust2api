@@ -428,7 +428,7 @@ func (s *ControlAuthService) CompleteExternalLogin(ctx context.Context, input *C
 	bundle, err := s.authRepo.GetIdentityBundleByFederatedIdentity(ctx, provider, issuer, externalSubject)
 	switch {
 	case err == nil && bundle != nil && bundle.Subject != nil:
-		user, err := s.getCurrentUserByID(ctx, bundle.Subject.LegacyUserID)
+		user, err := s.getLinkedUserByID(ctx, bundle.Subject.LegacyUserID)
 		if err != nil {
 			return nil, err
 		}
