@@ -274,7 +274,19 @@ func (s *ControlAuthService) ResetPassword(ctx context.Context, email, token, ne
 		return ErrPasswordResetDisabled
 	}
 
-	record, err := s.authRepo.ConsumePasswordResetToken(ctx, strings.TrimSpace(email), hashToken(strings.TrimSpace(token)), time.Now())
+	hashedPassword, err := hashPassword(newPassword)
+	if err != nil {
+		return err
+	}
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return fmt.Errorf("begin password reset transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	record, err := s.authRepo.ConsumePasswordResetToken(txCtx, strings.TrimSpace(email), hashToken(strings.TrimSpace(token)), time.Now())
 	if err != nil {
 		if errors.Is(err, ErrPasswordResetTokenNotFound) {
 			return ErrInvalidResetToken
@@ -282,7 +294,7 @@ func (s *ControlAuthService) ResetPassword(ctx context.Context, email, token, ne
 		return err
 	}
 
-	user, err := s.userRepo.GetByEmail(ctx, record.Email)
+	user, err := s.getCurrentUserByEmail(txCtx, record.Email)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			return ErrInvalidResetToken
@@ -293,21 +305,20 @@ func (s *ControlAuthService) ResetPassword(ctx context.Context, email, token, ne
 		return ErrUserNotActive
 	}
 
-	hashedPassword, err := hashPassword(newPassword)
-	if err != nil {
+	if err := s.updateUserPasswordHash(txCtx, user.ID, hashedPassword); err != nil {
 		return err
 	}
 	user.PasswordHash = hashedPassword
-	if err := s.userRepo.Update(ctx, user); err != nil {
-		return err
-	}
 
-	bundle, err := s.authRepo.SyncLocalCredentialState(ctx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(txCtx, user)
 	if err != nil {
 		return err
 	}
-	if err := s.authRepo.RevokeAllSessions(ctx, bundle.Subject.SubjectID, time.Now()); err != nil {
+	if err := s.authRepo.RevokeAllSessions(txCtx, bundle.Subject.SubjectID, time.Now()); err != nil {
 		return err
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit password reset transaction: %w", err)
 	}
 	return nil
 }
@@ -319,9 +330,20 @@ func (s *ControlAuthService) ChangePassword(ctx context.Context, identity *Authe
 	if !s.passwordChangeEnabled(ctx) {
 		return nil, nil, ErrPasswordChangeDisabled
 	}
-	user, err := s.userRepo.GetByID(ctx, identity.LegacyUserID)
+
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("begin password change transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	txCtx := dbent.NewTxContext(ctx, tx)
+	user, err := s.getCurrentUserByID(txCtx, identity.LegacyUserID)
 	if err != nil {
 		return nil, nil, err
+	}
+	if !user.IsActive() {
+		return nil, nil, ErrUserNotActive
 	}
 	if !checkPassword(currentPassword, user.PasswordHash) {
 		return nil, nil, ErrPasswordIncorrect
@@ -331,20 +353,29 @@ func (s *ControlAuthService) ChangePassword(ctx context.Context, identity *Authe
 	if err != nil {
 		return nil, nil, err
 	}
-	user.PasswordHash = hashedPassword
-	if err := s.userRepo.Update(ctx, user); err != nil {
+	if err := s.updateUserPasswordHash(txCtx, user.ID, hashedPassword); err != nil {
 		return nil, nil, err
 	}
+	user.PasswordHash = hashedPassword
 
-	bundle, err := s.authRepo.SyncLocalCredentialState(ctx, user)
+	bundle, err := s.authRepo.SyncLocalCredentialState(txCtx, user)
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := s.authRepo.RevokeAllSessions(ctx, bundle.Subject.SubjectID, time.Now()); err != nil {
+	if err := s.authRepo.RevokeAllSessions(txCtx, bundle.Subject.SubjectID, time.Now()); err != nil {
 		return nil, nil, err
 	}
+
+	nextIdentity, tokens, snapshot, err := s.createSessionInTransaction(txCtx, bundle, user, identity.AMR)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("commit password change transaction: %w", err)
+	}
 	_ = s.sessionCache.DeleteSessionSnapshot(ctx, identity.SessionID)
-	return s.createAuthenticatedSession(ctx, bundle, user, identity.AMR)
+	s.tryStoreSessionSnapshot(ctx, snapshot)
+	return nextIdentity, tokens, nil
 }
 
 func (s *ControlAuthService) UpdateProfile(ctx context.Context, identity *AuthenticatedIdentity, username *string) (*AuthenticatedIdentity, error) {
@@ -397,11 +428,18 @@ func (s *ControlAuthService) CompleteExternalLogin(ctx context.Context, input *C
 	bundle, err := s.authRepo.GetIdentityBundleByFederatedIdentity(ctx, provider, issuer, externalSubject)
 	switch {
 	case err == nil && bundle != nil && bundle.Subject != nil:
-		user, err := s.userRepo.GetByID(ctx, bundle.Subject.LegacyUserID)
+		user, err := s.getCurrentUserByID(ctx, bundle.Subject.LegacyUserID)
 		if err != nil {
 			return nil, err
 		}
+		if !user.IsActive() {
+			return nil, ErrUserNotActive
+		}
 		if err := s.ensureBackendModeAdmin(ctx, user); err != nil {
+			return nil, err
+		}
+		bundle, err = s.authRepo.SyncLocalCredentialState(ctx, user)
+		if err != nil {
 			return nil, err
 		}
 		identity, tokens, err := s.createAuthenticatedSession(ctx, bundle, user, input.AMR)

@@ -203,6 +203,9 @@ func newRotateControlAuthService(t *testing.T, authRepo ControlAuthRepository, u
 		issuer:           controlIssuerDefault,
 		audience:         controlAudienceDefault,
 		activeSigningKey: signingKey,
+		verificationKeys: map[string]*ecdsa.PublicKey{
+			signingKey.kid: signingKey.publicKey,
+		},
 	}
 }
 

@@ -18,6 +18,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	"github.com/Wei-Shaw/sub2api/ent/securitysecret"
+	dbuser "github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -226,6 +227,93 @@ func (s *ControlAuthService) AuthCapabilities(ctx context.Context) *ControlAuthC
 	}
 }
 
+func (s *ControlAuthService) entClientForContext(ctx context.Context) *dbent.Client {
+	if s == nil {
+		return nil
+	}
+	if tx := dbent.TxFromContext(ctx); tx != nil {
+		return tx.Client()
+	}
+	return s.entClient
+}
+
+func (s *ControlAuthService) getCurrentUserByID(ctx context.Context, userID int64) (*User, error) {
+	if userID <= 0 {
+		return nil, ErrUserNotFound
+	}
+	client := s.entClientForContext(ctx)
+	if client == nil {
+		return nil, fmt.Errorf("nil ent client")
+	}
+	entity, err := client.User.Query().Where(dbuser.IDEQ(userID)).Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return controlAuthUserEntityToService(entity), nil
+}
+
+func (s *ControlAuthService) getCurrentUserByEmail(ctx context.Context, email string) (*User, error) {
+	email = strings.TrimSpace(email)
+	if email == "" {
+		return nil, ErrUserNotFound
+	}
+	client := s.entClientForContext(ctx)
+	if client == nil {
+		return nil, fmt.Errorf("nil ent client")
+	}
+	entity, err := client.User.Query().Where(dbuser.EmailEQ(email)).Only(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return nil, ErrUserNotFound
+		}
+		return nil, err
+	}
+	return controlAuthUserEntityToService(entity), nil
+}
+
+func (s *ControlAuthService) updateUserPasswordHash(ctx context.Context, userID int64, passwordHash string) error {
+	if userID <= 0 {
+		return ErrUserNotFound
+	}
+	client := s.entClientForContext(ctx)
+	if client == nil {
+		return fmt.Errorf("nil ent client")
+	}
+	_, err := client.User.UpdateOneID(userID).SetPasswordHash(passwordHash).Save(ctx)
+	if err != nil {
+		if dbent.IsNotFound(err) {
+			return ErrUserNotFound
+		}
+		return err
+	}
+	return nil
+}
+
+func controlAuthUserEntityToService(entity *dbent.User) *User {
+	if entity == nil {
+		return nil
+	}
+	return &User{
+		ID:                  entity.ID,
+		Email:               entity.Email,
+		Username:            entity.Username,
+		Notes:               entity.Notes,
+		PasswordHash:        entity.PasswordHash,
+		Role:                entity.Role,
+		Balance:             entity.Balance,
+		Concurrency:         entity.Concurrency,
+		Status:              entity.Status,
+		CreatedAt:           entity.CreatedAt,
+		UpdatedAt:           entity.UpdatedAt,
+		TotpSecretEncrypted: entity.TotpSecretEncrypted,
+		TotpEnabled:         entity.TotpEnabled,
+		TotpEnabledAt:       entity.TotpEnabledAt,
+	}
+}
+
 func (s *ControlAuthService) authMode() string {
 	if s != nil && s.cfg != nil {
 		mode := strings.TrimSpace(s.cfg.ControlAuth.Mode)
@@ -424,11 +512,22 @@ func (s *ControlAuthService) AuthenticateAccessToken(ctx context.Context, tokenS
 	if bundle.Subject.AuthVersion != claims.AuthVersion {
 		return nil, ErrTokenRevoked
 	}
-	if !strings.EqualFold(bundle.Subject.Status, StatusActive) {
+
+	user, err := s.getCurrentUserByID(ctx, bundle.Subject.LegacyUserID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			return nil, ErrTokenRevoked
+		}
+		return nil, fmt.Errorf("load linked user: %w", err)
+	}
+	if user == nil || user.ID != snapshot.LegacyUserID {
+		return nil, ErrTokenRevoked
+	}
+	if !user.IsActive() {
 		return nil, ErrUserNotActive
 	}
 
-	return buildAuthenticatedIdentity(bundle, snapshot, s.tryGetLinkedUser(ctx, bundle.Subject.LegacyUserID)), nil
+	return buildAuthenticatedIdentity(bundle, snapshot, user), nil
 }
 
 func (s *ControlAuthService) Login(ctx context.Context, email, password, turnstileToken, remoteIP string) (*ControlLoginResult, error) {
@@ -569,7 +668,27 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 	if bundle == nil || bundle.Subject == nil || bundle.Subject.LegacyUserID != sessionRecord.LegacyUserID {
 		return nil, nil, ErrRefreshTokenInvalid
 	}
-	if bundle.Subject.AuthVersion != sessionRecord.AuthVersion || !strings.EqualFold(bundle.Subject.Status, StatusActive) {
+	if bundle.Subject.AuthVersion != sessionRecord.AuthVersion {
+		_ = s.authRepo.RevokeSession(txCtx, sessionRecord.SessionID, now)
+		if err := tx.Commit(); err != nil {
+			return nil, nil, fmt.Errorf("commit refresh revocation: %w", err)
+		}
+		_ = s.sessionCache.DeleteSessionSnapshot(ctx, sessionRecord.SessionID)
+		return nil, nil, ErrTokenRevoked
+	}
+	user, err := s.getCurrentUserByID(txCtx, bundle.Subject.LegacyUserID)
+	if err != nil {
+		if errors.Is(err, ErrUserNotFound) {
+			_ = s.authRepo.RevokeSession(txCtx, sessionRecord.SessionID, now)
+			if err := tx.Commit(); err != nil {
+				return nil, nil, fmt.Errorf("commit refresh revocation: %w", err)
+			}
+			_ = s.sessionCache.DeleteSessionSnapshot(ctx, sessionRecord.SessionID)
+			return nil, nil, ErrTokenRevoked
+		}
+		return nil, nil, fmt.Errorf("load linked user: %w", err)
+	}
+	if user == nil || user.ID != sessionRecord.LegacyUserID || !user.IsActive() {
 		_ = s.authRepo.RevokeSession(txCtx, sessionRecord.SessionID, now)
 		if err := tx.Commit(); err != nil {
 			return nil, nil, fmt.Errorf("commit refresh revocation: %w", err)
@@ -616,7 +735,7 @@ func (s *ControlAuthService) RefreshSession(ctx context.Context, rawRefreshToken
 	if err != nil {
 		return nil, nil, err
 	}
-	identity := buildAuthenticatedIdentity(bundle, snapshot, s.tryGetLinkedUser(ctx, bundle.Subject.LegacyUserID))
+	identity := buildAuthenticatedIdentity(bundle, snapshot, user)
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("commit refresh transaction: %w", err)
 	}
@@ -938,10 +1057,19 @@ func (s *ControlAuthService) tryStoreSessionSnapshot(ctx context.Context, snapsh
 }
 
 func (s *ControlAuthService) tryGetLinkedUser(ctx context.Context, legacyUserID int64) *User {
-	if s == nil || s.userRepo == nil || legacyUserID <= 0 {
+	if s == nil || legacyUserID <= 0 {
 		return nil
 	}
-	user, err := s.userRepo.GetByID(ctx, legacyUserID)
+	user, err := s.getCurrentUserByID(ctx, legacyUserID)
+	if err == nil {
+		return user
+	}
+	if errors.Is(err, ErrUserNotFound) && s.userRepo != nil {
+		user, err = s.userRepo.GetByID(ctx, legacyUserID)
+		if err == nil {
+			return user
+		}
+	}
 	if err != nil {
 		if !errors.Is(err, ErrUserNotFound) {
 			logger.LegacyPrintf("service.control_auth", "linked user lookup failed: user=%d err=%v", legacyUserID, err)
@@ -989,13 +1117,35 @@ func buildAuthenticatedIdentity(bundle *IdentityBundle, snapshot *SessionSnapsho
 	}
 
 	roles := append([]string(nil), bundle.Roles...)
-	primaryRole := RoleUser
-	if user != nil && user.IsAdmin() {
-		primaryRole = RoleAdmin
+	if user != nil {
+		if role := strings.TrimSpace(user.Role); role != "" {
+			roles = []string{role}
+		}
 	}
+
+	primaryRole := RoleUser
 	if len(roles) > 0 {
 		primaryRole = roles[0]
 	}
+
+	profile := bundle.Profile
+	if user != nil {
+		profile = &SubjectProfileRecord{
+			SubjectID:    bundle.Subject.SubjectID,
+			LegacyUserID: user.ID,
+			Email:        user.Email,
+			Username:     user.Username,
+			Notes:        user.Notes,
+		}
+		if bundle.Profile != nil {
+			profile.CreatedAt = bundle.Profile.CreatedAt
+			profile.UpdatedAt = bundle.Profile.UpdatedAt
+		}
+	} else if profile != nil {
+		copyProfile := *profile
+		profile = &copyProfile
+	}
+
 	legacyUserID := bundle.Subject.LegacyUserID
 	concurrency := 0
 	if user != nil {
@@ -1010,7 +1160,7 @@ func buildAuthenticatedIdentity(bundle *IdentityBundle, snapshot *SessionSnapsho
 		AuthVersion:       bundle.Subject.AuthVersion,
 		Roles:             roles,
 		PrimaryRole:       primaryRole,
-		Profile:           bundle.Profile,
+		Profile:           profile,
 		Concurrency:       concurrency,
 		SessionExpiresAt:  snapshot.ExpiresAt,
 		SessionAbsoluteAt: snapshot.AbsoluteExpiresAt,
