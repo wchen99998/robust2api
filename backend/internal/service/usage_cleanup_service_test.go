@@ -22,6 +22,7 @@ type cleanupDeleteResponse struct {
 }
 
 type cleanupDeleteCall struct {
+	taskID  int64
 	filters UsageCleanupFilters
 	limit   int
 }
@@ -219,10 +220,10 @@ func (s *cleanupRepoStub) MarkTaskFailed(ctx context.Context, taskID int64, dele
 	return nil
 }
 
-func (s *cleanupRepoStub) DeleteUsageLogsBatch(ctx context.Context, filters UsageCleanupFilters, limit int) (int64, error) {
+func (s *cleanupRepoStub) DeleteUsageLogsBatch(ctx context.Context, taskID int64, filters UsageCleanupFilters, limit int) (int64, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.deleteCalls = append(s.deleteCalls, cleanupDeleteCall{filters: filters, limit: limit})
+	s.deleteCalls = append(s.deleteCalls, cleanupDeleteCall{taskID: taskID, filters: filters, limit: limit})
 	if len(s.deleteQueue) == 0 {
 		return 0, nil
 	}
@@ -398,6 +399,7 @@ func TestUsageCleanupServiceRunOnceSuccess(t *testing.T) {
 	repo.mu.Lock()
 	defer repo.mu.Unlock()
 	require.Len(t, repo.deleteCalls, 3)
+	require.Equal(t, int64(5), repo.deleteCalls[0].taskID)
 	require.Equal(t, 2, repo.deleteCalls[0].limit)
 	require.True(t, repo.deleteCalls[0].filters.StartTime.Equal(start))
 	require.True(t, repo.deleteCalls[0].filters.EndTime.Equal(end))

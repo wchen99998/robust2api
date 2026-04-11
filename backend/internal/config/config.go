@@ -327,25 +327,29 @@ type ProxyProbeConfig struct {
 }
 
 type BillingConfig struct {
-	CircuitBreaker CircuitBreakerConfig  `mapstructure:"circuit_breaker"`
-	Stream         BillingStreamConfig   `mapstructure:"stream"`
-	DBPool         BillingDBPoolConfig   `mapstructure:"db_pool"`
-	HealthPort     string                `mapstructure:"health_port"`
+	CircuitBreaker             CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+	Stream                     BillingStreamConfig  `mapstructure:"stream"`
+	DBPool                     BillingDBPoolConfig  `mapstructure:"db_pool"`
+	HealthPort                 string               `mapstructure:"health_port"`
+	QueueFirstNonStreamEnabled bool                 `mapstructure:"queue_first_non_stream_enabled"`
+	StreamingV2Enabled         bool                 `mapstructure:"streaming_v2_enabled"`
 }
 
 // BillingStreamConfig configures the Redis Stream used as a message broker
 // between the gateway (publisher) and the billing service (consumer).
 type BillingStreamConfig struct {
-	Key                     string `mapstructure:"key"`
-	ConsumerGroup           string `mapstructure:"consumer_group"`
-	MaxLen                  int64  `mapstructure:"max_len"`
-	DLQKey                  string `mapstructure:"dlq_key"`
-	BatchSize               int    `mapstructure:"batch_size"`
-	BlockTimeoutSeconds     int    `mapstructure:"block_timeout_seconds"`
-	PendingRecoverySeconds  int    `mapstructure:"pending_recovery_seconds"`
-	MaxRetryCount           int    `mapstructure:"max_retry_count"`
-	Workers                 int    `mapstructure:"workers"`
-	PublishRetries          int    `mapstructure:"publish_retries"`
+	Key                    string `mapstructure:"key"`
+	ConsumerGroup          string `mapstructure:"consumer_group"`
+	MaxLen                 int64  `mapstructure:"max_len"`
+	DLQKey                 string `mapstructure:"dlq_key"`
+	DLQMaxLen              int64  `mapstructure:"dlq_max_len"`
+	BatchSize              int    `mapstructure:"batch_size"`
+	BlockTimeoutSeconds    int    `mapstructure:"block_timeout_seconds"`
+	PendingRecoverySeconds int    `mapstructure:"pending_recovery_seconds"`
+	MaxRetryCount          int    `mapstructure:"max_retry_count"`
+	Workers                int    `mapstructure:"workers"`
+	PublishRetries         int    `mapstructure:"publish_retries"`
+	PublishTimeoutSeconds  int    `mapstructure:"publish_timeout_seconds"`
 }
 
 // BillingDBPoolConfig configures the dedicated DB connection pool for billing writes.
@@ -1179,13 +1183,17 @@ func setDefaults() {
 	viper.SetDefault("billing.stream.consumer_group", "billing-workers")
 	viper.SetDefault("billing.stream.max_len", 0)
 	viper.SetDefault("billing.stream.dlq_key", "billing:events:dlq")
+	viper.SetDefault("billing.stream.dlq_max_len", 100000)
 	viper.SetDefault("billing.stream.batch_size", 50)
 	viper.SetDefault("billing.stream.block_timeout_seconds", 5)
 	viper.SetDefault("billing.stream.pending_recovery_seconds", 30)
 	viper.SetDefault("billing.stream.max_retry_count", 20)
 	viper.SetDefault("billing.stream.workers", 4)
 	viper.SetDefault("billing.stream.publish_retries", 3)
+	viper.SetDefault("billing.stream.publish_timeout_seconds", 10)
 	viper.SetDefault("billing.health_port", "8082")
+	viper.SetDefault("billing.queue_first_non_stream_enabled", false)
+	viper.SetDefault("billing.streaming_v2_enabled", false)
 
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)
@@ -1782,6 +1790,33 @@ func (c *Config) ValidateForRole(role Role) error {
 		if c.Billing.CircuitBreaker.HalfOpenRequests <= 0 {
 			return fmt.Errorf("billing.circuit_breaker.half_open_requests must be positive")
 		}
+	}
+	if c.Billing.Stream.PublishTimeoutSeconds <= 0 {
+		return fmt.Errorf("billing.stream.publish_timeout_seconds must be positive")
+	}
+	if c.Billing.Stream.Workers <= 0 {
+		return fmt.Errorf("billing.stream.workers must be positive")
+	}
+	if c.Billing.Stream.BatchSize <= 0 {
+		return fmt.Errorf("billing.stream.batch_size must be positive")
+	}
+	if c.Billing.Stream.BlockTimeoutSeconds <= 0 {
+		return fmt.Errorf("billing.stream.block_timeout_seconds must be positive")
+	}
+	if c.Billing.Stream.PendingRecoverySeconds <= 0 {
+		return fmt.Errorf("billing.stream.pending_recovery_seconds must be positive")
+	}
+	if c.Billing.Stream.MaxRetryCount <= 0 {
+		return fmt.Errorf("billing.stream.max_retry_count must be positive")
+	}
+	if c.Billing.Stream.PublishRetries <= 0 {
+		return fmt.Errorf("billing.stream.publish_retries must be positive")
+	}
+	if c.Billing.Stream.MaxLen < 0 {
+		return fmt.Errorf("billing.stream.max_len must be non-negative")
+	}
+	if c.Billing.Stream.DLQMaxLen <= 0 {
+		return fmt.Errorf("billing.stream.dlq_max_len must be positive")
 	}
 	if c.Database.MaxOpenConns <= 0 {
 		return fmt.Errorf("database.max_open_conns must be positive")

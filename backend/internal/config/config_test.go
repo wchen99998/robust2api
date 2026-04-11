@@ -1046,6 +1046,51 @@ func TestValidateConfigErrors(t *testing.T) {
 			wantErr: "billing.circuit_breaker.half_open_requests",
 		},
 		{
+			name:    "billing stream publish timeout",
+			mutate:  func(c *Config) { c.Billing.Stream.PublishTimeoutSeconds = 0 },
+			wantErr: "billing.stream.publish_timeout_seconds",
+		},
+		{
+			name:    "billing stream workers",
+			mutate:  func(c *Config) { c.Billing.Stream.Workers = 0 },
+			wantErr: "billing.stream.workers",
+		},
+		{
+			name:    "billing stream batch size",
+			mutate:  func(c *Config) { c.Billing.Stream.BatchSize = 0 },
+			wantErr: "billing.stream.batch_size",
+		},
+		{
+			name:    "billing stream block timeout",
+			mutate:  func(c *Config) { c.Billing.Stream.BlockTimeoutSeconds = 0 },
+			wantErr: "billing.stream.block_timeout_seconds",
+		},
+		{
+			name:    "billing stream pending recovery",
+			mutate:  func(c *Config) { c.Billing.Stream.PendingRecoverySeconds = 0 },
+			wantErr: "billing.stream.pending_recovery_seconds",
+		},
+		{
+			name:    "billing stream max retry count",
+			mutate:  func(c *Config) { c.Billing.Stream.MaxRetryCount = 0 },
+			wantErr: "billing.stream.max_retry_count",
+		},
+		{
+			name:    "billing stream publish retries",
+			mutate:  func(c *Config) { c.Billing.Stream.PublishRetries = 0 },
+			wantErr: "billing.stream.publish_retries",
+		},
+		{
+			name:    "billing stream max len non-negative",
+			mutate:  func(c *Config) { c.Billing.Stream.MaxLen = -1 },
+			wantErr: "billing.stream.max_len",
+		},
+		{
+			name:    "billing stream dlq max len",
+			mutate:  func(c *Config) { c.Billing.Stream.DLQMaxLen = 0 },
+			wantErr: "billing.stream.dlq_max_len",
+		},
+		{
 			name:    "database max open conns",
 			mutate:  func(c *Config) { c.Database.MaxOpenConns = 0 },
 			wantErr: "database.max_open_conns",

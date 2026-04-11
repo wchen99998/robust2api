@@ -39,16 +39,11 @@ func initialize() (*Application, error) {
 	}
 	redisClient := repository.ProvideRedis(configConfig)
 	v := health.NewChecker(db, redisClient)
-	v2, err := otel.ProvideOtel(configConfig)
-	if err != nil {
-		return nil, err
-	}
-	v3 := otel.ProvideMetricsServer(configConfig, v2)
+	billingEventConsumer := repository.NewRedisBillingEventConsumer(redisClient, configConfig)
 	billingDB, err := repository.ProvideBillingDB(configConfig)
 	if err != nil {
 		return nil, err
 	}
-	billingEventConsumer := repository.NewRedisBillingEventConsumer(redisClient, configConfig)
 	usageBillingRepository := repository.NewUsageBillingRepository(billingDB)
 	billingCache := repository.NewBillingCache(redisClient)
 	userRepository := repository.NewUserRepository(client, db)
@@ -68,10 +63,16 @@ func initialize() (*Application, error) {
 	apiKeyService := service.NewAPIKeyService(apiKeyRepository, userRepository, groupRepository, userSubscriptionRepository, userGroupRateRepository, apiKeyCache, configConfig)
 	apiKeyAuthCacheInvalidator := service.ProvideBillingAPIKeyAuthCacheInvalidator(apiKeyService)
 	billingConsumerService := service.NewBillingConsumerService(billingEventConsumer, usageBillingRepository, billingCacheService, deferredService, apiKeyAuthCacheInvalidator)
+	v2, err := otel.ProvideOtel(configConfig)
+	if err != nil {
+		return nil, err
+	}
+	v3 := otel.ProvideMetricsServer(configConfig, v2)
 	v4 := provideCleanup(client, redisClient, v2, v3, billingDB, billingConsumerService, billingCacheService, deferredService)
 	application := &Application{
-		Health:  v,
-		Cleanup: v4,
+		Health:          v,
+		BillingConsumer: billingConsumerService,
+		Cleanup:         v4,
 	}
 	return application, nil
 }
@@ -79,8 +80,9 @@ func initialize() (*Application, error) {
 // wire.go:
 
 type Application struct {
-	Health  *health2.Checker
-	Cleanup func()
+	Health          *health2.Checker
+	BillingConsumer *service.BillingConsumerService
+	Cleanup         func()
 }
 
 func provideCleanup(
