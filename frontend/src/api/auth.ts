@@ -23,9 +23,44 @@ import type {
 } from '@/types'
 
 export type LoginResponse = BootstrapResponse | TotpLoginResponse
+const REGISTRATION_EMAIL_CODE_COUNTDOWN_SECONDS = 60
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null
+}
+
+function firstErrorCode(errors: string[] | undefined): string | undefined {
+  return errors?.find((value) => typeof value === 'string' && value.length > 0)
+}
+
+function mapPromoStatusToErrorCode(status: string | undefined): string | undefined {
+  switch (String(status || '').toLowerCase()) {
+    case 'disabled':
+      return 'PROMO_CODE_DISABLED'
+    case 'expired':
+      return 'PROMO_CODE_EXPIRED'
+    case 'overused':
+      return 'PROMO_CODE_MAX_USED'
+    case 'invalid':
+    case 'not_provided':
+      return 'PROMO_CODE_INVALID'
+    default:
+      return undefined
+  }
+}
+
+function mapInvitationStatusToErrorCode(status: string | undefined): string | undefined {
+  switch (String(status || '').toLowerCase()) {
+    case 'used':
+      return 'INVITATION_CODE_USED'
+    case 'disabled':
+      return 'INVITATION_CODE_DISABLED'
+    case 'invalid':
+    case 'not_provided':
+      return 'INVITATION_CODE_INVALID'
+    default:
+      return undefined
+  }
 }
 
 function normalizePublicSettings(raw: unknown): PublicSettings {
@@ -404,8 +439,23 @@ export async function registrationPreflight(
 export async function sendVerifyCode(
   request: SendVerifyCodeRequest
 ): Promise<SendVerifyCodeResponse> {
-  const { data } = await apiClient.post<SendVerifyCodeResponse>('/registration/email-code', request)
-  return data
+  const { data } = await apiClient.post<unknown>('/registration/email-code', request)
+  if (isObjectRecord(data)) {
+    return {
+      message:
+        typeof data.message === 'string' && data.message.trim().length > 0
+          ? data.message
+          : 'Verification code sent successfully',
+      countdown:
+        typeof data.countdown === 'number' && Number.isFinite(data.countdown)
+          ? data.countdown
+          : REGISTRATION_EMAIL_CODE_COUNTDOWN_SECONDS
+    }
+  }
+  return {
+    message: 'Verification code sent successfully',
+    countdown: REGISTRATION_EMAIL_CODE_COUNTDOWN_SECONDS
+  }
 }
 
 export interface ValidatePromoCodeResponse {
@@ -420,8 +470,12 @@ export async function validatePromoCode(code: string): Promise<ValidatePromoCode
   const valid = ['valid', 'ok', 'accepted'].includes(String(result.promo_status || '').toLowerCase())
   return {
     valid,
-    bonus_amount: undefined,
-    error_code: valid ? undefined : (result.promo_status || result.errors?.[0] || 'INVALID_PROMO'),
+    bonus_amount: valid ? (result.promo_bonus_amount ?? 0) : undefined,
+    error_code: valid
+      ? undefined
+      : (firstErrorCode(result.errors) ||
+          mapPromoStatusToErrorCode(result.promo_status) ||
+          'PROMO_CODE_INVALID'),
     message: result.errors?.[0]
   }
 }
@@ -440,7 +494,9 @@ export async function validateInvitationCode(code: string): Promise<ValidateInvi
     valid,
     error_code: valid
       ? undefined
-      : (result.invitation_status || result.errors?.[0] || 'INVALID_INVITATION')
+      : (firstErrorCode(result.errors) ||
+          mapInvitationStatusToErrorCode(result.invitation_status) ||
+          'INVITATION_CODE_INVALID')
   }
 }
 

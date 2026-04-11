@@ -267,6 +267,7 @@ type RegistrationPreflightResult struct {
 	InvitationRequired        bool     `json:"invitation_required"`
 	EmailSuffixAllowed        bool     `json:"email_suffix_allowed"`
 	PromoStatus               string   `json:"promo_status"`
+	PromoBonusAmount          *float64 `json:"promo_bonus_amount,omitempty"`
 	InvitationStatus          string   `json:"invitation_status"`
 	Errors                    []string `json:"errors"`
 }

@@ -138,4 +138,69 @@ describe('auth API normalization', () => {
     expect(isTotp2FARequired(response)).toBe(true)
     expect((response as any).user_email_masked).toBe('te***@example.com')
   })
+
+  it('normalizes registration email code responses without a countdown', async () => {
+    const { sendVerifyCode } = await import('@/api/auth')
+    mockPost.mockResolvedValue({
+      data: {
+        success: true
+      }
+    })
+
+    const response = await sendVerifyCode({
+      email: 'tester@example.com'
+    })
+
+    expect(response.message).toBe('Verification code sent successfully')
+    expect(response.countdown).toBe(60)
+  })
+
+  it('preserves promo bonus amount from registration preflight', async () => {
+    const { validatePromoCode } = await import('@/api/auth')
+    mockPost.mockResolvedValue({
+      data: {
+        promo_status: 'valid',
+        promo_bonus_amount: 12.5
+      }
+    })
+
+    const response = await validatePromoCode('BONUS12')
+
+    expect(response).toEqual({
+      valid: true,
+      bonus_amount: 12.5,
+      error_code: undefined,
+      message: undefined
+    })
+  })
+
+  it('prefers canonical promo and invitation error codes from preflight errors', async () => {
+    const { validatePromoCode, validateInvitationCode } = await import('@/api/auth')
+
+    mockPost.mockResolvedValueOnce({
+      data: {
+        promo_status: 'disabled',
+        errors: ['PROMO_CODE_DISABLED']
+      }
+    })
+
+    await expect(validatePromoCode('BONUS12')).resolves.toEqual({
+      valid: false,
+      bonus_amount: undefined,
+      error_code: 'PROMO_CODE_DISABLED',
+      message: 'PROMO_CODE_DISABLED'
+    })
+
+    mockPost.mockResolvedValueOnce({
+      data: {
+        invitation_status: 'used',
+        errors: ['INVITATION_CODE_USED']
+      }
+    })
+
+    await expect(validateInvitationCode('INVITE')).resolves.toEqual({
+      valid: false,
+      error_code: 'INVITATION_CODE_USED'
+    })
+  })
 })

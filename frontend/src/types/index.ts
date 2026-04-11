@@ -142,6 +142,7 @@ export interface RegistrationPreflightResponse {
   invitation_required: boolean
   email_suffix_allowed: boolean
   promo_status?: string
+  promo_bonus_amount?: number
   invitation_status?: string
   errors?: string[]
 }

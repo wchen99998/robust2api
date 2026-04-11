@@ -194,11 +194,13 @@ func (s *authBFFLocalCredentialStub) ChangePassword(_ context.Context, _ *servic
 }
 
 type authBFFRegistrationStub struct {
-	emailCodeErr error
+	preflightResult *service.RegistrationPreflightResult
+	preflightErr    error
+	emailCodeErr    error
 }
 
 func (s *authBFFRegistrationStub) RegistrationPreflight(_ context.Context, _, _, _ string) (*service.RegistrationPreflightResult, error) {
-	return nil, errors.New("not implemented")
+	return s.preflightResult, s.preflightErr
 }
 
 func (s *authBFFRegistrationStub) SendRegistrationEmailCode(_ context.Context, _ string) error {
@@ -415,6 +417,26 @@ func TestRegistrationEmailCode_DisabledCredentialModesReturnForbidden(t *testing
 	require.Equal(t, http.StatusForbidden, rec.Code)
 	resp := decodeHandlerResponse(t, rec)
 	require.Equal(t, "REGISTRATION_DISABLED", resp.Reason)
+}
+
+func TestRegistrationEmailCode_ReturnsLegacyCountdownShape(t *testing.T) {
+	handler := newAuthBFFTestHandler(service.ControlAuthModeLocal, map[string]string{
+		service.SettingKeyRegistrationEnabled: "true",
+		service.SettingKeyEmailVerifyEnabled:  "true",
+		service.SettingKeyBackendModeEnabled:  "false",
+	}, nil)
+	handler.controlRegistration = &authBFFRegistrationStub{}
+
+	c, rec := newHandlerTestContext(http.MethodPost, "/api/v1/registration/email-code", `{"email":"user@example.com"}`)
+	handler.RegistrationEmailCode(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	resp := decodeHandlerResponse(t, rec)
+	payload, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, true, payload["success"])
+	require.Equal(t, "Verification code sent successfully", payload["message"])
+	require.Equal(t, float64(60), payload["countdown"])
 }
 
 func TestPasswordForgot_DisabledCredentialModesReturnForbidden(t *testing.T) {
