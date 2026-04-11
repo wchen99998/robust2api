@@ -118,9 +118,11 @@ type authBFFSessionAuthStub struct {
 	capabilities *service.ControlAuthCapabilities
 	identity     *service.AuthenticatedIdentity
 	authErr      error
+	lastToken    string
 }
 
-func (s *authBFFSessionAuthStub) AuthenticateAccessToken(_ context.Context, _ string) (*service.AuthenticatedIdentity, error) {
+func (s *authBFFSessionAuthStub) AuthenticateAccessToken(_ context.Context, token string) (*service.AuthenticatedIdentity, error) {
+	s.lastToken = token
 	if s.authErr != nil {
 		return nil, s.authErr
 	}
@@ -192,11 +194,13 @@ func (s *authBFFLocalCredentialStub) ChangePassword(_ context.Context, _ *servic
 }
 
 type authBFFRegistrationStub struct {
-	emailCodeErr error
+	preflightResult *service.RegistrationPreflightResult
+	preflightErr    error
+	emailCodeErr    error
 }
 
 func (s *authBFFRegistrationStub) RegistrationPreflight(_ context.Context, _, _, _ string) (*service.RegistrationPreflightResult, error) {
-	return nil, errors.New("not implemented")
+	return s.preflightResult, s.preflightErr
 }
 
 func (s *authBFFRegistrationStub) SendRegistrationEmailCode(_ context.Context, _ string) error {
@@ -366,6 +370,33 @@ func TestBootstrap_DoesNotExposeAccessToken(t *testing.T) {
 	require.False(t, exists)
 }
 
+func TestBootstrap_PrefersAccessCookieOverAuthorizationHeader(t *testing.T) {
+	handler := newAuthBFFTestHandler(service.ControlAuthModeLocal, map[string]string{
+		service.SettingKeySiteName:           "Sub2API",
+		service.SettingKeyBackendModeEnabled: "false",
+	}, nil)
+	sessionAuth := &authBFFSessionAuthStub{
+		capabilities: authCapabilitiesForMode(service.ControlAuthModeLocal, map[string]string{}),
+		identity: &service.AuthenticatedIdentity{
+			SubjectID:    "subject-1",
+			SessionID:    "session-1",
+			LegacyUserID: 1,
+			PrimaryRole:  service.RoleUser,
+			Roles:        []string{service.RoleUser},
+			Profile:      &service.SubjectProfileRecord{SubjectID: "subject-1", LegacyUserID: 1, Email: "user@example.com", Username: "tester"},
+		},
+	}
+	handler.controlSessionAuth = sessionAuth
+
+	c, rec := newHandlerTestContext(http.MethodGet, "/api/v1/bootstrap", "")
+	c.Request.Header.Set("Authorization", "Bearer header-access-token")
+	c.Request.AddCookie(&http.Cookie{Name: service.ControlAccessCookieName, Value: "cookie-access-token"})
+	handler.Bootstrap(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "cookie-access-token", sessionAuth.lastToken)
+}
+
 func TestSessionLogin_DisabledCredentialModesReturnForbidden(t *testing.T) {
 	handler := newAuthBFFTestHandler(service.ControlAuthModeExternalOIDC, nil, nil)
 
@@ -386,6 +417,26 @@ func TestRegistrationEmailCode_DisabledCredentialModesReturnForbidden(t *testing
 	require.Equal(t, http.StatusForbidden, rec.Code)
 	resp := decodeHandlerResponse(t, rec)
 	require.Equal(t, "REGISTRATION_DISABLED", resp.Reason)
+}
+
+func TestRegistrationEmailCode_ReturnsLegacyCountdownShape(t *testing.T) {
+	handler := newAuthBFFTestHandler(service.ControlAuthModeLocal, map[string]string{
+		service.SettingKeyRegistrationEnabled: "true",
+		service.SettingKeyEmailVerifyEnabled:  "true",
+		service.SettingKeyBackendModeEnabled:  "false",
+	}, nil)
+	handler.controlRegistration = &authBFFRegistrationStub{}
+
+	c, rec := newHandlerTestContext(http.MethodPost, "/api/v1/registration/email-code", `{"email":"user@example.com"}`)
+	handler.RegistrationEmailCode(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	resp := decodeHandlerResponse(t, rec)
+	payload, ok := resp.Data.(map[string]any)
+	require.True(t, ok)
+	require.Equal(t, true, payload["success"])
+	require.Equal(t, "Verification code sent successfully", payload["message"])
+	require.Equal(t, float64(60), payload["countdown"])
 }
 
 func TestPasswordForgot_DisabledCredentialModesReturnForbidden(t *testing.T) {

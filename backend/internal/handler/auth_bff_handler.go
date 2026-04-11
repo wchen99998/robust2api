@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	controlSessionCookiePath        = "/"
-	controlOAuthFlowCookieMaxAgeSec = 10 * 60
-	controlPendingCookieMaxAgeSec   = 15 * 60
-	controlCSRFCookieMaxAgeSec      = 30 * 24 * 60 * 60
-	controlDefaultFrontendRedirect  = "/dashboard"
-	controlLinuxDoFrontendCallback  = "/auth/linuxdo/callback"
-	controlOIDCFrontendCallback     = "/auth/oidc/callback"
+	controlSessionCookiePath            = "/"
+	controlOAuthFlowCookieMaxAgeSec     = 10 * 60
+	controlPendingCookieMaxAgeSec       = 15 * 60
+	controlCSRFCookieMaxAgeSec          = 30 * 24 * 60 * 60
+	controlRegistrationEmailCooldownSec = 60
+	controlDefaultFrontendRedirect      = "/dashboard"
+	controlLinuxDoFrontendCallback      = "/auth/linuxdo/callback"
+	controlOIDCFrontendCallback         = "/auth/oidc/callback"
 )
 
 type bootstrapSubjectResponse struct {
@@ -380,7 +381,11 @@ func (h *AuthHandler) RegistrationEmailCode(c *gin.Context) {
 		response.ErrorFrom(c, err)
 		return
 	}
-	response.Success(c, gin.H{"success": true})
+	response.Success(c, gin.H{
+		"success":   true,
+		"message":   "Verification code sent successfully",
+		"countdown": controlRegistrationEmailCooldownSec,
+	})
 }
 
 func (h *AuthHandler) Registration(c *gin.Context) {
@@ -970,9 +975,9 @@ func (h *AuthHandler) currentIdentity(c *gin.Context) (*service.AuthenticatedIde
 	if h.controlSessionAuth == nil {
 		return nil, infraerrors.InternalServer("CONTROL_AUTH_NOT_READY", "control auth service is not configured")
 	}
-	token := extractBearerToken(c)
+	token := h.cookieValue(c, service.ControlAccessCookieName)
 	if token == "" {
-		token = h.cookieValue(c, service.ControlAccessCookieName)
+		token = extractBearerToken(c)
 	}
 	if token == "" {
 		return nil, service.ErrInvalidToken

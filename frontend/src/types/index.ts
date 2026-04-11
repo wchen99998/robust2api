@@ -57,6 +57,7 @@ export interface RegisterRequest {
   email: string
   password: string
   verify_code?: string
+  verification_code?: string
   turnstile_token?: string
   promo_code?: string
   invitation_code?: string
@@ -126,6 +127,94 @@ export interface AuthResponse {
 
 export interface CurrentUserResponse extends User {
   run_mode?: 'standard' | 'simple'
+}
+
+export interface RegistrationPreflightRequest {
+  email?: string
+  promo_code?: string
+  invitation_code?: string
+  provider_registration_context?: string
+}
+
+export interface RegistrationPreflightResponse {
+  registration_enabled: boolean
+  email_verification_required: boolean
+  invitation_required: boolean
+  email_suffix_allowed: boolean
+  promo_status?: string
+  promo_bonus_amount?: number
+  invitation_status?: string
+  errors?: string[]
+}
+
+export interface BootstrapAuthState {
+  authenticated: boolean
+  mfa_required?: boolean
+  login_challenge_id?: string
+  refresh_available?: boolean
+}
+
+export interface BootstrapAuthCapabilities {
+  provider: string
+  password_login_enabled: boolean
+  registration_enabled: boolean
+  email_verification_enabled: boolean
+  password_reset_enabled: boolean
+  password_change_enabled: boolean
+  mfa_self_service_enabled: boolean
+  profile_self_service_enabled: boolean
+}
+
+export interface BootstrapAuthProvider {
+  id: string
+  type: string
+  display_name: string
+  start_path: string
+}
+
+export interface BootstrapSession {
+  session_id: string
+  expires_at: string
+  absolute_expires_at: string
+  last_seen_at: string
+}
+
+export interface BootstrapPendingRegistration {
+  challenge_id: string
+  provider: string
+  email: string
+  registration_email?: string
+  username?: string
+  redirect_to?: string
+  expires_at: string
+}
+
+export interface BootstrapMe {
+  subject_id?: string
+  sid?: string
+  roles?: string[]
+  primary_role?: string
+  user?: (User & { run_mode?: 'standard' | 'simple' }) | null
+  profile?: Partial<User> | null
+  mfa?: TotpStatus | null
+  session?: BootstrapSession | null
+}
+
+export interface BootstrapResponse {
+  access_token?: string
+  csrf_token?: string
+  run_mode?: 'standard' | 'simple'
+  public_settings: PublicSettings
+  auth_capabilities?: BootstrapAuthCapabilities
+  auth_providers?: BootstrapAuthProvider[]
+  auth_state: BootstrapAuthState
+  me?: BootstrapMe | null
+  pending_registration?: BootstrapPendingRegistration | null
+}
+
+export interface EmbedTokenResponse {
+  token: string
+  expires_at: string
 }
 
 // ==================== Subscription Types ====================
@@ -1548,6 +1637,7 @@ export interface TotpStatus {
   enabled: boolean
   enabled_at: number | null  // Unix timestamp in seconds
   feature_enabled: boolean
+  verification_method?: 'email' | 'password'
 }
 
 export interface TotpSetupRequest {
@@ -1581,13 +1671,17 @@ export interface TotpVerificationMethod {
 }
 
 export interface TotpLoginResponse {
-  requires_2fa: boolean
+  requires_2fa?: boolean
+  mfa_required?: boolean
   temp_token?: string
+  login_challenge_id?: string
   user_email_masked?: string
+  masked_email?: string
 }
 
 export interface TotpLogin2FARequest {
-  temp_token: string
+  temp_token?: string
+  login_challenge_id?: string
   totp_code: string
 }
 

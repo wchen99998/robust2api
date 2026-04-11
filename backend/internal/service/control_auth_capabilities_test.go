@@ -5,8 +5,10 @@ package service
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
 	"github.com/stretchr/testify/require"
 )
 
@@ -60,6 +62,61 @@ func (s *controlAuthCapabilitySettingRepoStub) GetAll(_ context.Context) (map[st
 
 func (s *controlAuthCapabilitySettingRepoStub) Delete(_ context.Context, key string) error {
 	delete(s.values, key)
+	return nil
+}
+
+type controlAuthCapabilityPromoRepoStub struct {
+	byCode map[string]*PromoCode
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) Create(context.Context, *PromoCode) error {
+	return nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) GetByID(context.Context, int64) (*PromoCode, error) {
+	return nil, ErrPromoCodeNotFound
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) GetByCode(_ context.Context, code string) (*PromoCode, error) {
+	if promo, ok := s.byCode[code]; ok {
+		return promo, nil
+	}
+	return nil, ErrPromoCodeNotFound
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) GetByCodeForUpdate(ctx context.Context, code string) (*PromoCode, error) {
+	return s.GetByCode(ctx, code)
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) Update(context.Context, *PromoCode) error {
+	return nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) Delete(context.Context, int64) error {
+	return nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) List(context.Context, pagination.PaginationParams) ([]PromoCode, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) ListWithFilters(context.Context, pagination.PaginationParams, string, string) ([]PromoCode, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) CreateUsage(context.Context, *PromoCodeUsage) error {
+	return nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) GetUsageByPromoCodeAndUser(context.Context, int64, int64) (*PromoCodeUsage, error) {
+	return nil, nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) ListUsagesByPromoCode(context.Context, int64, pagination.PaginationParams) ([]PromoCodeUsage, *pagination.PaginationResult, error) {
+	return nil, nil, nil
+}
+
+func (s *controlAuthCapabilityPromoRepoStub) IncrementUsedCount(context.Context, int64) error {
 	return nil
 }
 
@@ -145,4 +202,66 @@ func TestControlAuthService_RegistrationPreflight_UsesAuthModeAwareFlags(t *test
 	require.False(t, result.RegistrationEnabled)
 	require.False(t, result.EmailVerificationRequired)
 	require.Contains(t, result.Errors, "REGISTRATION_DISABLED")
+}
+
+func TestControlAuthService_RegistrationPreflight_ValidPromoIncludesBonusAmount(t *testing.T) {
+	cfg := &config.Config{
+		ControlAuth: config.ControlAuthConfig{
+			Mode: ControlAuthModeLocal,
+		},
+	}
+	settingSvc := NewSettingService(&controlAuthCapabilitySettingRepoStub{values: map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+		SettingKeyPromoCodeEnabled:    "true",
+		SettingKeyBackendModeEnabled:  "false",
+	}}, cfg)
+	svc := &ControlAuthService{
+		cfg:            cfg,
+		settingService: settingSvc,
+		promoRepo: &controlAuthCapabilityPromoRepoStub{byCode: map[string]*PromoCode{
+			"BONUS10": {
+				Code:        "BONUS10",
+				BonusAmount: 10,
+				Status:      PromoCodeStatusActive,
+			},
+		}},
+	}
+
+	result, err := svc.RegistrationPreflight(context.Background(), "", "BONUS10", "")
+	require.NoError(t, err)
+	require.Equal(t, "valid", result.PromoStatus)
+	require.NotNil(t, result.PromoBonusAmount)
+	require.Equal(t, 10.0, *result.PromoBonusAmount)
+	require.NotContains(t, result.Errors, "PROMO_CODE_INVALID")
+}
+
+func TestControlAuthService_RegistrationPreflight_PromoDisabledReturnsDisabled(t *testing.T) {
+	cfg := &config.Config{
+		ControlAuth: config.ControlAuthConfig{
+			Mode: ControlAuthModeLocal,
+		},
+	}
+	settingSvc := NewSettingService(&controlAuthCapabilitySettingRepoStub{values: map[string]string{
+		SettingKeyRegistrationEnabled: "true",
+		SettingKeyPromoCodeEnabled:    "false",
+		SettingKeyBackendModeEnabled:  "false",
+	}}, cfg)
+	svc := &ControlAuthService{
+		cfg:            cfg,
+		settingService: settingSvc,
+		promoRepo: &controlAuthCapabilityPromoRepoStub{byCode: map[string]*PromoCode{
+			"BONUS10": {
+				Code:        "BONUS10",
+				BonusAmount: 10,
+				Status:      PromoCodeStatusActive,
+				ExpiresAt:   ptr(time.Now().Add(time.Hour)),
+			},
+		}},
+	}
+
+	result, err := svc.RegistrationPreflight(context.Background(), "", "BONUS10", "")
+	require.NoError(t, err)
+	require.Equal(t, "disabled", result.PromoStatus)
+	require.Nil(t, result.PromoBonusAmount)
+	require.Contains(t, result.Errors, "PROMO_CODE_DISABLED")
 }

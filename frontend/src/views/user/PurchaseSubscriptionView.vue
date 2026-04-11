@@ -75,10 +75,12 @@ import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { buildEmbeddedUrl, detectTheme } from '@/utils/embedded-url'
+import { useEmbedToken } from '@/composables/useEmbedToken'
 
 const { t, locale } = useI18n()
 const appStore = useAppStore()
 const authStore = useAuthStore()
+const { token: embedToken, ensureEmbedToken } = useEmbedToken()
 
 const loading = ref(false)
 const purchaseTheme = ref<'light' | 'dark'>('light')
@@ -90,7 +92,13 @@ const purchaseEnabled = computed(() => {
 
 const purchaseUrl = computed(() => {
   const baseUrl = (appStore.cachedPublicSettings?.purchase_subscription_url || '').trim()
-  return buildEmbeddedUrl(baseUrl, authStore.user?.id, authStore.token, purchaseTheme.value, locale.value)
+  return buildEmbeddedUrl(
+    baseUrl,
+    authStore.user?.id,
+    embedToken.value,
+    purchaseTheme.value,
+    locale.value
+  )
 })
 
 const isValidUrl = computed(() => {
@@ -111,10 +119,15 @@ onMounted(async () => {
     })
   }
 
-  if (appStore.publicSettingsLoaded) return
+  if (appStore.publicSettingsLoaded) {
+    await ensureEmbedToken()
+    return
+  }
+
   loading.value = true
   try {
     await appStore.fetchPublicSettings()
+    await ensureEmbedToken()
   } finally {
     loading.value = false
   }

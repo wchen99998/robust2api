@@ -74,12 +74,14 @@ import { useAdminSettingsStore } from '@/stores/adminSettings'
 import AppLayout from '@/components/layout/AppLayout.vue'
 import Icon from '@/components/icons/Icon.vue'
 import { buildEmbeddedUrl, detectTheme } from '@/utils/embedded-url'
+import { useEmbedToken } from '@/composables/useEmbedToken'
 
 const { t, locale } = useI18n()
 const route = useRoute()
 const appStore = useAppStore()
 const authStore = useAuthStore()
 const adminSettingsStore = useAdminSettingsStore()
+const { token: embedToken, ensureEmbedToken } = useEmbedToken()
 
 const loading = ref(false)
 const pageTheme = ref<'light' | 'dark'>('light')
@@ -105,7 +107,7 @@ const embeddedUrl = computed(() => {
   return buildEmbeddedUrl(
     menuItem.value.url,
     authStore.user?.id,
-    authStore.token,
+    embedToken.value,
     pageTheme.value,
     locale.value,
   )
@@ -129,10 +131,15 @@ onMounted(async () => {
     })
   }
 
-  if (appStore.publicSettingsLoaded) return
+  if (appStore.publicSettingsLoaded) {
+    await ensureEmbedToken()
+    return
+  }
+
   loading.value = true
   try {
     await appStore.fetchPublicSettings()
+    await ensureEmbedToken()
   } finally {
     loading.value = false
   }

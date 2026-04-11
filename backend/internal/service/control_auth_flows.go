@@ -48,22 +48,32 @@ func (s *ControlAuthService) RegistrationPreflight(ctx context.Context, email, p
 
 	promoCode = strings.TrimSpace(promoCode)
 	if promoCode != "" {
-		promo, err := s.promoRepo.GetByCode(ctx, promoCode)
 		switch {
-		case err == nil && promo != nil && promo.Status == PromoCodeStatusActive && !promo.IsExpired() && (promo.MaxUses == 0 || promo.UsedCount < promo.MaxUses):
-			result.PromoStatus = "valid"
-		case err == nil && promo != nil && promo.IsExpired():
-			result.PromoStatus = "expired"
-			result.Errors = append(result.Errors, "PROMO_CODE_EXPIRED")
-		case err == nil && promo != nil && promo.Status == PromoCodeStatusDisabled:
+		case s.settingService == nil || !s.settingService.IsPromoCodeEnabled(ctx):
 			result.PromoStatus = "disabled"
 			result.Errors = append(result.Errors, "PROMO_CODE_DISABLED")
-		case err == nil && promo != nil && promo.MaxUses > 0 && promo.UsedCount >= promo.MaxUses:
-			result.PromoStatus = "overused"
-			result.Errors = append(result.Errors, "PROMO_CODE_MAX_USED")
-		default:
+		case s.promoRepo == nil:
 			result.PromoStatus = "invalid"
 			result.Errors = append(result.Errors, "PROMO_CODE_INVALID")
+		default:
+			promo, err := s.promoRepo.GetByCode(ctx, promoCode)
+			switch {
+			case err == nil && promo != nil && promo.Status == PromoCodeStatusActive && !promo.IsExpired() && (promo.MaxUses == 0 || promo.UsedCount < promo.MaxUses):
+				result.PromoStatus = "valid"
+				result.PromoBonusAmount = &promo.BonusAmount
+			case err == nil && promo != nil && promo.IsExpired():
+				result.PromoStatus = "expired"
+				result.Errors = append(result.Errors, "PROMO_CODE_EXPIRED")
+			case err == nil && promo != nil && promo.Status == PromoCodeStatusDisabled:
+				result.PromoStatus = "disabled"
+				result.Errors = append(result.Errors, "PROMO_CODE_DISABLED")
+			case err == nil && promo != nil && promo.MaxUses > 0 && promo.UsedCount >= promo.MaxUses:
+				result.PromoStatus = "overused"
+				result.Errors = append(result.Errors, "PROMO_CODE_MAX_USED")
+			default:
+				result.PromoStatus = "invalid"
+				result.Errors = append(result.Errors, "PROMO_CODE_INVALID")
+			}
 		}
 	}
 

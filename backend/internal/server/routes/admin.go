@@ -285,10 +285,6 @@ func registerSettingsRoutes(admin *gin.RouterGroup, h *handler.AdminHandlers) {
 		adminSettings.PUT("", h.Setting.UpdateSettings)
 		adminSettings.POST("/test-smtp", h.Setting.TestSMTPConnection)
 		adminSettings.POST("/send-test-email", h.Setting.SendTestEmail)
-		// Admin API Key 管理
-		adminSettings.GET("/admin-api-key", h.Setting.GetAdminAPIKey)
-		adminSettings.POST("/admin-api-key/regenerate", h.Setting.RegenerateAdminAPIKey)
-		adminSettings.DELETE("/admin-api-key", h.Setting.DeleteAdminAPIKey)
 		// 529过载冷却配置
 		adminSettings.GET("/overload-cooldown", h.Setting.GetOverloadCooldownSettings)
 		adminSettings.PUT("/overload-cooldown", h.Setting.UpdateOverloadCooldownSettings)

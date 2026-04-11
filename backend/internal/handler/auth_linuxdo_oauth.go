@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	linuxDoOAuthCookiePath        = "/api/v1/auth/oauth/linuxdo"
+	linuxDoOAuthCookiePath        = "/api/v1/oauth/linuxdo"
 	linuxDoOAuthStateCookieName   = "linuxdo_oauth_state"
 	linuxDoOAuthVerifierCookie    = "linuxdo_oauth_verifier"
 	linuxDoOAuthRedirectCookie    = "linuxdo_oauth_redirect"
@@ -68,7 +68,7 @@ func (e *linuxDoTokenExchangeError) Error() string {
 }
 
 // LinuxDoOAuthStart 启动 LinuxDo Connect OAuth 登录流程。
-// GET /api/v1/auth/oauth/linuxdo/start?redirect=/dashboard
+// GET /api/v1/oauth/linuxdo/start?redirect=/dashboard
 func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 	cfg, err := h.getLinuxDoOAuthConfig(c.Request.Context())
 	if err != nil {
@@ -118,7 +118,7 @@ func (h *AuthHandler) LinuxDoOAuthStart(c *gin.Context) {
 }
 
 // LinuxDoOAuthCallback 处理 OAuth 回调：创建/登录用户，然后重定向到前端。
-// GET /api/v1/auth/oauth/linuxdo/callback?code=...&state=...
+// GET /api/v1/oauth/linuxdo/callback?code=...&state=...
 func (h *AuthHandler) LinuxDoOAuthCallback(c *gin.Context) {
 	cfg, cfgErr := h.getLinuxDoOAuthConfig(c.Request.Context())
 	if cfgErr != nil {
@@ -248,7 +248,7 @@ type completeLinuxDoOAuthRequest struct {
 
 // CompleteLinuxDoOAuthRegistration completes a pending OAuth registration by validating
 // the invitation code and creating the user account.
-// POST /api/v1/auth/oauth/linuxdo/complete-registration
+// POST /api/v1/registration/complete
 func (h *AuthHandler) CompleteLinuxDoOAuthRegistration(c *gin.Context) {
 	var req completeLinuxDoOAuthRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

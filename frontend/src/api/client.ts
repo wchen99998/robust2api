@@ -3,7 +3,13 @@
  * Base client with interceptors for authentication, token refresh, and error handling
  */
 
-import axios, { AxiosInstance, AxiosError, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import axios, {
+  AxiosHeaders,
+  AxiosInstance,
+  AxiosError,
+  InternalAxiosRequestConfig,
+  AxiosResponse
+} from 'axios'
 import type { ApiResponse } from '@/types'
 import { getLocale } from '@/i18n'
 
@@ -14,6 +20,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 export const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   timeout: 30000,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json'
   }
@@ -21,24 +28,112 @@ export const apiClient: AxiosInstance = axios.create({
 
 // ==================== Token Refresh State ====================
 
-// Track if a token refresh is in progress to prevent multiple simultaneous refresh requests
 let isRefreshing = false
-// Queue of requests waiting for token refresh
-let refreshSubscribers: Array<(token: string) => void> = []
+let refreshSubscribers: Array<(ok: boolean) => void> = []
 
-/**
- * Subscribe to token refresh completion
- */
-function subscribeTokenRefresh(callback: (token: string) => void): void {
+function subscribeTokenRefresh(callback: (ok: boolean) => void): void {
   refreshSubscribers.push(callback)
 }
 
-/**
- * Notify all subscribers that token has been refreshed
- */
-function onTokenRefreshed(token: string): void {
-  refreshSubscribers.forEach((callback) => callback(token))
+function onTokenRefreshed(ok: boolean): void {
+  refreshSubscribers.forEach((callback) => callback(ok))
   refreshSubscribers = []
+}
+
+const CSRF_COOKIE_NAME = 'control_csrf_token'
+const CSRF_HEADER_NAME = 'X-CSRF-Token'
+const MUTATING_METHODS = new Set(['post', 'put', 'patch', 'delete'])
+const API_PATH_PREFIX = API_BASE_URL.startsWith('/') ? API_BASE_URL : ''
+
+const AUTH_EXCLUDED_PATH_PREFIXES = [
+  '/session/login',
+  '/session/login/totp',
+  '/registration',
+  '/registration/preflight',
+  '/registration/email-code',
+  '/password/forgot',
+  '/password/reset'
+]
+
+const REFRESH_PATH = '/session/refresh'
+
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') {
+    return null
+  }
+  const needle = `${encodeURIComponent(name)}=`
+  const found = document.cookie.split('; ').find((cookie) => cookie.startsWith(needle))
+  if (!found) {
+    return null
+  }
+  return decodeURIComponent(found.slice(needle.length))
+}
+
+export function getCSRFToken(): string | null {
+  return getCookie(CSRF_COOKIE_NAME)
+}
+
+function normalizePath(url: string | undefined): string {
+  if (!url) return ''
+  const stripPrefix = (path: string) => {
+    if (API_PATH_PREFIX && path.startsWith(`${API_PATH_PREFIX}/`)) {
+      return path.slice(API_PATH_PREFIX.length)
+    }
+    if (API_PATH_PREFIX && path === API_PATH_PREFIX) {
+      return '/'
+    }
+    return path
+  }
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const parsed = new URL(url)
+      return stripPrefix(parsed.pathname)
+    } catch {
+      return stripPrefix(url)
+    }
+  }
+  const normalized = url.startsWith('/') ? url : `/${url}`
+  return stripPrefix(normalized)
+}
+
+function shouldAttachCSRF(config: InternalAxiosRequestConfig): boolean {
+  const method = String(config.method || 'get').toLowerCase()
+  if (!MUTATING_METHODS.has(method)) {
+    return false
+  }
+  return true
+}
+
+function isAuthExcludedPath(path: string): boolean {
+  if (!path) return false
+  if (path === REFRESH_PATH) return true
+  return AUTH_EXCLUDED_PATH_PREFIXES.some(
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+  )
+}
+
+function syncCSRFHeader(config: InternalAxiosRequestConfig): void {
+  if (!shouldAttachCSRF(config)) {
+    return
+  }
+
+  const headers = AxiosHeaders.from(config.headers)
+  headers.delete(CSRF_HEADER_NAME)
+  headers.delete(CSRF_HEADER_NAME.toLowerCase())
+
+  const csrf = getCSRFToken()
+  if (csrf) {
+    headers.set(CSRF_HEADER_NAME, csrf)
+  }
+
+  config.headers = headers
+}
+
+function clearLegacyAuthStorage(): void {
+  localStorage.removeItem('auth_token')
+  localStorage.removeItem('refresh_token')
+  localStorage.removeItem('auth_user')
+  localStorage.removeItem('token_expires_at')
 }
 
 // ==================== Request Interceptor ====================
@@ -54,18 +149,17 @@ const getUserTimezone = (): string => {
 
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // Attach token from localStorage
-    const token = localStorage.getItem('auth_token')
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
-
-    // Attach locale for backend translations
     if (config.headers) {
       config.headers['Accept-Language'] = getLocale()
     }
 
-    // Attach timezone for all GET requests (backend may use it for default date ranges)
+    if (shouldAttachCSRF(config) && config.headers && !config.headers[CSRF_HEADER_NAME]) {
+      const csrf = getCSRFToken()
+      if (csrf) {
+        config.headers[CSRF_HEADER_NAME] = csrf
+      }
+    }
+
     if (config.method === 'get') {
       if (!config.params) {
         config.params = {}
@@ -118,28 +212,19 @@ apiClient.interceptors.response.use(
       // Validate `data` shape to avoid HTML error pages breaking our error handling.
       const apiData = (typeof data === 'object' && data !== null ? data : {}) as Record<string, any>
 
-      // 401: Try to refresh the token if we have a refresh token
-      // This handles TOKEN_EXPIRED, INVALID_TOKEN, TOKEN_REVOKED, etc.
       if (status === 401 && !originalRequest._retry) {
-        const refreshToken = localStorage.getItem('refresh_token')
-        const isAuthEndpoint =
-          url.includes('/auth/login') || url.includes('/auth/register') || url.includes('/auth/refresh')
+        const path = normalizePath(url)
+        const isAuthEndpoint = isAuthExcludedPath(path)
 
-        // If we have a refresh token and this is not an auth endpoint, try to refresh
-        if (refreshToken && !isAuthEndpoint) {
+        if (!isAuthEndpoint) {
           if (isRefreshing) {
-            // Wait for the ongoing refresh to complete
             return new Promise((resolve, reject) => {
-              subscribeTokenRefresh((newToken: string) => {
-                if (newToken) {
-                  // Mark as retried to prevent infinite loop if retry also returns 401
+              subscribeTokenRefresh((ok: boolean) => {
+                if (ok) {
                   originalRequest._retry = true
-                  if (originalRequest.headers) {
-                    originalRequest.headers.Authorization = `Bearer ${newToken}`
-                  }
+                  syncCSRFHeader(originalRequest)
                   resolve(apiClient(originalRequest))
                 } else {
-                  // Refresh failed, reject with original error
                   reject({
                     status,
                     code: apiData.code,
@@ -154,51 +239,28 @@ apiClient.interceptors.response.use(
           isRefreshing = true
 
           try {
-            // Call refresh endpoint directly to avoid circular dependency
-            const refreshResponse = await axios.post(
-              `${API_BASE_URL}/auth/refresh`,
-              { refresh_token: refreshToken },
-              { headers: { 'Content-Type': 'application/json' } }
+            await axios.post(
+              `${API_BASE_URL}${REFRESH_PATH}`,
+              {},
+              {
+                withCredentials: true,
+                headers: {
+                  'Content-Type': 'application/json',
+                  ...(getCSRFToken() ? { [CSRF_HEADER_NAME]: getCSRFToken() as string } : {})
+                }
+              }
             )
 
-            const refreshData = refreshResponse.data as ApiResponse<{
-              access_token: string
-              refresh_token: string
-              expires_in: number
-            }>
+            onTokenRefreshed(true)
 
-            if (refreshData.code === 0 && refreshData.data) {
-              const { access_token, refresh_token: newRefreshToken, expires_in } = refreshData.data
-
-              // Update tokens in localStorage (convert expires_in to timestamp)
-              localStorage.setItem('auth_token', access_token)
-              localStorage.setItem('refresh_token', newRefreshToken)
-              localStorage.setItem('token_expires_at', String(Date.now() + expires_in * 1000))
-
-              // Notify subscribers with new token
-              onTokenRefreshed(access_token)
-
-              // Retry the original request with new token
-              if (originalRequest.headers) {
-                originalRequest.headers.Authorization = `Bearer ${access_token}`
-              }
-
-              isRefreshing = false
-              return apiClient(originalRequest)
-            }
-
-            // Refresh response was not successful, fall through to clear auth
-            throw new Error('Token refresh failed')
+            isRefreshing = false
+            syncCSRFHeader(originalRequest)
+            return apiClient(originalRequest)
           } catch (refreshError) {
-            // Refresh failed - notify subscribers with empty token
-            onTokenRefreshed('')
+            onTokenRefreshed(false)
             isRefreshing = false
 
-            // Clear tokens and redirect to login
-            localStorage.removeItem('auth_token')
-            localStorage.removeItem('refresh_token')
-            localStorage.removeItem('auth_user')
-            localStorage.removeItem('token_expires_at')
+            clearLegacyAuthStorage()
             sessionStorage.setItem('auth_expired', '1')
 
             if (!window.location.pathname.includes('/login')) {
@@ -213,7 +275,6 @@ apiClient.interceptors.response.use(
           }
         }
 
-        // No refresh token or is auth endpoint - clear auth and redirect
         const hasToken = !!localStorage.getItem('auth_token')
         const headers = error.config?.headers as Record<string, unknown> | undefined
         const authHeader = headers?.Authorization ?? headers?.authorization
@@ -224,14 +285,10 @@ apiClient.interceptors.response.use(
               ? authHeader.length > 0
               : !!authHeader
 
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('refresh_token')
-        localStorage.removeItem('auth_user')
-        localStorage.removeItem('token_expires_at')
+        clearLegacyAuthStorage()
         if ((hasToken || sentAuth) && !isAuthEndpoint) {
           sessionStorage.setItem('auth_expired', '1')
         }
-        // Only redirect if not already on login page
         if (!window.location.pathname.includes('/login')) {
           window.location.href = '/login'
         }

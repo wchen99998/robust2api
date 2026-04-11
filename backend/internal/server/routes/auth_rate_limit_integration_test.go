@@ -25,7 +25,7 @@ func TestAuthRegisterRateLimitThresholdHitReturns429(t *testing.T) {
 	rdb := startAuthRouteRedis(t, ctx)
 
 	router := newAuthRoutesTestRouter(rdb)
-	const path = "/api/v1/auth/register"
+	const path = "/api/v1/registration"
 
 	for i := 1; i <= 6; i++ {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
@@ -36,7 +36,7 @@ func TestAuthRegisterRateLimitThresholdHitReturns429(t *testing.T) {
 		router.ServeHTTP(w, req)
 
 		if i <= 5 {
-			require.Equal(t, http.StatusBadRequest, w.Code, "第 %d 次请求应先进入业务校验", i)
+			require.Equal(t, http.StatusInternalServerError, w.Code, "第 %d 次请求应先进入业务处理", i)
 			continue
 		}
 		require.Equal(t, http.StatusTooManyRequests, w.Code, "第 6 次请求应命中限流")

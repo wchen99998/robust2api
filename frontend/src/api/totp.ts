@@ -19,7 +19,7 @@ import type {
  * @returns TOTP status including enabled state and feature availability
  */
 export async function getStatus(): Promise<TotpStatus> {
-  const { data } = await apiClient.get<TotpStatus>('/user/totp/status')
+  const { data } = await apiClient.get<TotpStatus>('/me/mfa/totp')
   return data
 }
 
@@ -28,8 +28,10 @@ export async function getStatus(): Promise<TotpStatus> {
  * @returns Method ('email' or 'password') required for setup/disable
  */
 export async function getVerificationMethod(): Promise<TotpVerificationMethod> {
-  const { data } = await apiClient.get<TotpVerificationMethod>('/user/totp/verification-method')
-  return data
+  const status = await getStatus()
+  return {
+    method: status.verification_method || 'password'
+  }
 }
 
 /**
@@ -37,7 +39,7 @@ export async function getVerificationMethod(): Promise<TotpVerificationMethod> {
  * @returns Success response
  */
 export async function sendVerifyCode(): Promise<{ success: boolean }> {
-  const { data } = await apiClient.post<{ success: boolean }>('/user/totp/send-code')
+  const { data } = await apiClient.post<{ success: boolean }>('/me/mfa/totp/send-code')
   return data
 }
 
@@ -47,7 +49,7 @@ export async function sendVerifyCode(): Promise<{ success: boolean }> {
  * @returns Setup response with secret, QR code URL, and setup token
  */
 export async function initiateSetup(request?: TotpSetupRequest): Promise<TotpSetupResponse> {
-  const { data } = await apiClient.post<TotpSetupResponse>('/user/totp/setup', request || {})
+  const { data } = await apiClient.post<TotpSetupResponse>('/me/mfa/totp/setup', request || {})
   return data
 }
 
@@ -57,7 +59,7 @@ export async function initiateSetup(request?: TotpSetupRequest): Promise<TotpSet
  * @returns Enable response with success status and enabled timestamp
  */
 export async function enable(request: TotpEnableRequest): Promise<TotpEnableResponse> {
-  const { data } = await apiClient.post<TotpEnableResponse>('/user/totp/enable', request)
+  const { data } = await apiClient.post<TotpEnableResponse>('/me/mfa/totp/enable', request)
   return data
 }
 
@@ -67,7 +69,7 @@ export async function enable(request: TotpEnableRequest): Promise<TotpEnableResp
  * @returns Success response
  */
 export async function disable(request: TotpDisableRequest): Promise<{ success: boolean }> {
-  const { data } = await apiClient.post<{ success: boolean }>('/user/totp/disable', request)
+  const { data } = await apiClient.delete<{ success: boolean }>('/me/mfa/totp', { data: request })
   return data
 }
 

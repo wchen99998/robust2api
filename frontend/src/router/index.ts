@@ -391,24 +391,20 @@ const router = createRouter({
 /**
  * Navigation guard: Authentication check
  */
-let authInitialized = false
-
 // 初始化导航加载状态和预加载
 const navigationLoading = useNavigationLoadingState()
 // 延迟初始化预加载，传入 router 实例
 let routePrefetch: ReturnType<typeof useRoutePrefetch> | null = null
 const BACKEND_MODE_ALLOWED_PATHS = ['/login', '/key-usage']
 
-router.beforeEach((to, _from, next) => {
+router.beforeEach(async (to, _from, next) => {
   // 开始导航加载状态
   navigationLoading.startNavigation()
 
   const authStore = useAuthStore()
 
-  // Restore auth state from localStorage on first navigation (page refresh)
-  if (!authInitialized) {
-    authStore.checkAuth()
-    authInitialized = true
+  if (!authStore.initialized) {
+    await authStore.initialize()
   }
 
   // Set page title

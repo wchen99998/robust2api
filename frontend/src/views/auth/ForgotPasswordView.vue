@@ -12,7 +12,25 @@
       </div>
 
       <!-- Success State -->
-      <div v-if="isSubmitted" class="space-y-6">
+      <div v-if="passwordResetDisabled" class="space-y-6">
+        <div class="rounded-xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-800/50 dark:bg-amber-900/20">
+          <div class="flex flex-col items-center gap-4 text-center">
+            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-800/50">
+              <Icon name="exclamationCircle" size="lg" class="text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h3 class="text-lg font-semibold text-amber-800 dark:text-amber-200">
+                {{ t('auth.forgotPasswordDisabled') }}
+              </h3>
+              <p class="mt-2 text-sm text-amber-700 dark:text-amber-300">
+                {{ t('auth.passwordResetManagedExternally') }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div v-else-if="isSubmitted" class="space-y-6">
         <div class="rounded-xl border border-green-200 bg-green-50 p-6 dark:border-green-800/50 dark:bg-green-900/20">
           <div class="flex flex-col items-center gap-4 text-center">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 dark:bg-green-800/50">
@@ -154,7 +172,7 @@ import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAppStore } from '@/stores'
-import { getPublicSettings, forgotPassword } from '@/api/auth'
+import { bootstrap, forgotPassword } from '@/api/auth'
 
 const { t } = useI18n()
 
@@ -171,6 +189,7 @@ const errorMessage = ref<string>('')
 // Public settings
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
+const passwordResetDisabled = ref<boolean>(false)
 
 // Turnstile
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
@@ -189,9 +208,11 @@ const errors = reactive({
 
 onMounted(async () => {
   try {
-    const settings = await getPublicSettings()
+    const boot = await bootstrap()
+    const settings = boot.public_settings
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
+    passwordResetDisabled.value = !(boot.auth_capabilities?.password_reset_enabled ?? true)
   } catch (error) {
     console.error('Failed to load public settings:', error)
   }
@@ -243,6 +264,9 @@ function validateForm(): boolean {
 // ==================== Form Handlers ====================
 
 async function handleSubmit(): Promise<void> {
+  if (passwordResetDisabled.value) {
+    return
+  }
   errorMessage.value = ''
 
   if (!validateForm()) {

@@ -216,6 +216,7 @@ import TextArea from '@/components/common/TextArea.vue'
 import { Icon } from '@/components/icons'
 import { useClipboard } from '@/composables/useClipboard'
 import { adminAPI } from '@/api/admin'
+import { getCSRFToken } from '@/api/client'
 import type { Account, ClaudeModel } from '@/types'
 
 const { t } = useI18n()
@@ -374,9 +375,10 @@ const startTest = async () => {
     // Use fetch with streaming for SSE since EventSource doesn't support POST
     const response = await fetch(url, {
       method: 'POST',
+      credentials: 'include',
       headers: {
-        Authorization: `Bearer ${localStorage.getItem('auth_token')}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        ...(getCSRFToken() ? { 'X-CSRF-Token': getCSRFToken() as string } : {})
       },
       body: JSON.stringify({
               model_id: selectedModelId.value,

@@ -14,7 +14,22 @@
 
       <!-- No Data Warning -->
       <div
-        v-if="!hasRegisterData"
+        v-if="emailVerificationDisabled"
+        class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
+      >
+        <div class="flex items-start gap-3">
+          <div class="flex-shrink-0">
+            <Icon name="exclamationCircle" size="md" class="text-amber-500" />
+          </div>
+          <div class="text-sm text-amber-700 dark:text-amber-400">
+            <p class="font-medium">{{ t('auth.emailVerificationDisabled') }}</p>
+            <p class="mt-1">{{ t('auth.emailVerificationManagedExternally') }}</p>
+          </div>
+        </div>
+      </div>
+
+      <div
+        v-else-if="!hasRegisterData"
         class="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-800/50 dark:bg-amber-900/20"
       >
         <div class="flex items-start gap-3">
@@ -176,7 +191,7 @@ import { AuthLayout } from '@/components/layout'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, sendVerifyCode } from '@/api/auth'
+import { bootstrap, sendVerifyCode } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import {
   isRegistrationEmailSuffixAllowed,
@@ -214,6 +229,7 @@ const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('robust2api')
 const registrationEmailSuffixWhitelist = ref<string[]>([])
+const emailVerificationDisabled = ref<boolean>(false)
 
 // Turnstile for resend
 const turnstileRef = ref<InstanceType<typeof TurnstileWidget> | null>(null)
@@ -246,10 +262,12 @@ onMounted(async () => {
 
   // Load public settings
   try {
-    const settings = await getPublicSettings()
+    const boot = await bootstrap()
+    const settings = boot.public_settings
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     siteName.value = settings.site_name || 'robust2api'
+    emailVerificationDisabled.value = !(boot.auth_capabilities?.email_verification_enabled ?? true)
     registrationEmailSuffixWhitelist.value = normalizeRegistrationEmailSuffixWhitelist(
       settings.registration_email_suffix_whitelist || []
     )
@@ -258,7 +276,7 @@ onMounted(async () => {
   }
 
   // Auto-send verification code if we have valid data
-  if (hasRegisterData.value) {
+  if (hasRegisterData.value && !emailVerificationDisabled.value) {
     await sendCode()
   }
 })
@@ -311,6 +329,9 @@ function onTurnstileError(): void {
 // ==================== Send Code ====================
 
 async function sendCode(): Promise<void> {
+  if (emailVerificationDisabled.value) {
+    return
+  }
   isSendingCode.value = true
   errorMessage.value = ''
 
@@ -348,6 +369,9 @@ async function sendCode(): Promise<void> {
 // ==================== Handlers ====================
 
 async function handleResendCode(): Promise<void> {
+  if (emailVerificationDisabled.value) {
+    return
+  }
   // If turnstile is enabled and we haven't shown it yet, show it
   if (turnstileEnabled.value && !showResendTurnstile.value) {
     showResendTurnstile.value = true
@@ -380,6 +404,9 @@ function validateForm(): boolean {
 }
 
 async function handleVerify(): Promise<void> {
+  if (emailVerificationDisabled.value) {
+    return
+  }
   errorMessage.value = ''
 
   if (!validateForm()) {

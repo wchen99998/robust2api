@@ -11,19 +11,18 @@
         </p>
       </div>
 
-      <div v-if="!backendModeEnabled && (linuxdoOAuthEnabled || oidcOAuthEnabled)" class="space-y-4">
-        <LinuxDoOAuthSection
-          v-if="linuxdoOAuthEnabled"
+      <div v-if="!backendModeEnabled && authProviders.length > 0" class="space-y-4">
+        <button
+          v-for="provider in authProviders"
+          :key="provider.id"
+          type="button"
+          class="btn btn-secondary w-full"
           :disabled="isLoading"
-          :show-divider="false"
-        />
-        <OidcOAuthSection
-          v-if="oidcOAuthEnabled"
-          :disabled="isLoading"
-          :provider-name="oidcOAuthProviderName"
-          :show-divider="false"
-        />
-        <div class="flex items-center gap-3">
+          @click="startProviderLogin(provider.start_path)"
+        >
+          {{ t('auth.oidc.signIn', { providerName: provider.display_name }) }}
+        </button>
+        <div v-if="passwordLoginEnabled" class="flex items-center gap-3">
           <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
           <span class="text-xs text-gray-500 dark:text-dark-400">
             {{ t('auth.oauthOrContinue') }}
@@ -32,8 +31,21 @@
         </div>
       </div>
 
+      <div
+        v-if="!passwordLoginEnabled"
+        class="rounded-mica-lg border border-status-amber/20 bg-status-amber/[0.06] p-4 dark:border-status-amber-dark/20 dark:bg-status-amber-dark/[0.06]"
+      >
+        <p class="text-sm text-status-amber dark:text-status-amber-dark">
+          {{
+            authProviders.length > 0
+              ? t('auth.passwordLoginDisabled')
+              : t('auth.noSignInMethods')
+          }}
+        </p>
+      </div>
+
       <!-- Login Form -->
-      <form @submit.prevent="handleLogin" class="space-y-5">
+      <form v-if="passwordLoginEnabled" @submit.prevent="handleLogin" class="space-y-5">
         <!-- Email Input -->
         <div>
           <label for="email" class="input-label">
@@ -170,7 +182,7 @@
     </div>
 
     <!-- Footer -->
-    <template v-if="!backendModeEnabled" #footer>
+    <template v-if="!backendModeEnabled && passwordLoginEnabled" #footer>
       <p class="text-mica-text-secondary dark:text-mica-text-secondary-dark">
         {{ t('auth.dontHaveAccount') }}
         <router-link
@@ -199,14 +211,12 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
-import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
-import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
 import TotpLoginModal from '@/components/auth/TotpLoginModal.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, isTotp2FARequired } from '@/api/auth'
-import type { TotpLoginResponse } from '@/types'
+import { bootstrap, isTotp2FARequired } from '@/api/auth'
+import type { BootstrapAuthProvider, TotpLoginResponse } from '@/types'
 
 const { t } = useI18n()
 
@@ -225,10 +235,9 @@ const showPassword = ref<boolean>(false)
 // Public settings
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
-const linuxdoOAuthEnabled = ref<boolean>(false)
-const oidcOAuthEnabled = ref<boolean>(false)
-const oidcOAuthProviderName = ref<string>('OIDC')
+const authProviders = ref<BootstrapAuthProvider[]>([])
 const backendModeEnabled = ref<boolean>(false)
+const passwordLoginEnabled = ref<boolean>(true)
 const passwordResetEnabled = ref<boolean>(false)
 
 // Turnstile
@@ -264,18 +273,37 @@ onMounted(async () => {
   }
 
   try {
-    const settings = await getPublicSettings()
+    const boot = await bootstrap()
+    const settings = boot.public_settings
+    const capabilities = boot.auth_capabilities
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
-    linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
-    oidcOAuthEnabled.value = settings.oidc_oauth_enabled
-    oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
+    authProviders.value = boot.auth_providers || []
     backendModeEnabled.value = settings.backend_mode_enabled
-    passwordResetEnabled.value = settings.password_reset_enabled
+    passwordLoginEnabled.value = capabilities?.password_login_enabled ?? true
+    passwordResetEnabled.value = capabilities?.password_reset_enabled ?? settings.password_reset_enabled
   } catch (error) {
     console.error('Failed to load public settings:', error)
   }
 })
+
+function startProviderLogin(startPath: string): void {
+  const redirectTo = (router.currentRoute.value.query.redirect as string) || '/dashboard'
+  if (!startPath) {
+    return
+  }
+  try {
+    const isAbsolute = /^https?:\/\//.test(startPath)
+    const target = isAbsolute
+      ? new URL(startPath)
+      : new URL(startPath.startsWith('/') ? startPath : `/${startPath}`, window.location.origin)
+    target.searchParams.set('redirect', redirectTo)
+    window.location.href = target.toString()
+  } catch {
+    const delimiter = startPath.includes('?') ? '&' : '?'
+    window.location.href = `${startPath}${delimiter}redirect=${encodeURIComponent(redirectTo)}`
+  }
+}
 
 // ==================== Turnstile Handlers ====================
 
@@ -355,8 +383,8 @@ async function handleLogin(): Promise<void> {
     // Check if 2FA is required
     if (isTotp2FARequired(response)) {
       const totpResponse = response as TotpLoginResponse
-      totpTempToken.value = totpResponse.temp_token || ''
-      totpUserEmailMasked.value = totpResponse.user_email_masked || ''
+      totpTempToken.value = totpResponse.login_challenge_id || totpResponse.temp_token || ''
+      totpUserEmailMasked.value = totpResponse.user_email_masked || totpResponse.masked_email || ''
       show2FAModal.value = true
       isLoading.value = false
       return

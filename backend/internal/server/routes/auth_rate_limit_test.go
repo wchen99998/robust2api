@@ -48,10 +48,6 @@ func TestAuthRoutesRateLimitFailCloseWhenRedisUnavailable(t *testing.T) {
 
 	router := newAuthRoutesTestRouter(rdb)
 	paths := []string{
-		"/api/v1/auth/register",
-		"/api/v1/auth/login",
-		"/api/v1/auth/login/2fa",
-		"/api/v1/auth/send-verify-code",
 		"/api/v1/session/login",
 		"/api/v1/session/login/totp",
 		"/api/v1/session/refresh",
@@ -84,14 +80,14 @@ func TestAuthRoutesRegisterBFFEndpoints(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/v1/bootstrap"},
 		{method: http.MethodGet, path: "/api/v1/jwks"},
-		{method: http.MethodPost, path: "/api/v1/session/logout"},
-		{method: http.MethodPost, path: "/api/v1/session/logout-all"},
+		{method: http.MethodDelete, path: "/api/v1/session"},
+		{method: http.MethodDelete, path: "/api/v1/sessions"},
 		{method: http.MethodGet, path: "/api/v1/oauth/oidc/start"},
 		{method: http.MethodGet, path: "/api/v1/oauth/oidc/callback"},
 		{method: http.MethodPatch, path: "/api/v1/me"},
 		{method: http.MethodGet, path: "/api/v1/me/mfa/totp"},
 		{method: http.MethodPost, path: "/api/v1/me/mfa/totp/setup"},
-		{method: http.MethodPost, path: "/api/v1/me/embed-token"},
+		{method: http.MethodPost, path: "/api/v1/embed-token"},
 	}
 
 	for _, tc := range paths {

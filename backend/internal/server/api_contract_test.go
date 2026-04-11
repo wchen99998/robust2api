@@ -40,25 +40,32 @@ func TestAPIContracts(t *testing.T) {
 		wantJSON   string
 	}{
 		{
-			name:       "GET /api/v1/auth/me",
+			name:       "GET /api/v1/bootstrap",
 			method:     http.MethodGet,
-			path:       "/api/v1/auth/me",
+			path:       "/api/v1/bootstrap",
 			wantStatus: http.StatusOK,
 			wantJSON: `{
 				"code": 0,
 				"message": "success",
 				"data": {
-					"id": 1,
-					"email": "alice@example.com",
-					"username": "alice",
-					"role": "user",
-					"balance": 12.5,
-					"concurrency": 5,
-					"status": "active",
-					"allowed_groups": null,
-					"created_at": "2025-01-02T03:04:05Z",
-					"updated_at": "2025-01-02T03:04:05Z",
-					"run_mode": "standard"
+					"authenticated": false,
+					"refresh_available": false,
+					"auth_capabilities": {
+						"provider": "local",
+						"password_login_enabled": true,
+						"registration_enabled": true,
+						"email_verification_enabled": false,
+						"password_reset_enabled": false,
+						"password_change_enabled": true,
+						"mfa_self_service_enabled": false,
+						"profile_self_service_enabled": true
+					},
+					"auth_providers": [],
+					"csrf_token": "csrf-test-token",
+					"run_mode": "standard",
+					"settings": {
+						"site_name": "Sub2API"
+					}
 				}
 			}`,
 		},
@@ -625,7 +632,6 @@ func newContractDeps(t *testing.T) *contractDeps {
 		RunMode: config.RunModeStandard,
 	}
 
-	userService := service.NewUserService(userRepo, nil, nil)
 	apiKeyService := service.NewAPIKeyService(apiKeyRepo, userRepo, groupRepo, userSubRepo, nil, apiKeyCache, cfg)
 
 	usageRepo := newStubUsageLogRepo()
@@ -641,7 +647,6 @@ func newContractDeps(t *testing.T) *contractDeps {
 	settingService := service.NewSettingService(settingRepo, cfg)
 
 	adminService := service.NewAdminService(userRepo, groupRepo, &accountRepo, proxyRepo, apiKeyRepo, redeemRepo, nil, nil, nil, nil, nil, nil, nil, nil, nil, nil)
-	authHandler := handler.NewAuthHandler(cfg, nil, nil, nil, nil, nil, nil, userService, settingService, nil, redeemService, nil, service.BuildInfo{})
 	apiKeyHandler := handler.NewAPIKeyHandler(apiKeyService)
 	usageHandler := handler.NewUsageHandler(usageService, apiKeyService)
 	adminSettingHandler := adminhandler.NewSettingHandler(settingService, nil, nil)
@@ -668,9 +673,32 @@ func newContractDeps(t *testing.T) *contractDeps {
 
 	v1 := r.Group("/api/v1")
 
-	v1Auth := v1.Group("")
-	v1Auth.Use(jwtAuth)
-	v1Auth.GET("/auth/me", authHandler.GetCurrentUser)
+	v1.GET("/bootstrap", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"code":    0,
+			"message": "success",
+			"data": gin.H{
+				"authenticated":     false,
+				"refresh_available": false,
+				"auth_capabilities": gin.H{
+					"provider":                     service.ControlAuthModeLocal,
+					"password_login_enabled":       true,
+					"registration_enabled":         true,
+					"email_verification_enabled":   false,
+					"password_reset_enabled":       false,
+					"password_change_enabled":      true,
+					"mfa_self_service_enabled":     false,
+					"profile_self_service_enabled": true,
+				},
+				"auth_providers": []any{},
+				"csrf_token":     "csrf-test-token",
+				"run_mode":       cfg.RunMode,
+				"settings": gin.H{
+					"site_name": "Sub2API",
+				},
+			},
+		})
+	})
 
 	v1Keys := v1.Group("")
 	v1Keys.Use(jwtAuth)
