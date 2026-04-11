@@ -118,9 +118,11 @@ type authBFFSessionAuthStub struct {
 	capabilities *service.ControlAuthCapabilities
 	identity     *service.AuthenticatedIdentity
 	authErr      error
+	lastToken    string
 }
 
-func (s *authBFFSessionAuthStub) AuthenticateAccessToken(_ context.Context, _ string) (*service.AuthenticatedIdentity, error) {
+func (s *authBFFSessionAuthStub) AuthenticateAccessToken(_ context.Context, token string) (*service.AuthenticatedIdentity, error) {
+	s.lastToken = token
 	if s.authErr != nil {
 		return nil, s.authErr
 	}
@@ -364,6 +366,33 @@ func TestBootstrap_DoesNotExposeAccessToken(t *testing.T) {
 	require.True(t, ok)
 	_, exists := payload["access_token"]
 	require.False(t, exists)
+}
+
+func TestBootstrap_PrefersAccessCookieOverAuthorizationHeader(t *testing.T) {
+	handler := newAuthBFFTestHandler(service.ControlAuthModeLocal, map[string]string{
+		service.SettingKeySiteName:           "Sub2API",
+		service.SettingKeyBackendModeEnabled: "false",
+	}, nil)
+	sessionAuth := &authBFFSessionAuthStub{
+		capabilities: authCapabilitiesForMode(service.ControlAuthModeLocal, map[string]string{}),
+		identity: &service.AuthenticatedIdentity{
+			SubjectID:    "subject-1",
+			SessionID:    "session-1",
+			LegacyUserID: 1,
+			PrimaryRole:  service.RoleUser,
+			Roles:        []string{service.RoleUser},
+			Profile:      &service.SubjectProfileRecord{SubjectID: "subject-1", LegacyUserID: 1, Email: "user@example.com", Username: "tester"},
+		},
+	}
+	handler.controlSessionAuth = sessionAuth
+
+	c, rec := newHandlerTestContext(http.MethodGet, "/api/v1/bootstrap", "")
+	c.Request.Header.Set("Authorization", "Bearer header-access-token")
+	c.Request.AddCookie(&http.Cookie{Name: service.ControlAccessCookieName, Value: "cookie-access-token"})
+	handler.Bootstrap(c)
+
+	require.Equal(t, http.StatusOK, rec.Code)
+	require.Equal(t, "cookie-access-token", sessionAuth.lastToken)
 }
 
 func TestSessionLogin_DisabledCredentialModesReturnForbidden(t *testing.T) {

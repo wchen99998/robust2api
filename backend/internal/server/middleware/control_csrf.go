@@ -16,6 +16,11 @@ func ControlCSRFMiddleware() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			c.Next()
+			return
+		}
 
 		headerValue := strings.TrimSpace(c.GetHeader(service.ControlCSRFHeaderName))
 		cookie, err := c.Request.Cookie(service.ControlCSRFCookieName)

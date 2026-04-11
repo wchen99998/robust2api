@@ -970,9 +970,9 @@ func (h *AuthHandler) currentIdentity(c *gin.Context) (*service.AuthenticatedIde
 	if h.controlSessionAuth == nil {
 		return nil, infraerrors.InternalServer("CONTROL_AUTH_NOT_READY", "control auth service is not configured")
 	}
-	token := extractBearerToken(c)
+	token := h.cookieValue(c, service.ControlAccessCookieName)
 	if token == "" {
-		token = h.cookieValue(c, service.ControlAccessCookieName)
+		token = extractBearerToken(c)
 	}
 	if token == "" {
 		return nil, service.ErrInvalidToken
