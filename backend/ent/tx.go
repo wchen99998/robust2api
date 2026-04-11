@@ -24,6 +24,28 @@ type Tx struct {
 	Announcement *AnnouncementClient
 	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
 	AnnouncementRead *AnnouncementReadClient
+	// AuthEmailVerification is the client for interacting with the AuthEmailVerification builders.
+	AuthEmailVerification *AuthEmailVerificationClient
+	// AuthFederatedIdentity is the client for interacting with the AuthFederatedIdentity builders.
+	AuthFederatedIdentity *AuthFederatedIdentityClient
+	// AuthFlow is the client for interacting with the AuthFlow builders.
+	AuthFlow *AuthFlowClient
+	// AuthMFATOTPFactor is the client for interacting with the AuthMFATOTPFactor builders.
+	AuthMFATOTPFactor *AuthMFATOTPFactorClient
+	// AuthPasswordCredential is the client for interacting with the AuthPasswordCredential builders.
+	AuthPasswordCredential *AuthPasswordCredentialClient
+	// AuthPasswordResetToken is the client for interacting with the AuthPasswordResetToken builders.
+	AuthPasswordResetToken *AuthPasswordResetTokenClient
+	// AuthRefreshToken is the client for interacting with the AuthRefreshToken builders.
+	AuthRefreshToken *AuthRefreshTokenClient
+	// AuthRegistrationChallenge is the client for interacting with the AuthRegistrationChallenge builders.
+	AuthRegistrationChallenge *AuthRegistrationChallengeClient
+	// AuthSession is the client for interacting with the AuthSession builders.
+	AuthSession *AuthSessionClient
+	// AuthSubject is the client for interacting with the AuthSubject builders.
+	AuthSubject *AuthSubjectClient
+	// ControlUserProfile is the client for interacting with the ControlUserProfile builders.
+	ControlUserProfile *ControlUserProfileClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
@@ -194,6 +216,17 @@ func (tx *Tx) init() {
 	tx.AccountGroup = NewAccountGroupClient(tx.config)
 	tx.Announcement = NewAnnouncementClient(tx.config)
 	tx.AnnouncementRead = NewAnnouncementReadClient(tx.config)
+	tx.AuthEmailVerification = NewAuthEmailVerificationClient(tx.config)
+	tx.AuthFederatedIdentity = NewAuthFederatedIdentityClient(tx.config)
+	tx.AuthFlow = NewAuthFlowClient(tx.config)
+	tx.AuthMFATOTPFactor = NewAuthMFATOTPFactorClient(tx.config)
+	tx.AuthPasswordCredential = NewAuthPasswordCredentialClient(tx.config)
+	tx.AuthPasswordResetToken = NewAuthPasswordResetTokenClient(tx.config)
+	tx.AuthRefreshToken = NewAuthRefreshTokenClient(tx.config)
+	tx.AuthRegistrationChallenge = NewAuthRegistrationChallengeClient(tx.config)
+	tx.AuthSession = NewAuthSessionClient(tx.config)
+	tx.AuthSubject = NewAuthSubjectClient(tx.config)
+	tx.ControlUserProfile = NewControlUserProfileClient(tx.config)
 	tx.ErrorPassthroughRule = NewErrorPassthroughRuleClient(tx.config)
 	tx.Group = NewGroupClient(tx.config)
 	tx.IdempotencyRecord = NewIdempotencyRecordClient(tx.config)

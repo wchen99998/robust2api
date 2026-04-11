@@ -10,6 +10,7 @@ import (
 	"reflect"
 
 	"github.com/Wei-Shaw/sub2api/ent/migrate"
+	"github.com/google/uuid"
 
 	"entgo.io/ent"
 	"entgo.io/ent/dialect"
@@ -20,6 +21,17 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/authemailverification"
+	"github.com/Wei-Shaw/sub2api/ent/authfederatedidentity"
+	"github.com/Wei-Shaw/sub2api/ent/authflow"
+	"github.com/Wei-Shaw/sub2api/ent/authmfatotpfactor"
+	"github.com/Wei-Shaw/sub2api/ent/authpasswordcredential"
+	"github.com/Wei-Shaw/sub2api/ent/authpasswordresettoken"
+	"github.com/Wei-Shaw/sub2api/ent/authrefreshtoken"
+	"github.com/Wei-Shaw/sub2api/ent/authregistrationchallenge"
+	"github.com/Wei-Shaw/sub2api/ent/authsession"
+	"github.com/Wei-Shaw/sub2api/ent/authsubject"
+	"github.com/Wei-Shaw/sub2api/ent/controluserprofile"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -56,6 +68,28 @@ type Client struct {
 	Announcement *AnnouncementClient
 	// AnnouncementRead is the client for interacting with the AnnouncementRead builders.
 	AnnouncementRead *AnnouncementReadClient
+	// AuthEmailVerification is the client for interacting with the AuthEmailVerification builders.
+	AuthEmailVerification *AuthEmailVerificationClient
+	// AuthFederatedIdentity is the client for interacting with the AuthFederatedIdentity builders.
+	AuthFederatedIdentity *AuthFederatedIdentityClient
+	// AuthFlow is the client for interacting with the AuthFlow builders.
+	AuthFlow *AuthFlowClient
+	// AuthMFATOTPFactor is the client for interacting with the AuthMFATOTPFactor builders.
+	AuthMFATOTPFactor *AuthMFATOTPFactorClient
+	// AuthPasswordCredential is the client for interacting with the AuthPasswordCredential builders.
+	AuthPasswordCredential *AuthPasswordCredentialClient
+	// AuthPasswordResetToken is the client for interacting with the AuthPasswordResetToken builders.
+	AuthPasswordResetToken *AuthPasswordResetTokenClient
+	// AuthRefreshToken is the client for interacting with the AuthRefreshToken builders.
+	AuthRefreshToken *AuthRefreshTokenClient
+	// AuthRegistrationChallenge is the client for interacting with the AuthRegistrationChallenge builders.
+	AuthRegistrationChallenge *AuthRegistrationChallengeClient
+	// AuthSession is the client for interacting with the AuthSession builders.
+	AuthSession *AuthSessionClient
+	// AuthSubject is the client for interacting with the AuthSubject builders.
+	AuthSubject *AuthSubjectClient
+	// ControlUserProfile is the client for interacting with the ControlUserProfile builders.
+	ControlUserProfile *ControlUserProfileClient
 	// ErrorPassthroughRule is the client for interacting with the ErrorPassthroughRule builders.
 	ErrorPassthroughRule *ErrorPassthroughRuleClient
 	// Group is the client for interacting with the Group builders.
@@ -106,6 +140,17 @@ func (c *Client) init() {
 	c.AccountGroup = NewAccountGroupClient(c.config)
 	c.Announcement = NewAnnouncementClient(c.config)
 	c.AnnouncementRead = NewAnnouncementReadClient(c.config)
+	c.AuthEmailVerification = NewAuthEmailVerificationClient(c.config)
+	c.AuthFederatedIdentity = NewAuthFederatedIdentityClient(c.config)
+	c.AuthFlow = NewAuthFlowClient(c.config)
+	c.AuthMFATOTPFactor = NewAuthMFATOTPFactorClient(c.config)
+	c.AuthPasswordCredential = NewAuthPasswordCredentialClient(c.config)
+	c.AuthPasswordResetToken = NewAuthPasswordResetTokenClient(c.config)
+	c.AuthRefreshToken = NewAuthRefreshTokenClient(c.config)
+	c.AuthRegistrationChallenge = NewAuthRegistrationChallengeClient(c.config)
+	c.AuthSession = NewAuthSessionClient(c.config)
+	c.AuthSubject = NewAuthSubjectClient(c.config)
+	c.ControlUserProfile = NewControlUserProfileClient(c.config)
 	c.ErrorPassthroughRule = NewErrorPassthroughRuleClient(c.config)
 	c.Group = NewGroupClient(c.config)
 	c.IdempotencyRecord = NewIdempotencyRecordClient(c.config)
@@ -213,30 +258,41 @@ func (c *Client) Tx(ctx context.Context) (*Tx, error) {
 	cfg := c.config
 	cfg.driver = tx
 	return &Tx{
-		ctx:                     ctx,
-		config:                  cfg,
-		APIKey:                  NewAPIKeyClient(cfg),
-		Account:                 NewAccountClient(cfg),
-		AccountGroup:            NewAccountGroupClient(cfg),
-		Announcement:            NewAnnouncementClient(cfg),
-		AnnouncementRead:        NewAnnouncementReadClient(cfg),
-		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
-		Group:                   NewGroupClient(cfg),
-		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
-		PromoCode:               NewPromoCodeClient(cfg),
-		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
-		Proxy:                   NewProxyClient(cfg),
-		RedeemCode:              NewRedeemCodeClient(cfg),
-		SecuritySecret:          NewSecuritySecretClient(cfg),
-		Setting:                 NewSettingClient(cfg),
-		TLSFingerprintProfile:   NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
-		UsageLog:                NewUsageLogClient(cfg),
-		User:                    NewUserClient(cfg),
-		UserAllowedGroup:        NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition: NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:      NewUserAttributeValueClient(cfg),
-		UserSubscription:        NewUserSubscriptionClient(cfg),
+		ctx:                       ctx,
+		config:                    cfg,
+		APIKey:                    NewAPIKeyClient(cfg),
+		Account:                   NewAccountClient(cfg),
+		AccountGroup:              NewAccountGroupClient(cfg),
+		Announcement:              NewAnnouncementClient(cfg),
+		AnnouncementRead:          NewAnnouncementReadClient(cfg),
+		AuthEmailVerification:     NewAuthEmailVerificationClient(cfg),
+		AuthFederatedIdentity:     NewAuthFederatedIdentityClient(cfg),
+		AuthFlow:                  NewAuthFlowClient(cfg),
+		AuthMFATOTPFactor:         NewAuthMFATOTPFactorClient(cfg),
+		AuthPasswordCredential:    NewAuthPasswordCredentialClient(cfg),
+		AuthPasswordResetToken:    NewAuthPasswordResetTokenClient(cfg),
+		AuthRefreshToken:          NewAuthRefreshTokenClient(cfg),
+		AuthRegistrationChallenge: NewAuthRegistrationChallengeClient(cfg),
+		AuthSession:               NewAuthSessionClient(cfg),
+		AuthSubject:               NewAuthSubjectClient(cfg),
+		ControlUserProfile:        NewControlUserProfileClient(cfg),
+		ErrorPassthroughRule:      NewErrorPassthroughRuleClient(cfg),
+		Group:                     NewGroupClient(cfg),
+		IdempotencyRecord:         NewIdempotencyRecordClient(cfg),
+		PromoCode:                 NewPromoCodeClient(cfg),
+		PromoCodeUsage:            NewPromoCodeUsageClient(cfg),
+		Proxy:                     NewProxyClient(cfg),
+		RedeemCode:                NewRedeemCodeClient(cfg),
+		SecuritySecret:            NewSecuritySecretClient(cfg),
+		Setting:                   NewSettingClient(cfg),
+		TLSFingerprintProfile:     NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:          NewUsageCleanupTaskClient(cfg),
+		UsageLog:                  NewUsageLogClient(cfg),
+		User:                      NewUserClient(cfg),
+		UserAllowedGroup:          NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:   NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:        NewUserAttributeValueClient(cfg),
+		UserSubscription:          NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -254,30 +310,41 @@ func (c *Client) BeginTx(ctx context.Context, opts *sql.TxOptions) (*Tx, error) 
 	cfg := c.config
 	cfg.driver = &txDriver{tx: tx, drv: c.driver}
 	return &Tx{
-		ctx:                     ctx,
-		config:                  cfg,
-		APIKey:                  NewAPIKeyClient(cfg),
-		Account:                 NewAccountClient(cfg),
-		AccountGroup:            NewAccountGroupClient(cfg),
-		Announcement:            NewAnnouncementClient(cfg),
-		AnnouncementRead:        NewAnnouncementReadClient(cfg),
-		ErrorPassthroughRule:    NewErrorPassthroughRuleClient(cfg),
-		Group:                   NewGroupClient(cfg),
-		IdempotencyRecord:       NewIdempotencyRecordClient(cfg),
-		PromoCode:               NewPromoCodeClient(cfg),
-		PromoCodeUsage:          NewPromoCodeUsageClient(cfg),
-		Proxy:                   NewProxyClient(cfg),
-		RedeemCode:              NewRedeemCodeClient(cfg),
-		SecuritySecret:          NewSecuritySecretClient(cfg),
-		Setting:                 NewSettingClient(cfg),
-		TLSFingerprintProfile:   NewTLSFingerprintProfileClient(cfg),
-		UsageCleanupTask:        NewUsageCleanupTaskClient(cfg),
-		UsageLog:                NewUsageLogClient(cfg),
-		User:                    NewUserClient(cfg),
-		UserAllowedGroup:        NewUserAllowedGroupClient(cfg),
-		UserAttributeDefinition: NewUserAttributeDefinitionClient(cfg),
-		UserAttributeValue:      NewUserAttributeValueClient(cfg),
-		UserSubscription:        NewUserSubscriptionClient(cfg),
+		ctx:                       ctx,
+		config:                    cfg,
+		APIKey:                    NewAPIKeyClient(cfg),
+		Account:                   NewAccountClient(cfg),
+		AccountGroup:              NewAccountGroupClient(cfg),
+		Announcement:              NewAnnouncementClient(cfg),
+		AnnouncementRead:          NewAnnouncementReadClient(cfg),
+		AuthEmailVerification:     NewAuthEmailVerificationClient(cfg),
+		AuthFederatedIdentity:     NewAuthFederatedIdentityClient(cfg),
+		AuthFlow:                  NewAuthFlowClient(cfg),
+		AuthMFATOTPFactor:         NewAuthMFATOTPFactorClient(cfg),
+		AuthPasswordCredential:    NewAuthPasswordCredentialClient(cfg),
+		AuthPasswordResetToken:    NewAuthPasswordResetTokenClient(cfg),
+		AuthRefreshToken:          NewAuthRefreshTokenClient(cfg),
+		AuthRegistrationChallenge: NewAuthRegistrationChallengeClient(cfg),
+		AuthSession:               NewAuthSessionClient(cfg),
+		AuthSubject:               NewAuthSubjectClient(cfg),
+		ControlUserProfile:        NewControlUserProfileClient(cfg),
+		ErrorPassthroughRule:      NewErrorPassthroughRuleClient(cfg),
+		Group:                     NewGroupClient(cfg),
+		IdempotencyRecord:         NewIdempotencyRecordClient(cfg),
+		PromoCode:                 NewPromoCodeClient(cfg),
+		PromoCodeUsage:            NewPromoCodeUsageClient(cfg),
+		Proxy:                     NewProxyClient(cfg),
+		RedeemCode:                NewRedeemCodeClient(cfg),
+		SecuritySecret:            NewSecuritySecretClient(cfg),
+		Setting:                   NewSettingClient(cfg),
+		TLSFingerprintProfile:     NewTLSFingerprintProfileClient(cfg),
+		UsageCleanupTask:          NewUsageCleanupTaskClient(cfg),
+		UsageLog:                  NewUsageLogClient(cfg),
+		User:                      NewUserClient(cfg),
+		UserAllowedGroup:          NewUserAllowedGroupClient(cfg),
+		UserAttributeDefinition:   NewUserAttributeDefinitionClient(cfg),
+		UserAttributeValue:        NewUserAttributeValueClient(cfg),
+		UserSubscription:          NewUserSubscriptionClient(cfg),
 	}, nil
 }
 
@@ -308,9 +375,12 @@ func (c *Client) Close() error {
 func (c *Client) Use(hooks ...Hook) {
 	for _, n := range []interface{ Use(...Hook) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.AuthEmailVerification, c.AuthFederatedIdentity, c.AuthFlow,
+		c.AuthMFATOTPFactor, c.AuthPasswordCredential, c.AuthPasswordResetToken,
+		c.AuthRefreshToken, c.AuthRegistrationChallenge, c.AuthSession, c.AuthSubject,
+		c.ControlUserProfile, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
 		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
@@ -323,9 +393,12 @@ func (c *Client) Use(hooks ...Hook) {
 func (c *Client) Intercept(interceptors ...Interceptor) {
 	for _, n := range []interface{ Intercept(...Interceptor) }{
 		c.APIKey, c.Account, c.AccountGroup, c.Announcement, c.AnnouncementRead,
-		c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord, c.PromoCode,
-		c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret, c.Setting,
-		c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
+		c.AuthEmailVerification, c.AuthFederatedIdentity, c.AuthFlow,
+		c.AuthMFATOTPFactor, c.AuthPasswordCredential, c.AuthPasswordResetToken,
+		c.AuthRefreshToken, c.AuthRegistrationChallenge, c.AuthSession, c.AuthSubject,
+		c.ControlUserProfile, c.ErrorPassthroughRule, c.Group, c.IdempotencyRecord,
+		c.PromoCode, c.PromoCodeUsage, c.Proxy, c.RedeemCode, c.SecuritySecret,
+		c.Setting, c.TLSFingerprintProfile, c.UsageCleanupTask, c.UsageLog, c.User,
 		c.UserAllowedGroup, c.UserAttributeDefinition, c.UserAttributeValue,
 		c.UserSubscription,
 	} {
@@ -346,6 +419,28 @@ func (c *Client) Mutate(ctx context.Context, m Mutation) (Value, error) {
 		return c.Announcement.mutate(ctx, m)
 	case *AnnouncementReadMutation:
 		return c.AnnouncementRead.mutate(ctx, m)
+	case *AuthEmailVerificationMutation:
+		return c.AuthEmailVerification.mutate(ctx, m)
+	case *AuthFederatedIdentityMutation:
+		return c.AuthFederatedIdentity.mutate(ctx, m)
+	case *AuthFlowMutation:
+		return c.AuthFlow.mutate(ctx, m)
+	case *AuthMFATOTPFactorMutation:
+		return c.AuthMFATOTPFactor.mutate(ctx, m)
+	case *AuthPasswordCredentialMutation:
+		return c.AuthPasswordCredential.mutate(ctx, m)
+	case *AuthPasswordResetTokenMutation:
+		return c.AuthPasswordResetToken.mutate(ctx, m)
+	case *AuthRefreshTokenMutation:
+		return c.AuthRefreshToken.mutate(ctx, m)
+	case *AuthRegistrationChallengeMutation:
+		return c.AuthRegistrationChallenge.mutate(ctx, m)
+	case *AuthSessionMutation:
+		return c.AuthSession.mutate(ctx, m)
+	case *AuthSubjectMutation:
+		return c.AuthSubject.mutate(ctx, m)
+	case *ControlUserProfileMutation:
+		return c.ControlUserProfile.mutate(ctx, m)
 	case *ErrorPassthroughRuleMutation:
 		return c.ErrorPassthroughRule.mutate(ctx, m)
 	case *GroupMutation:
@@ -1194,6 +1289,1469 @@ func (c *AnnouncementReadClient) mutate(ctx context.Context, m *AnnouncementRead
 		return (&AnnouncementReadDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
 	default:
 		return nil, fmt.Errorf("ent: unknown AnnouncementRead mutation op: %q", m.Op())
+	}
+}
+
+// AuthEmailVerificationClient is a client for the AuthEmailVerification schema.
+type AuthEmailVerificationClient struct {
+	config
+}
+
+// NewAuthEmailVerificationClient returns a client for the AuthEmailVerification from the given config.
+func NewAuthEmailVerificationClient(c config) *AuthEmailVerificationClient {
+	return &AuthEmailVerificationClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authemailverification.Hooks(f(g(h())))`.
+func (c *AuthEmailVerificationClient) Use(hooks ...Hook) {
+	c.hooks.AuthEmailVerification = append(c.hooks.AuthEmailVerification, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authemailverification.Intercept(f(g(h())))`.
+func (c *AuthEmailVerificationClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthEmailVerification = append(c.inters.AuthEmailVerification, interceptors...)
+}
+
+// Create returns a builder for creating a AuthEmailVerification entity.
+func (c *AuthEmailVerificationClient) Create() *AuthEmailVerificationCreate {
+	mutation := newAuthEmailVerificationMutation(c.config, OpCreate)
+	return &AuthEmailVerificationCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthEmailVerification entities.
+func (c *AuthEmailVerificationClient) CreateBulk(builders ...*AuthEmailVerificationCreate) *AuthEmailVerificationCreateBulk {
+	return &AuthEmailVerificationCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthEmailVerificationClient) MapCreateBulk(slice any, setFunc func(*AuthEmailVerificationCreate, int)) *AuthEmailVerificationCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthEmailVerificationCreateBulk{err: fmt.Errorf("calling to AuthEmailVerificationClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthEmailVerificationCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthEmailVerificationCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthEmailVerification.
+func (c *AuthEmailVerificationClient) Update() *AuthEmailVerificationUpdate {
+	mutation := newAuthEmailVerificationMutation(c.config, OpUpdate)
+	return &AuthEmailVerificationUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthEmailVerificationClient) UpdateOne(_m *AuthEmailVerification) *AuthEmailVerificationUpdateOne {
+	mutation := newAuthEmailVerificationMutation(c.config, OpUpdateOne, withAuthEmailVerification(_m))
+	return &AuthEmailVerificationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthEmailVerificationClient) UpdateOneID(id uuid.UUID) *AuthEmailVerificationUpdateOne {
+	mutation := newAuthEmailVerificationMutation(c.config, OpUpdateOne, withAuthEmailVerificationID(id))
+	return &AuthEmailVerificationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthEmailVerification.
+func (c *AuthEmailVerificationClient) Delete() *AuthEmailVerificationDelete {
+	mutation := newAuthEmailVerificationMutation(c.config, OpDelete)
+	return &AuthEmailVerificationDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthEmailVerificationClient) DeleteOne(_m *AuthEmailVerification) *AuthEmailVerificationDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthEmailVerificationClient) DeleteOneID(id uuid.UUID) *AuthEmailVerificationDeleteOne {
+	builder := c.Delete().Where(authemailverification.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthEmailVerificationDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthEmailVerification.
+func (c *AuthEmailVerificationClient) Query() *AuthEmailVerificationQuery {
+	return &AuthEmailVerificationQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthEmailVerification},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthEmailVerification entity by its id.
+func (c *AuthEmailVerificationClient) Get(ctx context.Context, id uuid.UUID) (*AuthEmailVerification, error) {
+	return c.Query().Where(authemailverification.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthEmailVerificationClient) GetX(ctx context.Context, id uuid.UUID) *AuthEmailVerification {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthEmailVerificationClient) Hooks() []Hook {
+	return c.hooks.AuthEmailVerification
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthEmailVerificationClient) Interceptors() []Interceptor {
+	return c.inters.AuthEmailVerification
+}
+
+func (c *AuthEmailVerificationClient) mutate(ctx context.Context, m *AuthEmailVerificationMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthEmailVerificationCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthEmailVerificationUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthEmailVerificationUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthEmailVerificationDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthEmailVerification mutation op: %q", m.Op())
+	}
+}
+
+// AuthFederatedIdentityClient is a client for the AuthFederatedIdentity schema.
+type AuthFederatedIdentityClient struct {
+	config
+}
+
+// NewAuthFederatedIdentityClient returns a client for the AuthFederatedIdentity from the given config.
+func NewAuthFederatedIdentityClient(c config) *AuthFederatedIdentityClient {
+	return &AuthFederatedIdentityClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authfederatedidentity.Hooks(f(g(h())))`.
+func (c *AuthFederatedIdentityClient) Use(hooks ...Hook) {
+	c.hooks.AuthFederatedIdentity = append(c.hooks.AuthFederatedIdentity, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authfederatedidentity.Intercept(f(g(h())))`.
+func (c *AuthFederatedIdentityClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthFederatedIdentity = append(c.inters.AuthFederatedIdentity, interceptors...)
+}
+
+// Create returns a builder for creating a AuthFederatedIdentity entity.
+func (c *AuthFederatedIdentityClient) Create() *AuthFederatedIdentityCreate {
+	mutation := newAuthFederatedIdentityMutation(c.config, OpCreate)
+	return &AuthFederatedIdentityCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthFederatedIdentity entities.
+func (c *AuthFederatedIdentityClient) CreateBulk(builders ...*AuthFederatedIdentityCreate) *AuthFederatedIdentityCreateBulk {
+	return &AuthFederatedIdentityCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthFederatedIdentityClient) MapCreateBulk(slice any, setFunc func(*AuthFederatedIdentityCreate, int)) *AuthFederatedIdentityCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthFederatedIdentityCreateBulk{err: fmt.Errorf("calling to AuthFederatedIdentityClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthFederatedIdentityCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthFederatedIdentityCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthFederatedIdentity.
+func (c *AuthFederatedIdentityClient) Update() *AuthFederatedIdentityUpdate {
+	mutation := newAuthFederatedIdentityMutation(c.config, OpUpdate)
+	return &AuthFederatedIdentityUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthFederatedIdentityClient) UpdateOne(_m *AuthFederatedIdentity) *AuthFederatedIdentityUpdateOne {
+	mutation := newAuthFederatedIdentityMutation(c.config, OpUpdateOne, withAuthFederatedIdentity(_m))
+	return &AuthFederatedIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthFederatedIdentityClient) UpdateOneID(id int64) *AuthFederatedIdentityUpdateOne {
+	mutation := newAuthFederatedIdentityMutation(c.config, OpUpdateOne, withAuthFederatedIdentityID(id))
+	return &AuthFederatedIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthFederatedIdentity.
+func (c *AuthFederatedIdentityClient) Delete() *AuthFederatedIdentityDelete {
+	mutation := newAuthFederatedIdentityMutation(c.config, OpDelete)
+	return &AuthFederatedIdentityDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthFederatedIdentityClient) DeleteOne(_m *AuthFederatedIdentity) *AuthFederatedIdentityDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthFederatedIdentityClient) DeleteOneID(id int64) *AuthFederatedIdentityDeleteOne {
+	builder := c.Delete().Where(authfederatedidentity.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthFederatedIdentityDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthFederatedIdentity.
+func (c *AuthFederatedIdentityClient) Query() *AuthFederatedIdentityQuery {
+	return &AuthFederatedIdentityQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthFederatedIdentity},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthFederatedIdentity entity by its id.
+func (c *AuthFederatedIdentityClient) Get(ctx context.Context, id int64) (*AuthFederatedIdentity, error) {
+	return c.Query().Where(authfederatedidentity.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthFederatedIdentityClient) GetX(ctx context.Context, id int64) *AuthFederatedIdentity {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthFederatedIdentityClient) Hooks() []Hook {
+	return c.hooks.AuthFederatedIdentity
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthFederatedIdentityClient) Interceptors() []Interceptor {
+	return c.inters.AuthFederatedIdentity
+}
+
+func (c *AuthFederatedIdentityClient) mutate(ctx context.Context, m *AuthFederatedIdentityMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthFederatedIdentityCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthFederatedIdentityUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthFederatedIdentityUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthFederatedIdentityDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthFederatedIdentity mutation op: %q", m.Op())
+	}
+}
+
+// AuthFlowClient is a client for the AuthFlow schema.
+type AuthFlowClient struct {
+	config
+}
+
+// NewAuthFlowClient returns a client for the AuthFlow from the given config.
+func NewAuthFlowClient(c config) *AuthFlowClient {
+	return &AuthFlowClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authflow.Hooks(f(g(h())))`.
+func (c *AuthFlowClient) Use(hooks ...Hook) {
+	c.hooks.AuthFlow = append(c.hooks.AuthFlow, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authflow.Intercept(f(g(h())))`.
+func (c *AuthFlowClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthFlow = append(c.inters.AuthFlow, interceptors...)
+}
+
+// Create returns a builder for creating a AuthFlow entity.
+func (c *AuthFlowClient) Create() *AuthFlowCreate {
+	mutation := newAuthFlowMutation(c.config, OpCreate)
+	return &AuthFlowCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthFlow entities.
+func (c *AuthFlowClient) CreateBulk(builders ...*AuthFlowCreate) *AuthFlowCreateBulk {
+	return &AuthFlowCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthFlowClient) MapCreateBulk(slice any, setFunc func(*AuthFlowCreate, int)) *AuthFlowCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthFlowCreateBulk{err: fmt.Errorf("calling to AuthFlowClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthFlowCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthFlowCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthFlow.
+func (c *AuthFlowClient) Update() *AuthFlowUpdate {
+	mutation := newAuthFlowMutation(c.config, OpUpdate)
+	return &AuthFlowUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthFlowClient) UpdateOne(_m *AuthFlow) *AuthFlowUpdateOne {
+	mutation := newAuthFlowMutation(c.config, OpUpdateOne, withAuthFlow(_m))
+	return &AuthFlowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthFlowClient) UpdateOneID(id uuid.UUID) *AuthFlowUpdateOne {
+	mutation := newAuthFlowMutation(c.config, OpUpdateOne, withAuthFlowID(id))
+	return &AuthFlowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthFlow.
+func (c *AuthFlowClient) Delete() *AuthFlowDelete {
+	mutation := newAuthFlowMutation(c.config, OpDelete)
+	return &AuthFlowDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthFlowClient) DeleteOne(_m *AuthFlow) *AuthFlowDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthFlowClient) DeleteOneID(id uuid.UUID) *AuthFlowDeleteOne {
+	builder := c.Delete().Where(authflow.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthFlowDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthFlow.
+func (c *AuthFlowClient) Query() *AuthFlowQuery {
+	return &AuthFlowQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthFlow},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthFlow entity by its id.
+func (c *AuthFlowClient) Get(ctx context.Context, id uuid.UUID) (*AuthFlow, error) {
+	return c.Query().Where(authflow.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthFlowClient) GetX(ctx context.Context, id uuid.UUID) *AuthFlow {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthFlowClient) Hooks() []Hook {
+	return c.hooks.AuthFlow
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthFlowClient) Interceptors() []Interceptor {
+	return c.inters.AuthFlow
+}
+
+func (c *AuthFlowClient) mutate(ctx context.Context, m *AuthFlowMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthFlowCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthFlowUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthFlowUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthFlowDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthFlow mutation op: %q", m.Op())
+	}
+}
+
+// AuthMFATOTPFactorClient is a client for the AuthMFATOTPFactor schema.
+type AuthMFATOTPFactorClient struct {
+	config
+}
+
+// NewAuthMFATOTPFactorClient returns a client for the AuthMFATOTPFactor from the given config.
+func NewAuthMFATOTPFactorClient(c config) *AuthMFATOTPFactorClient {
+	return &AuthMFATOTPFactorClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authmfatotpfactor.Hooks(f(g(h())))`.
+func (c *AuthMFATOTPFactorClient) Use(hooks ...Hook) {
+	c.hooks.AuthMFATOTPFactor = append(c.hooks.AuthMFATOTPFactor, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authmfatotpfactor.Intercept(f(g(h())))`.
+func (c *AuthMFATOTPFactorClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthMFATOTPFactor = append(c.inters.AuthMFATOTPFactor, interceptors...)
+}
+
+// Create returns a builder for creating a AuthMFATOTPFactor entity.
+func (c *AuthMFATOTPFactorClient) Create() *AuthMFATOTPFactorCreate {
+	mutation := newAuthMFATOTPFactorMutation(c.config, OpCreate)
+	return &AuthMFATOTPFactorCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthMFATOTPFactor entities.
+func (c *AuthMFATOTPFactorClient) CreateBulk(builders ...*AuthMFATOTPFactorCreate) *AuthMFATOTPFactorCreateBulk {
+	return &AuthMFATOTPFactorCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthMFATOTPFactorClient) MapCreateBulk(slice any, setFunc func(*AuthMFATOTPFactorCreate, int)) *AuthMFATOTPFactorCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthMFATOTPFactorCreateBulk{err: fmt.Errorf("calling to AuthMFATOTPFactorClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthMFATOTPFactorCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthMFATOTPFactorCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthMFATOTPFactor.
+func (c *AuthMFATOTPFactorClient) Update() *AuthMFATOTPFactorUpdate {
+	mutation := newAuthMFATOTPFactorMutation(c.config, OpUpdate)
+	return &AuthMFATOTPFactorUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthMFATOTPFactorClient) UpdateOne(_m *AuthMFATOTPFactor) *AuthMFATOTPFactorUpdateOne {
+	mutation := newAuthMFATOTPFactorMutation(c.config, OpUpdateOne, withAuthMFATOTPFactor(_m))
+	return &AuthMFATOTPFactorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthMFATOTPFactorClient) UpdateOneID(id uuid.UUID) *AuthMFATOTPFactorUpdateOne {
+	mutation := newAuthMFATOTPFactorMutation(c.config, OpUpdateOne, withAuthMFATOTPFactorID(id))
+	return &AuthMFATOTPFactorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthMFATOTPFactor.
+func (c *AuthMFATOTPFactorClient) Delete() *AuthMFATOTPFactorDelete {
+	mutation := newAuthMFATOTPFactorMutation(c.config, OpDelete)
+	return &AuthMFATOTPFactorDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthMFATOTPFactorClient) DeleteOne(_m *AuthMFATOTPFactor) *AuthMFATOTPFactorDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthMFATOTPFactorClient) DeleteOneID(id uuid.UUID) *AuthMFATOTPFactorDeleteOne {
+	builder := c.Delete().Where(authmfatotpfactor.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthMFATOTPFactorDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthMFATOTPFactor.
+func (c *AuthMFATOTPFactorClient) Query() *AuthMFATOTPFactorQuery {
+	return &AuthMFATOTPFactorQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthMFATOTPFactor},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthMFATOTPFactor entity by its id.
+func (c *AuthMFATOTPFactorClient) Get(ctx context.Context, id uuid.UUID) (*AuthMFATOTPFactor, error) {
+	return c.Query().Where(authmfatotpfactor.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthMFATOTPFactorClient) GetX(ctx context.Context, id uuid.UUID) *AuthMFATOTPFactor {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthMFATOTPFactorClient) Hooks() []Hook {
+	return c.hooks.AuthMFATOTPFactor
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthMFATOTPFactorClient) Interceptors() []Interceptor {
+	return c.inters.AuthMFATOTPFactor
+}
+
+func (c *AuthMFATOTPFactorClient) mutate(ctx context.Context, m *AuthMFATOTPFactorMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthMFATOTPFactorCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthMFATOTPFactorUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthMFATOTPFactorUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthMFATOTPFactorDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthMFATOTPFactor mutation op: %q", m.Op())
+	}
+}
+
+// AuthPasswordCredentialClient is a client for the AuthPasswordCredential schema.
+type AuthPasswordCredentialClient struct {
+	config
+}
+
+// NewAuthPasswordCredentialClient returns a client for the AuthPasswordCredential from the given config.
+func NewAuthPasswordCredentialClient(c config) *AuthPasswordCredentialClient {
+	return &AuthPasswordCredentialClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authpasswordcredential.Hooks(f(g(h())))`.
+func (c *AuthPasswordCredentialClient) Use(hooks ...Hook) {
+	c.hooks.AuthPasswordCredential = append(c.hooks.AuthPasswordCredential, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authpasswordcredential.Intercept(f(g(h())))`.
+func (c *AuthPasswordCredentialClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthPasswordCredential = append(c.inters.AuthPasswordCredential, interceptors...)
+}
+
+// Create returns a builder for creating a AuthPasswordCredential entity.
+func (c *AuthPasswordCredentialClient) Create() *AuthPasswordCredentialCreate {
+	mutation := newAuthPasswordCredentialMutation(c.config, OpCreate)
+	return &AuthPasswordCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthPasswordCredential entities.
+func (c *AuthPasswordCredentialClient) CreateBulk(builders ...*AuthPasswordCredentialCreate) *AuthPasswordCredentialCreateBulk {
+	return &AuthPasswordCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthPasswordCredentialClient) MapCreateBulk(slice any, setFunc func(*AuthPasswordCredentialCreate, int)) *AuthPasswordCredentialCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthPasswordCredentialCreateBulk{err: fmt.Errorf("calling to AuthPasswordCredentialClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthPasswordCredentialCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthPasswordCredentialCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthPasswordCredential.
+func (c *AuthPasswordCredentialClient) Update() *AuthPasswordCredentialUpdate {
+	mutation := newAuthPasswordCredentialMutation(c.config, OpUpdate)
+	return &AuthPasswordCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthPasswordCredentialClient) UpdateOne(_m *AuthPasswordCredential) *AuthPasswordCredentialUpdateOne {
+	mutation := newAuthPasswordCredentialMutation(c.config, OpUpdateOne, withAuthPasswordCredential(_m))
+	return &AuthPasswordCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthPasswordCredentialClient) UpdateOneID(id uuid.UUID) *AuthPasswordCredentialUpdateOne {
+	mutation := newAuthPasswordCredentialMutation(c.config, OpUpdateOne, withAuthPasswordCredentialID(id))
+	return &AuthPasswordCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthPasswordCredential.
+func (c *AuthPasswordCredentialClient) Delete() *AuthPasswordCredentialDelete {
+	mutation := newAuthPasswordCredentialMutation(c.config, OpDelete)
+	return &AuthPasswordCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthPasswordCredentialClient) DeleteOne(_m *AuthPasswordCredential) *AuthPasswordCredentialDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthPasswordCredentialClient) DeleteOneID(id uuid.UUID) *AuthPasswordCredentialDeleteOne {
+	builder := c.Delete().Where(authpasswordcredential.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthPasswordCredentialDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthPasswordCredential.
+func (c *AuthPasswordCredentialClient) Query() *AuthPasswordCredentialQuery {
+	return &AuthPasswordCredentialQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthPasswordCredential},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthPasswordCredential entity by its id.
+func (c *AuthPasswordCredentialClient) Get(ctx context.Context, id uuid.UUID) (*AuthPasswordCredential, error) {
+	return c.Query().Where(authpasswordcredential.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthPasswordCredentialClient) GetX(ctx context.Context, id uuid.UUID) *AuthPasswordCredential {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthPasswordCredentialClient) Hooks() []Hook {
+	return c.hooks.AuthPasswordCredential
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthPasswordCredentialClient) Interceptors() []Interceptor {
+	return c.inters.AuthPasswordCredential
+}
+
+func (c *AuthPasswordCredentialClient) mutate(ctx context.Context, m *AuthPasswordCredentialMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthPasswordCredentialCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthPasswordCredentialUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthPasswordCredentialUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthPasswordCredentialDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthPasswordCredential mutation op: %q", m.Op())
+	}
+}
+
+// AuthPasswordResetTokenClient is a client for the AuthPasswordResetToken schema.
+type AuthPasswordResetTokenClient struct {
+	config
+}
+
+// NewAuthPasswordResetTokenClient returns a client for the AuthPasswordResetToken from the given config.
+func NewAuthPasswordResetTokenClient(c config) *AuthPasswordResetTokenClient {
+	return &AuthPasswordResetTokenClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authpasswordresettoken.Hooks(f(g(h())))`.
+func (c *AuthPasswordResetTokenClient) Use(hooks ...Hook) {
+	c.hooks.AuthPasswordResetToken = append(c.hooks.AuthPasswordResetToken, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authpasswordresettoken.Intercept(f(g(h())))`.
+func (c *AuthPasswordResetTokenClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthPasswordResetToken = append(c.inters.AuthPasswordResetToken, interceptors...)
+}
+
+// Create returns a builder for creating a AuthPasswordResetToken entity.
+func (c *AuthPasswordResetTokenClient) Create() *AuthPasswordResetTokenCreate {
+	mutation := newAuthPasswordResetTokenMutation(c.config, OpCreate)
+	return &AuthPasswordResetTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthPasswordResetToken entities.
+func (c *AuthPasswordResetTokenClient) CreateBulk(builders ...*AuthPasswordResetTokenCreate) *AuthPasswordResetTokenCreateBulk {
+	return &AuthPasswordResetTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthPasswordResetTokenClient) MapCreateBulk(slice any, setFunc func(*AuthPasswordResetTokenCreate, int)) *AuthPasswordResetTokenCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthPasswordResetTokenCreateBulk{err: fmt.Errorf("calling to AuthPasswordResetTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthPasswordResetTokenCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthPasswordResetTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthPasswordResetToken.
+func (c *AuthPasswordResetTokenClient) Update() *AuthPasswordResetTokenUpdate {
+	mutation := newAuthPasswordResetTokenMutation(c.config, OpUpdate)
+	return &AuthPasswordResetTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthPasswordResetTokenClient) UpdateOne(_m *AuthPasswordResetToken) *AuthPasswordResetTokenUpdateOne {
+	mutation := newAuthPasswordResetTokenMutation(c.config, OpUpdateOne, withAuthPasswordResetToken(_m))
+	return &AuthPasswordResetTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthPasswordResetTokenClient) UpdateOneID(id uuid.UUID) *AuthPasswordResetTokenUpdateOne {
+	mutation := newAuthPasswordResetTokenMutation(c.config, OpUpdateOne, withAuthPasswordResetTokenID(id))
+	return &AuthPasswordResetTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthPasswordResetToken.
+func (c *AuthPasswordResetTokenClient) Delete() *AuthPasswordResetTokenDelete {
+	mutation := newAuthPasswordResetTokenMutation(c.config, OpDelete)
+	return &AuthPasswordResetTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthPasswordResetTokenClient) DeleteOne(_m *AuthPasswordResetToken) *AuthPasswordResetTokenDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthPasswordResetTokenClient) DeleteOneID(id uuid.UUID) *AuthPasswordResetTokenDeleteOne {
+	builder := c.Delete().Where(authpasswordresettoken.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthPasswordResetTokenDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthPasswordResetToken.
+func (c *AuthPasswordResetTokenClient) Query() *AuthPasswordResetTokenQuery {
+	return &AuthPasswordResetTokenQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthPasswordResetToken},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthPasswordResetToken entity by its id.
+func (c *AuthPasswordResetTokenClient) Get(ctx context.Context, id uuid.UUID) (*AuthPasswordResetToken, error) {
+	return c.Query().Where(authpasswordresettoken.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthPasswordResetTokenClient) GetX(ctx context.Context, id uuid.UUID) *AuthPasswordResetToken {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthPasswordResetTokenClient) Hooks() []Hook {
+	return c.hooks.AuthPasswordResetToken
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthPasswordResetTokenClient) Interceptors() []Interceptor {
+	return c.inters.AuthPasswordResetToken
+}
+
+func (c *AuthPasswordResetTokenClient) mutate(ctx context.Context, m *AuthPasswordResetTokenMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthPasswordResetTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthPasswordResetTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthPasswordResetTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthPasswordResetTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthPasswordResetToken mutation op: %q", m.Op())
+	}
+}
+
+// AuthRefreshTokenClient is a client for the AuthRefreshToken schema.
+type AuthRefreshTokenClient struct {
+	config
+}
+
+// NewAuthRefreshTokenClient returns a client for the AuthRefreshToken from the given config.
+func NewAuthRefreshTokenClient(c config) *AuthRefreshTokenClient {
+	return &AuthRefreshTokenClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authrefreshtoken.Hooks(f(g(h())))`.
+func (c *AuthRefreshTokenClient) Use(hooks ...Hook) {
+	c.hooks.AuthRefreshToken = append(c.hooks.AuthRefreshToken, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authrefreshtoken.Intercept(f(g(h())))`.
+func (c *AuthRefreshTokenClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthRefreshToken = append(c.inters.AuthRefreshToken, interceptors...)
+}
+
+// Create returns a builder for creating a AuthRefreshToken entity.
+func (c *AuthRefreshTokenClient) Create() *AuthRefreshTokenCreate {
+	mutation := newAuthRefreshTokenMutation(c.config, OpCreate)
+	return &AuthRefreshTokenCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthRefreshToken entities.
+func (c *AuthRefreshTokenClient) CreateBulk(builders ...*AuthRefreshTokenCreate) *AuthRefreshTokenCreateBulk {
+	return &AuthRefreshTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthRefreshTokenClient) MapCreateBulk(slice any, setFunc func(*AuthRefreshTokenCreate, int)) *AuthRefreshTokenCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthRefreshTokenCreateBulk{err: fmt.Errorf("calling to AuthRefreshTokenClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthRefreshTokenCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthRefreshTokenCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthRefreshToken.
+func (c *AuthRefreshTokenClient) Update() *AuthRefreshTokenUpdate {
+	mutation := newAuthRefreshTokenMutation(c.config, OpUpdate)
+	return &AuthRefreshTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthRefreshTokenClient) UpdateOne(_m *AuthRefreshToken) *AuthRefreshTokenUpdateOne {
+	mutation := newAuthRefreshTokenMutation(c.config, OpUpdateOne, withAuthRefreshToken(_m))
+	return &AuthRefreshTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthRefreshTokenClient) UpdateOneID(id string) *AuthRefreshTokenUpdateOne {
+	mutation := newAuthRefreshTokenMutation(c.config, OpUpdateOne, withAuthRefreshTokenID(id))
+	return &AuthRefreshTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthRefreshToken.
+func (c *AuthRefreshTokenClient) Delete() *AuthRefreshTokenDelete {
+	mutation := newAuthRefreshTokenMutation(c.config, OpDelete)
+	return &AuthRefreshTokenDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthRefreshTokenClient) DeleteOne(_m *AuthRefreshToken) *AuthRefreshTokenDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthRefreshTokenClient) DeleteOneID(id string) *AuthRefreshTokenDeleteOne {
+	builder := c.Delete().Where(authrefreshtoken.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthRefreshTokenDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthRefreshToken.
+func (c *AuthRefreshTokenClient) Query() *AuthRefreshTokenQuery {
+	return &AuthRefreshTokenQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthRefreshToken},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthRefreshToken entity by its id.
+func (c *AuthRefreshTokenClient) Get(ctx context.Context, id string) (*AuthRefreshToken, error) {
+	return c.Query().Where(authrefreshtoken.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthRefreshTokenClient) GetX(ctx context.Context, id string) *AuthRefreshToken {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthRefreshTokenClient) Hooks() []Hook {
+	return c.hooks.AuthRefreshToken
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthRefreshTokenClient) Interceptors() []Interceptor {
+	return c.inters.AuthRefreshToken
+}
+
+func (c *AuthRefreshTokenClient) mutate(ctx context.Context, m *AuthRefreshTokenMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthRefreshTokenCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthRefreshTokenUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthRefreshTokenUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthRefreshTokenDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthRefreshToken mutation op: %q", m.Op())
+	}
+}
+
+// AuthRegistrationChallengeClient is a client for the AuthRegistrationChallenge schema.
+type AuthRegistrationChallengeClient struct {
+	config
+}
+
+// NewAuthRegistrationChallengeClient returns a client for the AuthRegistrationChallenge from the given config.
+func NewAuthRegistrationChallengeClient(c config) *AuthRegistrationChallengeClient {
+	return &AuthRegistrationChallengeClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authregistrationchallenge.Hooks(f(g(h())))`.
+func (c *AuthRegistrationChallengeClient) Use(hooks ...Hook) {
+	c.hooks.AuthRegistrationChallenge = append(c.hooks.AuthRegistrationChallenge, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authregistrationchallenge.Intercept(f(g(h())))`.
+func (c *AuthRegistrationChallengeClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthRegistrationChallenge = append(c.inters.AuthRegistrationChallenge, interceptors...)
+}
+
+// Create returns a builder for creating a AuthRegistrationChallenge entity.
+func (c *AuthRegistrationChallengeClient) Create() *AuthRegistrationChallengeCreate {
+	mutation := newAuthRegistrationChallengeMutation(c.config, OpCreate)
+	return &AuthRegistrationChallengeCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthRegistrationChallenge entities.
+func (c *AuthRegistrationChallengeClient) CreateBulk(builders ...*AuthRegistrationChallengeCreate) *AuthRegistrationChallengeCreateBulk {
+	return &AuthRegistrationChallengeCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthRegistrationChallengeClient) MapCreateBulk(slice any, setFunc func(*AuthRegistrationChallengeCreate, int)) *AuthRegistrationChallengeCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthRegistrationChallengeCreateBulk{err: fmt.Errorf("calling to AuthRegistrationChallengeClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthRegistrationChallengeCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthRegistrationChallengeCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthRegistrationChallenge.
+func (c *AuthRegistrationChallengeClient) Update() *AuthRegistrationChallengeUpdate {
+	mutation := newAuthRegistrationChallengeMutation(c.config, OpUpdate)
+	return &AuthRegistrationChallengeUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthRegistrationChallengeClient) UpdateOne(_m *AuthRegistrationChallenge) *AuthRegistrationChallengeUpdateOne {
+	mutation := newAuthRegistrationChallengeMutation(c.config, OpUpdateOne, withAuthRegistrationChallenge(_m))
+	return &AuthRegistrationChallengeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthRegistrationChallengeClient) UpdateOneID(id uuid.UUID) *AuthRegistrationChallengeUpdateOne {
+	mutation := newAuthRegistrationChallengeMutation(c.config, OpUpdateOne, withAuthRegistrationChallengeID(id))
+	return &AuthRegistrationChallengeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthRegistrationChallenge.
+func (c *AuthRegistrationChallengeClient) Delete() *AuthRegistrationChallengeDelete {
+	mutation := newAuthRegistrationChallengeMutation(c.config, OpDelete)
+	return &AuthRegistrationChallengeDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthRegistrationChallengeClient) DeleteOne(_m *AuthRegistrationChallenge) *AuthRegistrationChallengeDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthRegistrationChallengeClient) DeleteOneID(id uuid.UUID) *AuthRegistrationChallengeDeleteOne {
+	builder := c.Delete().Where(authregistrationchallenge.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthRegistrationChallengeDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthRegistrationChallenge.
+func (c *AuthRegistrationChallengeClient) Query() *AuthRegistrationChallengeQuery {
+	return &AuthRegistrationChallengeQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthRegistrationChallenge},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthRegistrationChallenge entity by its id.
+func (c *AuthRegistrationChallengeClient) Get(ctx context.Context, id uuid.UUID) (*AuthRegistrationChallenge, error) {
+	return c.Query().Where(authregistrationchallenge.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthRegistrationChallengeClient) GetX(ctx context.Context, id uuid.UUID) *AuthRegistrationChallenge {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthRegistrationChallengeClient) Hooks() []Hook {
+	return c.hooks.AuthRegistrationChallenge
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthRegistrationChallengeClient) Interceptors() []Interceptor {
+	return c.inters.AuthRegistrationChallenge
+}
+
+func (c *AuthRegistrationChallengeClient) mutate(ctx context.Context, m *AuthRegistrationChallengeMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthRegistrationChallengeCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthRegistrationChallengeUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthRegistrationChallengeUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthRegistrationChallengeDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthRegistrationChallenge mutation op: %q", m.Op())
+	}
+}
+
+// AuthSessionClient is a client for the AuthSession schema.
+type AuthSessionClient struct {
+	config
+}
+
+// NewAuthSessionClient returns a client for the AuthSession from the given config.
+func NewAuthSessionClient(c config) *AuthSessionClient {
+	return &AuthSessionClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authsession.Hooks(f(g(h())))`.
+func (c *AuthSessionClient) Use(hooks ...Hook) {
+	c.hooks.AuthSession = append(c.hooks.AuthSession, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authsession.Intercept(f(g(h())))`.
+func (c *AuthSessionClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthSession = append(c.inters.AuthSession, interceptors...)
+}
+
+// Create returns a builder for creating a AuthSession entity.
+func (c *AuthSessionClient) Create() *AuthSessionCreate {
+	mutation := newAuthSessionMutation(c.config, OpCreate)
+	return &AuthSessionCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthSession entities.
+func (c *AuthSessionClient) CreateBulk(builders ...*AuthSessionCreate) *AuthSessionCreateBulk {
+	return &AuthSessionCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthSessionClient) MapCreateBulk(slice any, setFunc func(*AuthSessionCreate, int)) *AuthSessionCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthSessionCreateBulk{err: fmt.Errorf("calling to AuthSessionClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthSessionCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthSessionCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthSession.
+func (c *AuthSessionClient) Update() *AuthSessionUpdate {
+	mutation := newAuthSessionMutation(c.config, OpUpdate)
+	return &AuthSessionUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthSessionClient) UpdateOne(_m *AuthSession) *AuthSessionUpdateOne {
+	mutation := newAuthSessionMutation(c.config, OpUpdateOne, withAuthSession(_m))
+	return &AuthSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthSessionClient) UpdateOneID(id uuid.UUID) *AuthSessionUpdateOne {
+	mutation := newAuthSessionMutation(c.config, OpUpdateOne, withAuthSessionID(id))
+	return &AuthSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthSession.
+func (c *AuthSessionClient) Delete() *AuthSessionDelete {
+	mutation := newAuthSessionMutation(c.config, OpDelete)
+	return &AuthSessionDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthSessionClient) DeleteOne(_m *AuthSession) *AuthSessionDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthSessionClient) DeleteOneID(id uuid.UUID) *AuthSessionDeleteOne {
+	builder := c.Delete().Where(authsession.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthSessionDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthSession.
+func (c *AuthSessionClient) Query() *AuthSessionQuery {
+	return &AuthSessionQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthSession},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthSession entity by its id.
+func (c *AuthSessionClient) Get(ctx context.Context, id uuid.UUID) (*AuthSession, error) {
+	return c.Query().Where(authsession.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthSessionClient) GetX(ctx context.Context, id uuid.UUID) *AuthSession {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthSessionClient) Hooks() []Hook {
+	return c.hooks.AuthSession
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthSessionClient) Interceptors() []Interceptor {
+	return c.inters.AuthSession
+}
+
+func (c *AuthSessionClient) mutate(ctx context.Context, m *AuthSessionMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthSessionCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthSessionUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthSessionUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthSessionDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthSession mutation op: %q", m.Op())
+	}
+}
+
+// AuthSubjectClient is a client for the AuthSubject schema.
+type AuthSubjectClient struct {
+	config
+}
+
+// NewAuthSubjectClient returns a client for the AuthSubject from the given config.
+func NewAuthSubjectClient(c config) *AuthSubjectClient {
+	return &AuthSubjectClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `authsubject.Hooks(f(g(h())))`.
+func (c *AuthSubjectClient) Use(hooks ...Hook) {
+	c.hooks.AuthSubject = append(c.hooks.AuthSubject, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `authsubject.Intercept(f(g(h())))`.
+func (c *AuthSubjectClient) Intercept(interceptors ...Interceptor) {
+	c.inters.AuthSubject = append(c.inters.AuthSubject, interceptors...)
+}
+
+// Create returns a builder for creating a AuthSubject entity.
+func (c *AuthSubjectClient) Create() *AuthSubjectCreate {
+	mutation := newAuthSubjectMutation(c.config, OpCreate)
+	return &AuthSubjectCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of AuthSubject entities.
+func (c *AuthSubjectClient) CreateBulk(builders ...*AuthSubjectCreate) *AuthSubjectCreateBulk {
+	return &AuthSubjectCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *AuthSubjectClient) MapCreateBulk(slice any, setFunc func(*AuthSubjectCreate, int)) *AuthSubjectCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &AuthSubjectCreateBulk{err: fmt.Errorf("calling to AuthSubjectClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*AuthSubjectCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &AuthSubjectCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for AuthSubject.
+func (c *AuthSubjectClient) Update() *AuthSubjectUpdate {
+	mutation := newAuthSubjectMutation(c.config, OpUpdate)
+	return &AuthSubjectUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *AuthSubjectClient) UpdateOne(_m *AuthSubject) *AuthSubjectUpdateOne {
+	mutation := newAuthSubjectMutation(c.config, OpUpdateOne, withAuthSubject(_m))
+	return &AuthSubjectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *AuthSubjectClient) UpdateOneID(id uuid.UUID) *AuthSubjectUpdateOne {
+	mutation := newAuthSubjectMutation(c.config, OpUpdateOne, withAuthSubjectID(id))
+	return &AuthSubjectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for AuthSubject.
+func (c *AuthSubjectClient) Delete() *AuthSubjectDelete {
+	mutation := newAuthSubjectMutation(c.config, OpDelete)
+	return &AuthSubjectDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *AuthSubjectClient) DeleteOne(_m *AuthSubject) *AuthSubjectDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *AuthSubjectClient) DeleteOneID(id uuid.UUID) *AuthSubjectDeleteOne {
+	builder := c.Delete().Where(authsubject.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &AuthSubjectDeleteOne{builder}
+}
+
+// Query returns a query builder for AuthSubject.
+func (c *AuthSubjectClient) Query() *AuthSubjectQuery {
+	return &AuthSubjectQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeAuthSubject},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a AuthSubject entity by its id.
+func (c *AuthSubjectClient) Get(ctx context.Context, id uuid.UUID) (*AuthSubject, error) {
+	return c.Query().Where(authsubject.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *AuthSubjectClient) GetX(ctx context.Context, id uuid.UUID) *AuthSubject {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *AuthSubjectClient) Hooks() []Hook {
+	return c.hooks.AuthSubject
+}
+
+// Interceptors returns the client interceptors.
+func (c *AuthSubjectClient) Interceptors() []Interceptor {
+	return c.inters.AuthSubject
+}
+
+func (c *AuthSubjectClient) mutate(ctx context.Context, m *AuthSubjectMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&AuthSubjectCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&AuthSubjectUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&AuthSubjectUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&AuthSubjectDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown AuthSubject mutation op: %q", m.Op())
+	}
+}
+
+// ControlUserProfileClient is a client for the ControlUserProfile schema.
+type ControlUserProfileClient struct {
+	config
+}
+
+// NewControlUserProfileClient returns a client for the ControlUserProfile from the given config.
+func NewControlUserProfileClient(c config) *ControlUserProfileClient {
+	return &ControlUserProfileClient{config: c}
+}
+
+// Use adds a list of mutation hooks to the hooks stack.
+// A call to `Use(f, g, h)` equals to `controluserprofile.Hooks(f(g(h())))`.
+func (c *ControlUserProfileClient) Use(hooks ...Hook) {
+	c.hooks.ControlUserProfile = append(c.hooks.ControlUserProfile, hooks...)
+}
+
+// Intercept adds a list of query interceptors to the interceptors stack.
+// A call to `Intercept(f, g, h)` equals to `controluserprofile.Intercept(f(g(h())))`.
+func (c *ControlUserProfileClient) Intercept(interceptors ...Interceptor) {
+	c.inters.ControlUserProfile = append(c.inters.ControlUserProfile, interceptors...)
+}
+
+// Create returns a builder for creating a ControlUserProfile entity.
+func (c *ControlUserProfileClient) Create() *ControlUserProfileCreate {
+	mutation := newControlUserProfileMutation(c.config, OpCreate)
+	return &ControlUserProfileCreate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// CreateBulk returns a builder for creating a bulk of ControlUserProfile entities.
+func (c *ControlUserProfileClient) CreateBulk(builders ...*ControlUserProfileCreate) *ControlUserProfileCreateBulk {
+	return &ControlUserProfileCreateBulk{config: c.config, builders: builders}
+}
+
+// MapCreateBulk creates a bulk creation builder from the given slice. For each item in the slice, the function creates
+// a builder and applies setFunc on it.
+func (c *ControlUserProfileClient) MapCreateBulk(slice any, setFunc func(*ControlUserProfileCreate, int)) *ControlUserProfileCreateBulk {
+	rv := reflect.ValueOf(slice)
+	if rv.Kind() != reflect.Slice {
+		return &ControlUserProfileCreateBulk{err: fmt.Errorf("calling to ControlUserProfileClient.MapCreateBulk with wrong type %T, need slice", slice)}
+	}
+	builders := make([]*ControlUserProfileCreate, rv.Len())
+	for i := 0; i < rv.Len(); i++ {
+		builders[i] = c.Create()
+		setFunc(builders[i], i)
+	}
+	return &ControlUserProfileCreateBulk{config: c.config, builders: builders}
+}
+
+// Update returns an update builder for ControlUserProfile.
+func (c *ControlUserProfileClient) Update() *ControlUserProfileUpdate {
+	mutation := newControlUserProfileMutation(c.config, OpUpdate)
+	return &ControlUserProfileUpdate{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOne returns an update builder for the given entity.
+func (c *ControlUserProfileClient) UpdateOne(_m *ControlUserProfile) *ControlUserProfileUpdateOne {
+	mutation := newControlUserProfileMutation(c.config, OpUpdateOne, withControlUserProfile(_m))
+	return &ControlUserProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// UpdateOneID returns an update builder for the given id.
+func (c *ControlUserProfileClient) UpdateOneID(id uuid.UUID) *ControlUserProfileUpdateOne {
+	mutation := newControlUserProfileMutation(c.config, OpUpdateOne, withControlUserProfileID(id))
+	return &ControlUserProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// Delete returns a delete builder for ControlUserProfile.
+func (c *ControlUserProfileClient) Delete() *ControlUserProfileDelete {
+	mutation := newControlUserProfileMutation(c.config, OpDelete)
+	return &ControlUserProfileDelete{config: c.config, hooks: c.Hooks(), mutation: mutation}
+}
+
+// DeleteOne returns a builder for deleting the given entity.
+func (c *ControlUserProfileClient) DeleteOne(_m *ControlUserProfile) *ControlUserProfileDeleteOne {
+	return c.DeleteOneID(_m.ID)
+}
+
+// DeleteOneID returns a builder for deleting the given entity by its id.
+func (c *ControlUserProfileClient) DeleteOneID(id uuid.UUID) *ControlUserProfileDeleteOne {
+	builder := c.Delete().Where(controluserprofile.ID(id))
+	builder.mutation.id = &id
+	builder.mutation.op = OpDeleteOne
+	return &ControlUserProfileDeleteOne{builder}
+}
+
+// Query returns a query builder for ControlUserProfile.
+func (c *ControlUserProfileClient) Query() *ControlUserProfileQuery {
+	return &ControlUserProfileQuery{
+		config: c.config,
+		ctx:    &QueryContext{Type: TypeControlUserProfile},
+		inters: c.Interceptors(),
+	}
+}
+
+// Get returns a ControlUserProfile entity by its id.
+func (c *ControlUserProfileClient) Get(ctx context.Context, id uuid.UUID) (*ControlUserProfile, error) {
+	return c.Query().Where(controluserprofile.ID(id)).Only(ctx)
+}
+
+// GetX is like Get, but panics if an error occurs.
+func (c *ControlUserProfileClient) GetX(ctx context.Context, id uuid.UUID) *ControlUserProfile {
+	obj, err := c.Get(ctx, id)
+	if err != nil {
+		panic(err)
+	}
+	return obj
+}
+
+// Hooks returns the client hooks.
+func (c *ControlUserProfileClient) Hooks() []Hook {
+	return c.hooks.ControlUserProfile
+}
+
+// Interceptors returns the client interceptors.
+func (c *ControlUserProfileClient) Interceptors() []Interceptor {
+	return c.inters.ControlUserProfile
+}
+
+func (c *ControlUserProfileClient) mutate(ctx context.Context, m *ControlUserProfileMutation) (Value, error) {
+	switch m.Op() {
+	case OpCreate:
+		return (&ControlUserProfileCreate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdate:
+		return (&ControlUserProfileUpdate{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpUpdateOne:
+		return (&ControlUserProfileUpdateOne{config: c.config, hooks: c.Hooks(), mutation: m}).Save(ctx)
+	case OpDelete, OpDeleteOne:
+		return (&ControlUserProfileDelete{config: c.config, hooks: c.Hooks(), mutation: m}).Exec(ctx)
+	default:
+		return nil, fmt.Errorf("ent: unknown ControlUserProfile mutation op: %q", m.Op())
 	}
 }
 
@@ -4031,6 +5589,9 @@ func (c *UserSubscriptionClient) mutate(ctx context.Context, m *UserSubscription
 type (
 	hooks struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
+		AuthEmailVerification, AuthFederatedIdentity, AuthFlow, AuthMFATOTPFactor,
+		AuthPasswordCredential, AuthPasswordResetToken, AuthRefreshToken,
+		AuthRegistrationChallenge, AuthSession, AuthSubject, ControlUserProfile,
 		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
 		Proxy, RedeemCode, SecuritySecret, Setting, TLSFingerprintProfile,
 		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,
@@ -4038,6 +5599,9 @@ type (
 	}
 	inters struct {
 		APIKey, Account, AccountGroup, Announcement, AnnouncementRead,
+		AuthEmailVerification, AuthFederatedIdentity, AuthFlow, AuthMFATOTPFactor,
+		AuthPasswordCredential, AuthPasswordResetToken, AuthRefreshToken,
+		AuthRegistrationChallenge, AuthSession, AuthSubject, ControlUserProfile,
 		ErrorPassthroughRule, Group, IdempotencyRecord, PromoCode, PromoCodeUsage,
 		Proxy, RedeemCode, SecuritySecret, Setting, TLSFingerprintProfile,
 		UsageCleanupTask, UsageLog, User, UserAllowedGroup, UserAttributeDefinition,

@@ -21,6 +21,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/user"
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
+	"github.com/google/uuid"
 )
 
 // UserUpdate is the builder for updating User entities.
@@ -185,6 +186,26 @@ func (_u *UserUpdate) SetNillableNotes(v *string) *UserUpdate {
 	if v != nil {
 		_u.SetNotes(*v)
 	}
+	return _u
+}
+
+// SetSubjectID sets the "subject_id" field.
+func (_u *UserUpdate) SetSubjectID(v uuid.UUID) *UserUpdate {
+	_u.mutation.SetSubjectID(v)
+	return _u
+}
+
+// SetNillableSubjectID sets the "subject_id" field if the given value is not nil.
+func (_u *UserUpdate) SetNillableSubjectID(v *uuid.UUID) *UserUpdate {
+	if v != nil {
+		_u.SetSubjectID(*v)
+	}
+	return _u
+}
+
+// ClearSubjectID clears the value of the "subject_id" field.
+func (_u *UserUpdate) ClearSubjectID() *UserUpdate {
+	_u.mutation.ClearSubjectID()
 	return _u
 }
 
@@ -693,6 +714,12 @@ func (_u *UserUpdate) sqlSave(ctx context.Context) (_node int, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(user.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SubjectID(); ok {
+		_spec.SetField(user.FieldSubjectID, field.TypeUUID, value)
+	}
+	if _u.mutation.SubjectIDCleared() {
+		_spec.ClearField(user.FieldSubjectID, field.TypeUUID)
 	}
 	if value, ok := _u.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)
@@ -1298,6 +1325,26 @@ func (_u *UserUpdateOne) SetNillableNotes(v *string) *UserUpdateOne {
 	return _u
 }
 
+// SetSubjectID sets the "subject_id" field.
+func (_u *UserUpdateOne) SetSubjectID(v uuid.UUID) *UserUpdateOne {
+	_u.mutation.SetSubjectID(v)
+	return _u
+}
+
+// SetNillableSubjectID sets the "subject_id" field if the given value is not nil.
+func (_u *UserUpdateOne) SetNillableSubjectID(v *uuid.UUID) *UserUpdateOne {
+	if v != nil {
+		_u.SetSubjectID(*v)
+	}
+	return _u
+}
+
+// ClearSubjectID clears the value of the "subject_id" field.
+func (_u *UserUpdateOne) ClearSubjectID() *UserUpdateOne {
+	_u.mutation.ClearSubjectID()
+	return _u
+}
+
 // SetTotpSecretEncrypted sets the "totp_secret_encrypted" field.
 func (_u *UserUpdateOne) SetTotpSecretEncrypted(v string) *UserUpdateOne {
 	_u.mutation.SetTotpSecretEncrypted(v)
@@ -1833,6 +1880,12 @@ func (_u *UserUpdateOne) sqlSave(ctx context.Context) (_node *User, err error) {
 	}
 	if value, ok := _u.mutation.Notes(); ok {
 		_spec.SetField(user.FieldNotes, field.TypeString, value)
+	}
+	if value, ok := _u.mutation.SubjectID(); ok {
+		_spec.SetField(user.FieldSubjectID, field.TypeUUID, value)
+	}
+	if _u.mutation.SubjectIDCleared() {
+		_spec.ClearField(user.FieldSubjectID, field.TypeUUID)
 	}
 	if value, ok := _u.mutation.TotpSecretEncrypted(); ok {
 		_spec.SetField(user.FieldTotpSecretEncrypted, field.TypeString, value)

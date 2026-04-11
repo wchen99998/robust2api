@@ -37,6 +37,8 @@ const (
 	FieldUsername = "username"
 	// FieldNotes holds the string denoting the notes field in the database.
 	FieldNotes = "notes"
+	// FieldSubjectID holds the string denoting the subject_id field in the database.
+	FieldSubjectID = "subject_id"
 	// FieldTotpSecretEncrypted holds the string denoting the totp_secret_encrypted field in the database.
 	FieldTotpSecretEncrypted = "totp_secret_encrypted"
 	// FieldTotpEnabled holds the string denoting the totp_enabled field in the database.
@@ -149,6 +151,7 @@ var Columns = []string{
 	FieldStatus,
 	FieldUsername,
 	FieldNotes,
+	FieldSubjectID,
 	FieldTotpSecretEncrypted,
 	FieldTotpEnabled,
 	FieldTotpEnabledAt,
@@ -271,6 +274,11 @@ func ByUsername(opts ...sql.OrderTermOption) OrderOption {
 // ByNotes orders the results by the notes field.
 func ByNotes(opts ...sql.OrderTermOption) OrderOption {
 	return sql.OrderByField(FieldNotes, opts...).ToFunc()
+}
+
+// BySubjectID orders the results by the subject_id field.
+func BySubjectID(opts ...sql.OrderTermOption) OrderOption {
+	return sql.OrderByField(FieldSubjectID, opts...).ToFunc()
 }
 
 // ByTotpSecretEncrypted orders the results by the totp_secret_encrypted field.

@@ -338,6 +338,275 @@ var (
 			},
 		},
 	}
+	// AuthEmailVerificationsColumns holds the columns for the "auth_email_verifications" table.
+	AuthEmailVerificationsColumns = []*schema.Column{
+		{Name: "verification_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "subject_id", Type: field.TypeUUID, Nullable: true},
+		{Name: "purpose", Type: field.TypeString, Size: 64},
+		{Name: "email", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "code_hash", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "consumed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AuthEmailVerificationsTable holds the schema information for the "auth_email_verifications" table.
+	AuthEmailVerificationsTable = &schema.Table{
+		Name:       "auth_email_verifications",
+		Columns:    AuthEmailVerificationsColumns,
+		PrimaryKey: []*schema.Column{AuthEmailVerificationsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authemailverification_email_purpose_consumed_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthEmailVerificationsColumns[5], AuthEmailVerificationsColumns[4], AuthEmailVerificationsColumns[8]},
+			},
+		},
+	}
+	// AuthFederatedIdentitiesColumns holds the columns for the "auth_federated_identities" table.
+	AuthFederatedIdentitiesColumns = []*schema.Column{
+		{Name: "id", Type: field.TypeInt64, Increment: true},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "provider", Type: field.TypeString, Size: 64},
+		{Name: "issuer", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "external_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "email", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "username", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+	}
+	// AuthFederatedIdentitiesTable holds the schema information for the "auth_federated_identities" table.
+	AuthFederatedIdentitiesTable = &schema.Table{
+		Name:       "auth_federated_identities",
+		Columns:    AuthFederatedIdentitiesColumns,
+		PrimaryKey: []*schema.Column{AuthFederatedIdentitiesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authfederatedidentity_provider_issuer_external_subject",
+				Unique:  true,
+				Columns: []*schema.Column{AuthFederatedIdentitiesColumns[4], AuthFederatedIdentitiesColumns[5], AuthFederatedIdentitiesColumns[6]},
+			},
+			{
+				Name:    "authfederatedidentity_subject_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuthFederatedIdentitiesColumns[3]},
+			},
+		},
+	}
+	// AuthFlowsColumns holds the columns for the "auth_flows" table.
+	AuthFlowsColumns = []*schema.Column{
+		{Name: "flow_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "provider", Type: field.TypeString, Size: 64},
+		{Name: "purpose", Type: field.TypeString, Size: 64},
+		{Name: "issuer", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "state_hash", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "code_verifier", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "nonce", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "redirect_to", Type: field.TypeString, Default: "/", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "consumed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AuthFlowsTable holds the schema information for the "auth_flows" table.
+	AuthFlowsTable = &schema.Table{
+		Name:       "auth_flows",
+		Columns:    AuthFlowsColumns,
+		PrimaryKey: []*schema.Column{AuthFlowsColumns[0]},
+	}
+	// AuthMfaTotpFactorsColumns holds the columns for the "auth_mfa_totp_factors" table.
+	AuthMfaTotpFactorsColumns = []*schema.Column{
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "secret_encrypted", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "enabled", Type: field.TypeBool, Default: false},
+		{Name: "enabled_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AuthMfaTotpFactorsTable holds the schema information for the "auth_mfa_totp_factors" table.
+	AuthMfaTotpFactorsTable = &schema.Table{
+		Name:       "auth_mfa_totp_factors",
+		Columns:    AuthMfaTotpFactorsColumns,
+		PrimaryKey: []*schema.Column{AuthMfaTotpFactorsColumns[0]},
+	}
+	// AuthPasswordCredentialsColumns holds the columns for the "auth_password_credentials" table.
+	AuthPasswordCredentialsColumns = []*schema.Column{
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "password_hash", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "changed_at", Type: field.TypeTime},
+	}
+	// AuthPasswordCredentialsTable holds the schema information for the "auth_password_credentials" table.
+	AuthPasswordCredentialsTable = &schema.Table{
+		Name:       "auth_password_credentials",
+		Columns:    AuthPasswordCredentialsColumns,
+		PrimaryKey: []*schema.Column{AuthPasswordCredentialsColumns[0]},
+	}
+	// AuthPasswordResetTokensColumns holds the columns for the "auth_password_reset_tokens" table.
+	AuthPasswordResetTokensColumns = []*schema.Column{
+		{Name: "reset_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "email", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "token_hash", Type: field.TypeString, Unique: true, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "consumed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AuthPasswordResetTokensTable holds the schema information for the "auth_password_reset_tokens" table.
+	AuthPasswordResetTokensTable = &schema.Table{
+		Name:       "auth_password_reset_tokens",
+		Columns:    AuthPasswordResetTokensColumns,
+		PrimaryKey: []*schema.Column{AuthPasswordResetTokensColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authpasswordresettoken_subject_id_consumed_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthPasswordResetTokensColumns[3], AuthPasswordResetTokensColumns[7]},
+			},
+		},
+	}
+	// AuthRefreshTokensColumns holds the columns for the "auth_refresh_tokens" table.
+	AuthRefreshTokensColumns = []*schema.Column{
+		{Name: "token_hash", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "sid", Type: field.TypeUUID},
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "legacy_user_id", Type: field.TypeInt64},
+		{Name: "idle_expires_at", Type: field.TypeTime},
+		{Name: "absolute_expires_at", Type: field.TypeTime},
+		{Name: "rotated_at", Type: field.TypeTime, Nullable: true},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "replaced_by_token_hash", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
+	}
+	// AuthRefreshTokensTable holds the schema information for the "auth_refresh_tokens" table.
+	AuthRefreshTokensTable = &schema.Table{
+		Name:       "auth_refresh_tokens",
+		Columns:    AuthRefreshTokensColumns,
+		PrimaryKey: []*schema.Column{AuthRefreshTokensColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authrefreshtoken_sid",
+				Unique:  false,
+				Columns: []*schema.Column{AuthRefreshTokensColumns[3]},
+			},
+			{
+				Name:    "authrefreshtoken_subject_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuthRefreshTokensColumns[4]},
+			},
+		},
+	}
+	// AuthRegistrationChallengesColumns holds the columns for the "auth_registration_challenges" table.
+	AuthRegistrationChallengesColumns = []*schema.Column{
+		{Name: "challenge_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "provider", Type: field.TypeString, Size: 64},
+		{Name: "issuer", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "external_subject", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "email", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "registration_email", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "username", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "redirect_to", Type: field.TypeString, Default: "/", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "consumed_at", Type: field.TypeTime, Nullable: true},
+	}
+	// AuthRegistrationChallengesTable holds the schema information for the "auth_registration_challenges" table.
+	AuthRegistrationChallengesTable = &schema.Table{
+		Name:       "auth_registration_challenges",
+		Columns:    AuthRegistrationChallengesColumns,
+		PrimaryKey: []*schema.Column{AuthRegistrationChallengesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authregistrationchallenge_expires_at_consumed_at",
+				Unique:  false,
+				Columns: []*schema.Column{AuthRegistrationChallengesColumns[10], AuthRegistrationChallengesColumns[11]},
+			},
+		},
+	}
+	// AuthSessionsColumns holds the columns for the "auth_sessions" table.
+	AuthSessionsColumns = []*schema.Column{
+		{Name: "sid", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "legacy_user_id", Type: field.TypeInt64},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "active"},
+		{Name: "amr", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "last_seen_at", Type: field.TypeTime},
+		{Name: "expires_at", Type: field.TypeTime},
+		{Name: "absolute_expires_at", Type: field.TypeTime},
+		{Name: "revoked_at", Type: field.TypeTime, Nullable: true},
+		{Name: "current_refresh_token_hash", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "auth_version", Type: field.TypeInt64},
+	}
+	// AuthSessionsTable holds the schema information for the "auth_sessions" table.
+	AuthSessionsTable = &schema.Table{
+		Name:       "auth_sessions",
+		Columns:    AuthSessionsColumns,
+		PrimaryKey: []*schema.Column{AuthSessionsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authsession_subject_id_status",
+				Unique:  false,
+				Columns: []*schema.Column{AuthSessionsColumns[3], AuthSessionsColumns[5]},
+			},
+			{
+				Name:    "authsession_legacy_user_id",
+				Unique:  false,
+				Columns: []*schema.Column{AuthSessionsColumns[4]},
+			},
+		},
+	}
+	// AuthSubjectsColumns holds the columns for the "auth_subjects" table.
+	AuthSubjectsColumns = []*schema.Column{
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "legacy_user_id", Type: field.TypeInt64, Unique: true},
+		{Name: "email", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "status", Type: field.TypeString, Size: 32, Default: "active"},
+		{Name: "auth_version", Type: field.TypeInt64, Default: 1},
+	}
+	// AuthSubjectsTable holds the schema information for the "auth_subjects" table.
+	AuthSubjectsTable = &schema.Table{
+		Name:       "auth_subjects",
+		Columns:    AuthSubjectsColumns,
+		PrimaryKey: []*schema.Column{AuthSubjectsColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "authsubject_email",
+				Unique:  false,
+				Columns: []*schema.Column{AuthSubjectsColumns[4]},
+			},
+		},
+	}
+	// ControlUserProfilesColumns holds the columns for the "control_user_profiles" table.
+	ControlUserProfilesColumns = []*schema.Column{
+		{Name: "subject_id", Type: field.TypeUUID},
+		{Name: "created_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "updated_at", Type: field.TypeTime, SchemaType: map[string]string{"postgres": "timestamptz"}},
+		{Name: "legacy_user_id", Type: field.TypeInt64, Unique: true},
+		{Name: "email", Type: field.TypeString, SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "username", Type: field.TypeString, Size: 100, Default: ""},
+		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+	}
+	// ControlUserProfilesTable holds the schema information for the "control_user_profiles" table.
+	ControlUserProfilesTable = &schema.Table{
+		Name:       "control_user_profiles",
+		Columns:    ControlUserProfilesColumns,
+		PrimaryKey: []*schema.Column{ControlUserProfilesColumns[0]},
+		Indexes: []*schema.Index{
+			{
+				Name:    "controluserprofile_email",
+				Unique:  false,
+				Columns: []*schema.Column{ControlUserProfilesColumns[4]},
+			},
+		},
+	}
 	// ErrorPassthroughRulesColumns holds the columns for the "error_passthrough_rules" table.
 	ErrorPassthroughRulesColumns = []*schema.Column{
 		{Name: "id", Type: field.TypeInt64, Increment: true},
@@ -887,6 +1156,7 @@ var (
 		{Name: "status", Type: field.TypeString, Size: 20, Default: "active"},
 		{Name: "username", Type: field.TypeString, Size: 100, Default: ""},
 		{Name: "notes", Type: field.TypeString, Default: "", SchemaType: map[string]string{"postgres": "text"}},
+		{Name: "subject_id", Type: field.TypeUUID, Nullable: true, SchemaType: map[string]string{"postgres": "uuid"}},
 		{Name: "totp_secret_encrypted", Type: field.TypeString, Nullable: true, SchemaType: map[string]string{"postgres": "text"}},
 		{Name: "totp_enabled", Type: field.TypeBool, Default: false},
 		{Name: "totp_enabled_at", Type: field.TypeTime, Nullable: true},
@@ -1124,6 +1394,17 @@ var (
 		AccountGroupsTable,
 		AnnouncementsTable,
 		AnnouncementReadsTable,
+		AuthEmailVerificationsTable,
+		AuthFederatedIdentitiesTable,
+		AuthFlowsTable,
+		AuthMfaTotpFactorsTable,
+		AuthPasswordCredentialsTable,
+		AuthPasswordResetTokensTable,
+		AuthRefreshTokensTable,
+		AuthRegistrationChallengesTable,
+		AuthSessionsTable,
+		AuthSubjectsTable,
+		ControlUserProfilesTable,
 		ErrorPassthroughRulesTable,
 		GroupsTable,
 		IdempotencyRecordsTable,
@@ -1166,6 +1447,39 @@ func init() {
 	AnnouncementReadsTable.ForeignKeys[1].RefTable = UsersTable
 	AnnouncementReadsTable.Annotation = &entsql.Annotation{
 		Table: "announcement_reads",
+	}
+	AuthEmailVerificationsTable.Annotation = &entsql.Annotation{
+		Table: "auth_email_verifications",
+	}
+	AuthFederatedIdentitiesTable.Annotation = &entsql.Annotation{
+		Table: "auth_federated_identities",
+	}
+	AuthFlowsTable.Annotation = &entsql.Annotation{
+		Table: "auth_flows",
+	}
+	AuthMfaTotpFactorsTable.Annotation = &entsql.Annotation{
+		Table: "auth_mfa_totp_factors",
+	}
+	AuthPasswordCredentialsTable.Annotation = &entsql.Annotation{
+		Table: "auth_password_credentials",
+	}
+	AuthPasswordResetTokensTable.Annotation = &entsql.Annotation{
+		Table: "auth_password_reset_tokens",
+	}
+	AuthRefreshTokensTable.Annotation = &entsql.Annotation{
+		Table: "auth_refresh_tokens",
+	}
+	AuthRegistrationChallengesTable.Annotation = &entsql.Annotation{
+		Table: "auth_registration_challenges",
+	}
+	AuthSessionsTable.Annotation = &entsql.Annotation{
+		Table: "auth_sessions",
+	}
+	AuthSubjectsTable.Annotation = &entsql.Annotation{
+		Table: "auth_subjects",
+	}
+	ControlUserProfilesTable.Annotation = &entsql.Annotation{
+		Table: "control_user_profiles",
 	}
 	ErrorPassthroughRulesTable.Annotation = &entsql.Annotation{
 		Table: "error_passthrough_rules",

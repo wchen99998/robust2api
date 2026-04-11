@@ -10,6 +10,17 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/announcement"
 	"github.com/Wei-Shaw/sub2api/ent/announcementread"
 	"github.com/Wei-Shaw/sub2api/ent/apikey"
+	"github.com/Wei-Shaw/sub2api/ent/authemailverification"
+	"github.com/Wei-Shaw/sub2api/ent/authfederatedidentity"
+	"github.com/Wei-Shaw/sub2api/ent/authflow"
+	"github.com/Wei-Shaw/sub2api/ent/authmfatotpfactor"
+	"github.com/Wei-Shaw/sub2api/ent/authpasswordcredential"
+	"github.com/Wei-Shaw/sub2api/ent/authpasswordresettoken"
+	"github.com/Wei-Shaw/sub2api/ent/authrefreshtoken"
+	"github.com/Wei-Shaw/sub2api/ent/authregistrationchallenge"
+	"github.com/Wei-Shaw/sub2api/ent/authsession"
+	"github.com/Wei-Shaw/sub2api/ent/authsubject"
+	"github.com/Wei-Shaw/sub2api/ent/controluserprofile"
 	"github.com/Wei-Shaw/sub2api/ent/errorpassthroughrule"
 	"github.com/Wei-Shaw/sub2api/ent/group"
 	"github.com/Wei-Shaw/sub2api/ent/idempotencyrecord"
@@ -29,6 +40,7 @@ import (
 	"github.com/Wei-Shaw/sub2api/ent/userattributevalue"
 	"github.com/Wei-Shaw/sub2api/ent/usersubscription"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/google/uuid"
 )
 
 // The init function reads all schema descriptors with runtime code
@@ -305,6 +317,407 @@ func init() {
 	announcementreadDescCreatedAt := announcementreadFields[3].Descriptor()
 	// announcementread.DefaultCreatedAt holds the default value on creation for the created_at field.
 	announcementread.DefaultCreatedAt = announcementreadDescCreatedAt.Default.(func() time.Time)
+	authemailverificationMixin := schema.AuthEmailVerification{}.Mixin()
+	authemailverificationMixinFields0 := authemailverificationMixin[0].Fields()
+	_ = authemailverificationMixinFields0
+	authemailverificationFields := schema.AuthEmailVerification{}.Fields()
+	_ = authemailverificationFields
+	// authemailverificationDescCreatedAt is the schema descriptor for created_at field.
+	authemailverificationDescCreatedAt := authemailverificationMixinFields0[0].Descriptor()
+	// authemailverification.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authemailverification.DefaultCreatedAt = authemailverificationDescCreatedAt.Default.(func() time.Time)
+	// authemailverificationDescUpdatedAt is the schema descriptor for updated_at field.
+	authemailverificationDescUpdatedAt := authemailverificationMixinFields0[1].Descriptor()
+	// authemailverification.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authemailverification.DefaultUpdatedAt = authemailverificationDescUpdatedAt.Default.(func() time.Time)
+	// authemailverification.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authemailverification.UpdateDefaultUpdatedAt = authemailverificationDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authemailverificationDescPurpose is the schema descriptor for purpose field.
+	authemailverificationDescPurpose := authemailverificationFields[2].Descriptor()
+	// authemailverification.PurposeValidator is a validator for the "purpose" field. It is called by the builders before save.
+	authemailverification.PurposeValidator = func() func(string) error {
+		validators := authemailverificationDescPurpose.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(purpose string) error {
+			for _, fn := range fns {
+				if err := fn(purpose); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// authemailverificationDescEmail is the schema descriptor for email field.
+	authemailverificationDescEmail := authemailverificationFields[3].Descriptor()
+	// authemailverification.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	authemailverification.EmailValidator = authemailverificationDescEmail.Validators[0].(func(string) error)
+	// authemailverificationDescCodeHash is the schema descriptor for code_hash field.
+	authemailverificationDescCodeHash := authemailverificationFields[4].Descriptor()
+	// authemailverification.CodeHashValidator is a validator for the "code_hash" field. It is called by the builders before save.
+	authemailverification.CodeHashValidator = authemailverificationDescCodeHash.Validators[0].(func(string) error)
+	// authemailverificationDescID is the schema descriptor for id field.
+	authemailverificationDescID := authemailverificationFields[0].Descriptor()
+	// authemailverification.DefaultID holds the default value on creation for the id field.
+	authemailverification.DefaultID = authemailverificationDescID.Default.(func() uuid.UUID)
+	authfederatedidentityMixin := schema.AuthFederatedIdentity{}.Mixin()
+	authfederatedidentityMixinFields0 := authfederatedidentityMixin[0].Fields()
+	_ = authfederatedidentityMixinFields0
+	authfederatedidentityFields := schema.AuthFederatedIdentity{}.Fields()
+	_ = authfederatedidentityFields
+	// authfederatedidentityDescCreatedAt is the schema descriptor for created_at field.
+	authfederatedidentityDescCreatedAt := authfederatedidentityMixinFields0[0].Descriptor()
+	// authfederatedidentity.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authfederatedidentity.DefaultCreatedAt = authfederatedidentityDescCreatedAt.Default.(func() time.Time)
+	// authfederatedidentityDescUpdatedAt is the schema descriptor for updated_at field.
+	authfederatedidentityDescUpdatedAt := authfederatedidentityMixinFields0[1].Descriptor()
+	// authfederatedidentity.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authfederatedidentity.DefaultUpdatedAt = authfederatedidentityDescUpdatedAt.Default.(func() time.Time)
+	// authfederatedidentity.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authfederatedidentity.UpdateDefaultUpdatedAt = authfederatedidentityDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authfederatedidentityDescProvider is the schema descriptor for provider field.
+	authfederatedidentityDescProvider := authfederatedidentityFields[2].Descriptor()
+	// authfederatedidentity.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	authfederatedidentity.ProviderValidator = func() func(string) error {
+		validators := authfederatedidentityDescProvider.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(provider string) error {
+			for _, fn := range fns {
+				if err := fn(provider); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// authfederatedidentityDescIssuer is the schema descriptor for issuer field.
+	authfederatedidentityDescIssuer := authfederatedidentityFields[3].Descriptor()
+	// authfederatedidentity.IssuerValidator is a validator for the "issuer" field. It is called by the builders before save.
+	authfederatedidentity.IssuerValidator = authfederatedidentityDescIssuer.Validators[0].(func(string) error)
+	// authfederatedidentityDescExternalSubject is the schema descriptor for external_subject field.
+	authfederatedidentityDescExternalSubject := authfederatedidentityFields[4].Descriptor()
+	// authfederatedidentity.ExternalSubjectValidator is a validator for the "external_subject" field. It is called by the builders before save.
+	authfederatedidentity.ExternalSubjectValidator = authfederatedidentityDescExternalSubject.Validators[0].(func(string) error)
+	// authfederatedidentityDescEmail is the schema descriptor for email field.
+	authfederatedidentityDescEmail := authfederatedidentityFields[5].Descriptor()
+	// authfederatedidentity.DefaultEmail holds the default value on creation for the email field.
+	authfederatedidentity.DefaultEmail = authfederatedidentityDescEmail.Default.(string)
+	// authfederatedidentityDescUsername is the schema descriptor for username field.
+	authfederatedidentityDescUsername := authfederatedidentityFields[6].Descriptor()
+	// authfederatedidentity.DefaultUsername holds the default value on creation for the username field.
+	authfederatedidentity.DefaultUsername = authfederatedidentityDescUsername.Default.(string)
+	authflowMixin := schema.AuthFlow{}.Mixin()
+	authflowMixinFields0 := authflowMixin[0].Fields()
+	_ = authflowMixinFields0
+	authflowFields := schema.AuthFlow{}.Fields()
+	_ = authflowFields
+	// authflowDescCreatedAt is the schema descriptor for created_at field.
+	authflowDescCreatedAt := authflowMixinFields0[0].Descriptor()
+	// authflow.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authflow.DefaultCreatedAt = authflowDescCreatedAt.Default.(func() time.Time)
+	// authflowDescUpdatedAt is the schema descriptor for updated_at field.
+	authflowDescUpdatedAt := authflowMixinFields0[1].Descriptor()
+	// authflow.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authflow.DefaultUpdatedAt = authflowDescUpdatedAt.Default.(func() time.Time)
+	// authflow.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authflow.UpdateDefaultUpdatedAt = authflowDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authflowDescProvider is the schema descriptor for provider field.
+	authflowDescProvider := authflowFields[1].Descriptor()
+	// authflow.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	authflow.ProviderValidator = func() func(string) error {
+		validators := authflowDescProvider.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(provider string) error {
+			for _, fn := range fns {
+				if err := fn(provider); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// authflowDescPurpose is the schema descriptor for purpose field.
+	authflowDescPurpose := authflowFields[2].Descriptor()
+	// authflow.PurposeValidator is a validator for the "purpose" field. It is called by the builders before save.
+	authflow.PurposeValidator = func() func(string) error {
+		validators := authflowDescPurpose.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(purpose string) error {
+			for _, fn := range fns {
+				if err := fn(purpose); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// authflowDescIssuer is the schema descriptor for issuer field.
+	authflowDescIssuer := authflowFields[3].Descriptor()
+	// authflow.DefaultIssuer holds the default value on creation for the issuer field.
+	authflow.DefaultIssuer = authflowDescIssuer.Default.(string)
+	// authflowDescStateHash is the schema descriptor for state_hash field.
+	authflowDescStateHash := authflowFields[4].Descriptor()
+	// authflow.StateHashValidator is a validator for the "state_hash" field. It is called by the builders before save.
+	authflow.StateHashValidator = authflowDescStateHash.Validators[0].(func(string) error)
+	// authflowDescRedirectTo is the schema descriptor for redirect_to field.
+	authflowDescRedirectTo := authflowFields[7].Descriptor()
+	// authflow.DefaultRedirectTo holds the default value on creation for the redirect_to field.
+	authflow.DefaultRedirectTo = authflowDescRedirectTo.Default.(string)
+	// authflowDescID is the schema descriptor for id field.
+	authflowDescID := authflowFields[0].Descriptor()
+	// authflow.DefaultID holds the default value on creation for the id field.
+	authflow.DefaultID = authflowDescID.Default.(func() uuid.UUID)
+	authmfatotpfactorMixin := schema.AuthMFATOTPFactor{}.Mixin()
+	authmfatotpfactorMixinFields0 := authmfatotpfactorMixin[0].Fields()
+	_ = authmfatotpfactorMixinFields0
+	authmfatotpfactorFields := schema.AuthMFATOTPFactor{}.Fields()
+	_ = authmfatotpfactorFields
+	// authmfatotpfactorDescCreatedAt is the schema descriptor for created_at field.
+	authmfatotpfactorDescCreatedAt := authmfatotpfactorMixinFields0[0].Descriptor()
+	// authmfatotpfactor.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authmfatotpfactor.DefaultCreatedAt = authmfatotpfactorDescCreatedAt.Default.(func() time.Time)
+	// authmfatotpfactorDescUpdatedAt is the schema descriptor for updated_at field.
+	authmfatotpfactorDescUpdatedAt := authmfatotpfactorMixinFields0[1].Descriptor()
+	// authmfatotpfactor.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authmfatotpfactor.DefaultUpdatedAt = authmfatotpfactorDescUpdatedAt.Default.(func() time.Time)
+	// authmfatotpfactor.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authmfatotpfactor.UpdateDefaultUpdatedAt = authmfatotpfactorDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authmfatotpfactorDescEnabled is the schema descriptor for enabled field.
+	authmfatotpfactorDescEnabled := authmfatotpfactorFields[2].Descriptor()
+	// authmfatotpfactor.DefaultEnabled holds the default value on creation for the enabled field.
+	authmfatotpfactor.DefaultEnabled = authmfatotpfactorDescEnabled.Default.(bool)
+	authpasswordcredentialMixin := schema.AuthPasswordCredential{}.Mixin()
+	authpasswordcredentialMixinFields0 := authpasswordcredentialMixin[0].Fields()
+	_ = authpasswordcredentialMixinFields0
+	authpasswordcredentialFields := schema.AuthPasswordCredential{}.Fields()
+	_ = authpasswordcredentialFields
+	// authpasswordcredentialDescCreatedAt is the schema descriptor for created_at field.
+	authpasswordcredentialDescCreatedAt := authpasswordcredentialMixinFields0[0].Descriptor()
+	// authpasswordcredential.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authpasswordcredential.DefaultCreatedAt = authpasswordcredentialDescCreatedAt.Default.(func() time.Time)
+	// authpasswordcredentialDescUpdatedAt is the schema descriptor for updated_at field.
+	authpasswordcredentialDescUpdatedAt := authpasswordcredentialMixinFields0[1].Descriptor()
+	// authpasswordcredential.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authpasswordcredential.DefaultUpdatedAt = authpasswordcredentialDescUpdatedAt.Default.(func() time.Time)
+	// authpasswordcredential.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authpasswordcredential.UpdateDefaultUpdatedAt = authpasswordcredentialDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authpasswordcredentialDescPasswordHash is the schema descriptor for password_hash field.
+	authpasswordcredentialDescPasswordHash := authpasswordcredentialFields[1].Descriptor()
+	// authpasswordcredential.PasswordHashValidator is a validator for the "password_hash" field. It is called by the builders before save.
+	authpasswordcredential.PasswordHashValidator = authpasswordcredentialDescPasswordHash.Validators[0].(func(string) error)
+	authpasswordresettokenMixin := schema.AuthPasswordResetToken{}.Mixin()
+	authpasswordresettokenMixinFields0 := authpasswordresettokenMixin[0].Fields()
+	_ = authpasswordresettokenMixinFields0
+	authpasswordresettokenFields := schema.AuthPasswordResetToken{}.Fields()
+	_ = authpasswordresettokenFields
+	// authpasswordresettokenDescCreatedAt is the schema descriptor for created_at field.
+	authpasswordresettokenDescCreatedAt := authpasswordresettokenMixinFields0[0].Descriptor()
+	// authpasswordresettoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authpasswordresettoken.DefaultCreatedAt = authpasswordresettokenDescCreatedAt.Default.(func() time.Time)
+	// authpasswordresettokenDescUpdatedAt is the schema descriptor for updated_at field.
+	authpasswordresettokenDescUpdatedAt := authpasswordresettokenMixinFields0[1].Descriptor()
+	// authpasswordresettoken.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authpasswordresettoken.DefaultUpdatedAt = authpasswordresettokenDescUpdatedAt.Default.(func() time.Time)
+	// authpasswordresettoken.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authpasswordresettoken.UpdateDefaultUpdatedAt = authpasswordresettokenDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authpasswordresettokenDescEmail is the schema descriptor for email field.
+	authpasswordresettokenDescEmail := authpasswordresettokenFields[2].Descriptor()
+	// authpasswordresettoken.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	authpasswordresettoken.EmailValidator = authpasswordresettokenDescEmail.Validators[0].(func(string) error)
+	// authpasswordresettokenDescTokenHash is the schema descriptor for token_hash field.
+	authpasswordresettokenDescTokenHash := authpasswordresettokenFields[3].Descriptor()
+	// authpasswordresettoken.TokenHashValidator is a validator for the "token_hash" field. It is called by the builders before save.
+	authpasswordresettoken.TokenHashValidator = authpasswordresettokenDescTokenHash.Validators[0].(func(string) error)
+	// authpasswordresettokenDescID is the schema descriptor for id field.
+	authpasswordresettokenDescID := authpasswordresettokenFields[0].Descriptor()
+	// authpasswordresettoken.DefaultID holds the default value on creation for the id field.
+	authpasswordresettoken.DefaultID = authpasswordresettokenDescID.Default.(func() uuid.UUID)
+	authrefreshtokenMixin := schema.AuthRefreshToken{}.Mixin()
+	authrefreshtokenMixinFields0 := authrefreshtokenMixin[0].Fields()
+	_ = authrefreshtokenMixinFields0
+	authrefreshtokenFields := schema.AuthRefreshToken{}.Fields()
+	_ = authrefreshtokenFields
+	// authrefreshtokenDescCreatedAt is the schema descriptor for created_at field.
+	authrefreshtokenDescCreatedAt := authrefreshtokenMixinFields0[0].Descriptor()
+	// authrefreshtoken.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authrefreshtoken.DefaultCreatedAt = authrefreshtokenDescCreatedAt.Default.(func() time.Time)
+	// authrefreshtokenDescUpdatedAt is the schema descriptor for updated_at field.
+	authrefreshtokenDescUpdatedAt := authrefreshtokenMixinFields0[1].Descriptor()
+	// authrefreshtoken.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authrefreshtoken.DefaultUpdatedAt = authrefreshtokenDescUpdatedAt.Default.(func() time.Time)
+	// authrefreshtoken.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authrefreshtoken.UpdateDefaultUpdatedAt = authrefreshtokenDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authrefreshtokenDescID is the schema descriptor for id field.
+	authrefreshtokenDescID := authrefreshtokenFields[0].Descriptor()
+	// authrefreshtoken.IDValidator is a validator for the "id" field. It is called by the builders before save.
+	authrefreshtoken.IDValidator = authrefreshtokenDescID.Validators[0].(func(string) error)
+	authregistrationchallengeMixin := schema.AuthRegistrationChallenge{}.Mixin()
+	authregistrationchallengeMixinFields0 := authregistrationchallengeMixin[0].Fields()
+	_ = authregistrationchallengeMixinFields0
+	authregistrationchallengeFields := schema.AuthRegistrationChallenge{}.Fields()
+	_ = authregistrationchallengeFields
+	// authregistrationchallengeDescCreatedAt is the schema descriptor for created_at field.
+	authregistrationchallengeDescCreatedAt := authregistrationchallengeMixinFields0[0].Descriptor()
+	// authregistrationchallenge.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authregistrationchallenge.DefaultCreatedAt = authregistrationchallengeDescCreatedAt.Default.(func() time.Time)
+	// authregistrationchallengeDescUpdatedAt is the schema descriptor for updated_at field.
+	authregistrationchallengeDescUpdatedAt := authregistrationchallengeMixinFields0[1].Descriptor()
+	// authregistrationchallenge.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authregistrationchallenge.DefaultUpdatedAt = authregistrationchallengeDescUpdatedAt.Default.(func() time.Time)
+	// authregistrationchallenge.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authregistrationchallenge.UpdateDefaultUpdatedAt = authregistrationchallengeDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authregistrationchallengeDescProvider is the schema descriptor for provider field.
+	authregistrationchallengeDescProvider := authregistrationchallengeFields[1].Descriptor()
+	// authregistrationchallenge.ProviderValidator is a validator for the "provider" field. It is called by the builders before save.
+	authregistrationchallenge.ProviderValidator = func() func(string) error {
+		validators := authregistrationchallengeDescProvider.Validators
+		fns := [...]func(string) error{
+			validators[0].(func(string) error),
+			validators[1].(func(string) error),
+		}
+		return func(provider string) error {
+			for _, fn := range fns {
+				if err := fn(provider); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	}()
+	// authregistrationchallengeDescIssuer is the schema descriptor for issuer field.
+	authregistrationchallengeDescIssuer := authregistrationchallengeFields[2].Descriptor()
+	// authregistrationchallenge.DefaultIssuer holds the default value on creation for the issuer field.
+	authregistrationchallenge.DefaultIssuer = authregistrationchallengeDescIssuer.Default.(string)
+	// authregistrationchallengeDescExternalSubject is the schema descriptor for external_subject field.
+	authregistrationchallengeDescExternalSubject := authregistrationchallengeFields[3].Descriptor()
+	// authregistrationchallenge.ExternalSubjectValidator is a validator for the "external_subject" field. It is called by the builders before save.
+	authregistrationchallenge.ExternalSubjectValidator = authregistrationchallengeDescExternalSubject.Validators[0].(func(string) error)
+	// authregistrationchallengeDescEmail is the schema descriptor for email field.
+	authregistrationchallengeDescEmail := authregistrationchallengeFields[4].Descriptor()
+	// authregistrationchallenge.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	authregistrationchallenge.EmailValidator = authregistrationchallengeDescEmail.Validators[0].(func(string) error)
+	// authregistrationchallengeDescRegistrationEmail is the schema descriptor for registration_email field.
+	authregistrationchallengeDescRegistrationEmail := authregistrationchallengeFields[5].Descriptor()
+	// authregistrationchallenge.DefaultRegistrationEmail holds the default value on creation for the registration_email field.
+	authregistrationchallenge.DefaultRegistrationEmail = authregistrationchallengeDescRegistrationEmail.Default.(string)
+	// authregistrationchallengeDescUsername is the schema descriptor for username field.
+	authregistrationchallengeDescUsername := authregistrationchallengeFields[6].Descriptor()
+	// authregistrationchallenge.DefaultUsername holds the default value on creation for the username field.
+	authregistrationchallenge.DefaultUsername = authregistrationchallengeDescUsername.Default.(string)
+	// authregistrationchallengeDescRedirectTo is the schema descriptor for redirect_to field.
+	authregistrationchallengeDescRedirectTo := authregistrationchallengeFields[7].Descriptor()
+	// authregistrationchallenge.DefaultRedirectTo holds the default value on creation for the redirect_to field.
+	authregistrationchallenge.DefaultRedirectTo = authregistrationchallengeDescRedirectTo.Default.(string)
+	// authregistrationchallengeDescID is the schema descriptor for id field.
+	authregistrationchallengeDescID := authregistrationchallengeFields[0].Descriptor()
+	// authregistrationchallenge.DefaultID holds the default value on creation for the id field.
+	authregistrationchallenge.DefaultID = authregistrationchallengeDescID.Default.(func() uuid.UUID)
+	authsessionMixin := schema.AuthSession{}.Mixin()
+	authsessionMixinFields0 := authsessionMixin[0].Fields()
+	_ = authsessionMixinFields0
+	authsessionFields := schema.AuthSession{}.Fields()
+	_ = authsessionFields
+	// authsessionDescCreatedAt is the schema descriptor for created_at field.
+	authsessionDescCreatedAt := authsessionMixinFields0[0].Descriptor()
+	// authsession.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authsession.DefaultCreatedAt = authsessionDescCreatedAt.Default.(func() time.Time)
+	// authsessionDescUpdatedAt is the schema descriptor for updated_at field.
+	authsessionDescUpdatedAt := authsessionMixinFields0[1].Descriptor()
+	// authsession.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authsession.DefaultUpdatedAt = authsessionDescUpdatedAt.Default.(func() time.Time)
+	// authsession.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authsession.UpdateDefaultUpdatedAt = authsessionDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authsessionDescStatus is the schema descriptor for status field.
+	authsessionDescStatus := authsessionFields[3].Descriptor()
+	// authsession.DefaultStatus holds the default value on creation for the status field.
+	authsession.DefaultStatus = authsessionDescStatus.Default.(string)
+	// authsession.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	authsession.StatusValidator = authsessionDescStatus.Validators[0].(func(string) error)
+	// authsessionDescAmr is the schema descriptor for amr field.
+	authsessionDescAmr := authsessionFields[4].Descriptor()
+	// authsession.AmrValidator is a validator for the "amr" field. It is called by the builders before save.
+	authsession.AmrValidator = authsessionDescAmr.Validators[0].(func(string) error)
+	// authsessionDescCurrentRefreshTokenHash is the schema descriptor for current_refresh_token_hash field.
+	authsessionDescCurrentRefreshTokenHash := authsessionFields[9].Descriptor()
+	// authsession.CurrentRefreshTokenHashValidator is a validator for the "current_refresh_token_hash" field. It is called by the builders before save.
+	authsession.CurrentRefreshTokenHashValidator = authsessionDescCurrentRefreshTokenHash.Validators[0].(func(string) error)
+	// authsessionDescID is the schema descriptor for id field.
+	authsessionDescID := authsessionFields[0].Descriptor()
+	// authsession.DefaultID holds the default value on creation for the id field.
+	authsession.DefaultID = authsessionDescID.Default.(func() uuid.UUID)
+	authsubjectMixin := schema.AuthSubject{}.Mixin()
+	authsubjectMixinFields0 := authsubjectMixin[0].Fields()
+	_ = authsubjectMixinFields0
+	authsubjectFields := schema.AuthSubject{}.Fields()
+	_ = authsubjectFields
+	// authsubjectDescCreatedAt is the schema descriptor for created_at field.
+	authsubjectDescCreatedAt := authsubjectMixinFields0[0].Descriptor()
+	// authsubject.DefaultCreatedAt holds the default value on creation for the created_at field.
+	authsubject.DefaultCreatedAt = authsubjectDescCreatedAt.Default.(func() time.Time)
+	// authsubjectDescUpdatedAt is the schema descriptor for updated_at field.
+	authsubjectDescUpdatedAt := authsubjectMixinFields0[1].Descriptor()
+	// authsubject.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	authsubject.DefaultUpdatedAt = authsubjectDescUpdatedAt.Default.(func() time.Time)
+	// authsubject.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	authsubject.UpdateDefaultUpdatedAt = authsubjectDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// authsubjectDescEmail is the schema descriptor for email field.
+	authsubjectDescEmail := authsubjectFields[2].Descriptor()
+	// authsubject.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	authsubject.EmailValidator = authsubjectDescEmail.Validators[0].(func(string) error)
+	// authsubjectDescStatus is the schema descriptor for status field.
+	authsubjectDescStatus := authsubjectFields[3].Descriptor()
+	// authsubject.DefaultStatus holds the default value on creation for the status field.
+	authsubject.DefaultStatus = authsubjectDescStatus.Default.(string)
+	// authsubject.StatusValidator is a validator for the "status" field. It is called by the builders before save.
+	authsubject.StatusValidator = authsubjectDescStatus.Validators[0].(func(string) error)
+	// authsubjectDescAuthVersion is the schema descriptor for auth_version field.
+	authsubjectDescAuthVersion := authsubjectFields[4].Descriptor()
+	// authsubject.DefaultAuthVersion holds the default value on creation for the auth_version field.
+	authsubject.DefaultAuthVersion = authsubjectDescAuthVersion.Default.(int64)
+	// authsubjectDescID is the schema descriptor for id field.
+	authsubjectDescID := authsubjectFields[0].Descriptor()
+	// authsubject.DefaultID holds the default value on creation for the id field.
+	authsubject.DefaultID = authsubjectDescID.Default.(func() uuid.UUID)
+	controluserprofileMixin := schema.ControlUserProfile{}.Mixin()
+	controluserprofileMixinFields0 := controluserprofileMixin[0].Fields()
+	_ = controluserprofileMixinFields0
+	controluserprofileFields := schema.ControlUserProfile{}.Fields()
+	_ = controluserprofileFields
+	// controluserprofileDescCreatedAt is the schema descriptor for created_at field.
+	controluserprofileDescCreatedAt := controluserprofileMixinFields0[0].Descriptor()
+	// controluserprofile.DefaultCreatedAt holds the default value on creation for the created_at field.
+	controluserprofile.DefaultCreatedAt = controluserprofileDescCreatedAt.Default.(func() time.Time)
+	// controluserprofileDescUpdatedAt is the schema descriptor for updated_at field.
+	controluserprofileDescUpdatedAt := controluserprofileMixinFields0[1].Descriptor()
+	// controluserprofile.DefaultUpdatedAt holds the default value on creation for the updated_at field.
+	controluserprofile.DefaultUpdatedAt = controluserprofileDescUpdatedAt.Default.(func() time.Time)
+	// controluserprofile.UpdateDefaultUpdatedAt holds the default value on update for the updated_at field.
+	controluserprofile.UpdateDefaultUpdatedAt = controluserprofileDescUpdatedAt.UpdateDefault.(func() time.Time)
+	// controluserprofileDescEmail is the schema descriptor for email field.
+	controluserprofileDescEmail := controluserprofileFields[2].Descriptor()
+	// controluserprofile.EmailValidator is a validator for the "email" field. It is called by the builders before save.
+	controluserprofile.EmailValidator = controluserprofileDescEmail.Validators[0].(func(string) error)
+	// controluserprofileDescUsername is the schema descriptor for username field.
+	controluserprofileDescUsername := controluserprofileFields[3].Descriptor()
+	// controluserprofile.DefaultUsername holds the default value on creation for the username field.
+	controluserprofile.DefaultUsername = controluserprofileDescUsername.Default.(string)
+	// controluserprofile.UsernameValidator is a validator for the "username" field. It is called by the builders before save.
+	controluserprofile.UsernameValidator = controluserprofileDescUsername.Validators[0].(func(string) error)
+	// controluserprofileDescNotes is the schema descriptor for notes field.
+	controluserprofileDescNotes := controluserprofileFields[4].Descriptor()
+	// controluserprofile.DefaultNotes holds the default value on creation for the notes field.
+	controluserprofile.DefaultNotes = controluserprofileDescNotes.Default.(string)
 	errorpassthroughruleMixin := schema.ErrorPassthroughRule{}.Mixin()
 	errorpassthroughruleMixinFields0 := errorpassthroughruleMixin[0].Fields()
 	_ = errorpassthroughruleMixinFields0
@@ -1054,7 +1467,7 @@ func init() {
 	// user.DefaultNotes holds the default value on creation for the notes field.
 	user.DefaultNotes = userDescNotes.Default.(string)
 	// userDescTotpEnabled is the schema descriptor for totp_enabled field.
-	userDescTotpEnabled := userFields[9].Descriptor()
+	userDescTotpEnabled := userFields[10].Descriptor()
 	// user.DefaultTotpEnabled holds the default value on creation for the totp_enabled field.
 	user.DefaultTotpEnabled = userDescTotpEnabled.Default.(bool)
 	userallowedgroupFields := schema.UserAllowedGroup{}.Fields()
