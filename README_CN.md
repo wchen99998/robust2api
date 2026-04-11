@@ -1,8 +1,8 @@
-# robust2api
+# Robust2API
 
-`robust2api` 是一个 AI API 网关，用于把多个上游 AI 账户统一暴露到单一的鉴权与控制平面之后。它负责认证、API Key 分发、计费、负载均衡、限流，以及向 OpenAI、Anthropic、Gemini 等上游服务转发请求。
+`Robust2API` 是一个 AI API 网关，用于把多个上游 AI 账户统一暴露到单一的鉴权与控制平面之后。它负责认证、API Key 分发、计费、负载均衡、限流，以及向 OpenAI、Anthropic、Gemini 等上游服务转发请求。
 
-当前仓库中仍然保留部分历史 `sub2api` 命名，例如目录、二进制名称、Helm Chart 路径和配置示例。这些名称在本文中仅用于对应现有代码结构。
+为兼容文件系统、URL 和命令行工具，仓库中的路径、二进制名称、Helm Chart 目录以及配置示例等机器标识统一使用小写 `robust2api`。
 
 ## 核心能力
 
@@ -53,28 +53,28 @@ handler -> service -> repository -> ent/redis -> PostgreSQL
 ### 从源码构建
 
 ```bash
-git clone https://github.com/Wei-Shaw/sub2api.git
-cd sub2api
+git clone https://github.com/wchen99998/robust2api.git
+cd robust2api
 
 cd frontend
 pnpm install
 pnpm build
 
 cd ../backend
-go build -o sub2api-gateway ./cmd/gateway
-go build -o sub2api-control ./cmd/control
-go build -o sub2api-bootstrap ./cmd/bootstrap
-go build -o sub2api-worker ./cmd/worker
+go build -o robust2api-gateway ./cmd/gateway
+go build -o robust2api-control ./cmd/control
+go build -o robust2api-bootstrap ./cmd/bootstrap
+go build -o robust2api-worker ./cmd/worker
 ```
 
-先创建运行时配置文件 `/etc/sub2api/config.yaml`，再导出初始化所需环境变量：
+先创建运行时配置文件 `/etc/robust2api/config.yaml`，再导出初始化所需环境变量：
 
 ```bash
 export DATABASE_HOST=localhost
 export DATABASE_PORT=5432
 export DATABASE_USER=postgres
 export DATABASE_PASSWORD=your_password
-export DATABASE_DBNAME=sub2api
+export DATABASE_DBNAME=robust2api
 export DATABASE_SSLMODE=disable
 export JWT_SECRET="$(openssl rand -hex 32)"
 export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
@@ -85,15 +85,15 @@ export ADMIN_PASSWORD=change-me
 首次运行先执行 bootstrap，再启动各服务：
 
 ```bash
-./sub2api-bootstrap
-./sub2api-gateway
-./sub2api-control
-./sub2api-worker
+./robust2api-bootstrap
+./robust2api-gateway
+./robust2api-control
+./robust2api-worker
 ```
 
 ## 配置说明
 
-- 运行时 YAML 配置文件路径为 `/etc/sub2api/config.yaml`
+- 运行时 YAML 配置文件路径为 `/etc/robust2api/config.yaml`
 - `bootstrap` 依赖环境变量读取初始化密钥
 - `JWT_SECRET` 至少 32 字节
 - `TOTP_ENCRYPTION_KEY` 必须为 64 位十六进制字符串
@@ -112,7 +112,7 @@ database:
   port: 5432
   user: "postgres"
   password: "your_password"
-  dbname: "sub2api"
+  dbname: "robust2api"
 
 redis:
   host: "localhost"
@@ -151,7 +151,7 @@ go generate ./cmd/worker
 
 - Kubernetes 与 GitOps 部署说明见 [DEPLOY.md](DEPLOY.md)
 - Terraform 基础设施位于 `infra/production/`
-- Helm Chart 位于 `deploy/helm/sub2api/`
+- Helm Chart 位于 `deploy/helm/robust2api/`
 - 生产集群清单位于 `clusters/production/`
 
 如果前面使用 Nginx 且需要兼容 Codex CLI，请在 `http` 块中加入：
@@ -163,7 +163,7 @@ underscores_in_headers on;
 ## 项目结构
 
 ```text
-sub2api/
+robust2api/
 ├── backend/
 │   ├── cmd/
 │   ├── ent/
@@ -172,7 +172,7 @@ sub2api/
 ├── frontend/
 ├── deploy/
 │   ├── Caddyfile
-│   └── helm/sub2api/
+│   └── helm/robust2api/
 ├── clusters/production/
 ├── infra/
 └── docs/

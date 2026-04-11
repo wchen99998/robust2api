@@ -1,0 +1,19 @@
+{{- if and .Values.gateway.enabled ((.Values.observability).enabled) (((.Values.observability).serviceMonitor).enabled) }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "robust2api.fullname" . }}
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+    {{- with .Values.observability.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "robust2api.gateway.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: metrics
+      interval: {{ .Values.observability.serviceMonitor.interval }}
+      path: /metrics
+{{- end }}

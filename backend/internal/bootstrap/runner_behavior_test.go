@@ -12,8 +12,8 @@ import (
 	"entgo.io/ent/dialect"
 	entsql "entgo.io/ent/dialect/sql"
 	"github.com/DATA-DOG/go-sqlmock"
-	dbent "github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/enttest"
+	dbent "github.com/wchen99998/robust2api/ent"
+	"github.com/wchen99998/robust2api/ent/enttest"
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 )

@@ -1,0 +1,66 @@
+{{- if .Values.bootstrap.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "robust2api.bootstrapJobName" . }}
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: bootstrap
+  annotations:
+    robust2api.io/bootstrap-inputs-checksum: {{ include "robust2api.bootstrapInputsChecksum" . | quote }}
+spec:
+  backoffLimit: {{ .Values.bootstrap.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.bootstrap.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      annotations:
+        robust2api.io/bootstrap-inputs-checksum: {{ include "robust2api.bootstrapInputsChecksum" . | quote }}
+      labels:
+        {{- include "robust2api.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: bootstrap
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "robust2api.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 1000
+      restartPolicy: OnFailure
+      containers:
+        - name: bootstrap
+          image: "{{ .Values.image.bootstrap.repository }}:{{ .Values.image.bootstrap.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.bootstrap.pullPolicy }}
+          command: ["/app/robust2api-bootstrap"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "robust2api.fullname" . }}
+            - secretRef:
+                name: {{ include "robust2api.runtimeSecretName" . }}
+            {{- if ne (include "robust2api.controlSecretName" .) (include "robust2api.runtimeSecretName" .) }}
+            - secretRef:
+                name: {{ include "robust2api.controlSecretName" . }}
+            {{- end }}
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

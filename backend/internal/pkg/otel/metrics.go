@@ -10,7 +10,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-const meterName = "github.com/Wei-Shaw/sub2api"
+const meterName = "github.com/wchen99998/robust2api"
 
 var (
 	globalMetrics     *Metrics
@@ -48,7 +48,7 @@ func NewMetrics() (*Metrics, error) {
 	m := &Metrics{}
 	var err error
 
-	m.httpRequestsTotal, err = meter.Int64Counter("sub2api.http.requests",
+	m.httpRequestsTotal, err = meter.Int64Counter("robust2api.http.requests",
 		metric.WithDescription("Total HTTP requests"),
 		metric.WithUnit("{request}"),
 	)
@@ -56,7 +56,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.httpRequestDuration, err = meter.Float64Histogram("sub2api.http.request.duration",
+	m.httpRequestDuration, err = meter.Float64Histogram("robust2api.http.request.duration",
 		metric.WithDescription("HTTP request duration in seconds"),
 		metric.WithUnit("s"),
 		metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 60),
@@ -65,7 +65,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.httpRequestTTFT, err = meter.Float64Histogram("sub2api.http.request.ttft",
+	m.httpRequestTTFT, err = meter.Float64Histogram("robust2api.http.request.ttft",
 		metric.WithDescription("Time to first token in seconds"),
 		metric.WithUnit("s"),
 		metric.WithExplicitBucketBoundaries(0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 3, 5, 10),
@@ -74,7 +74,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.upstreamRequestDuration, err = meter.Float64Histogram("sub2api.upstream.request.duration",
+	m.upstreamRequestDuration, err = meter.Float64Histogram("robust2api.upstream.request.duration",
 		metric.WithDescription("Per-upstream-attempt request duration in seconds"),
 		metric.WithUnit("s"),
 		metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10, 15, 20, 30, 60),
@@ -83,7 +83,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.tokensTotal, err = meter.Int64Counter("sub2api.tokens",
+	m.tokensTotal, err = meter.Int64Counter("robust2api.tokens",
 		metric.WithDescription("Total tokens processed"),
 		metric.WithUnit("{token}"),
 	)
@@ -91,7 +91,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.upstreamErrorsTotal, err = meter.Int64Counter("sub2api.upstream.errors",
+	m.upstreamErrorsTotal, err = meter.Int64Counter("robust2api.upstream.errors",
 		metric.WithDescription("Total upstream errors"),
 		metric.WithUnit("{error}"),
 	)
@@ -99,7 +99,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.accountFailoversTotal, err = meter.Int64Counter("sub2api.account.failovers",
+	m.accountFailoversTotal, err = meter.Int64Counter("robust2api.account.failovers",
 		metric.WithDescription("Total account failover events"),
 		metric.WithUnit("{event}"),
 	)
@@ -107,7 +107,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.rateLimitRejectionsTotal, err = meter.Int64Counter("sub2api.ratelimit.rejections",
+	m.rateLimitRejectionsTotal, err = meter.Int64Counter("robust2api.ratelimit.rejections",
 		metric.WithDescription("Total rate limit rejections"),
 		metric.WithUnit("{rejection}"),
 	)
@@ -115,7 +115,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.concurrencyQueueDepth, err = meter.Int64Gauge("sub2api.concurrency.queue_depth",
+	m.concurrencyQueueDepth, err = meter.Int64Gauge("robust2api.concurrency.queue_depth",
 		metric.WithDescription("Current concurrency queue depth"),
 		metric.WithUnit("{request}"),
 	)
@@ -123,7 +123,7 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.upstreamAccountsActive, err = meter.Int64Gauge("sub2api.upstream.accounts_active",
+	m.upstreamAccountsActive, err = meter.Int64Gauge("robust2api.upstream.accounts_active",
 		metric.WithDescription("Number of active upstream accounts"),
 		metric.WithUnit("{account}"),
 	)

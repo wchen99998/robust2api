@@ -3,7 +3,7 @@ package routes
 import (
 	"net/http"
 
-	"github.com/Wei-Shaw/sub2api/internal/health"
+	"github.com/wchen99998/robust2api/internal/health"
 
 	"github.com/gin-gonic/gin"
 )

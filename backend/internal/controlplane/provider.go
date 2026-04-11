@@ -1,10 +1,10 @@
 package controlplane
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/handler"
-	"github.com/Wei-Shaw/sub2api/internal/server"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/handler"
+	"github.com/wchen99998/robust2api/internal/server"
+	"github.com/wchen99998/robust2api/internal/server/middleware"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/google/wire"
 )
 

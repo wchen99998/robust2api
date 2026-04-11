@@ -7,11 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
-	bootstraprunner "github.com/Wei-Shaw/sub2api/internal/bootstrap"
+	bootstraprunner "github.com/wchen99998/robust2api/internal/bootstrap"
 )
 
 func Run() error {
-	log.Println("[bootstrap] starting sub2api-bootstrap")
+	log.Println("[bootstrap] starting robust2api-bootstrap")
 
 	env := bootstraprunner.LoadBootstrapEnv()
 

@@ -4,7 +4,7 @@ namespace: monitoring
 ## Shared public endpoint convention
 public:
   ## Base domain used to derive public service hosts as <service>-<namespace>.<baseDomain>
-  baseDomain: "sub2api.local"
+  baseDomain: "robust2api.local"
 
 ## kube-prometheus-stack (Prometheus + Grafana + Alertmanager)
 kube-prometheus-stack:
@@ -69,7 +69,7 @@ tempo:
       trace:
         backend: s3
         s3:
-          bucket: ""       # --set tempo.tempo.storage.trace.s3.bucket=sub2api-tempo
+          bucket: ""       # --set tempo.tempo.storage.trace.s3.bucket=robust2api-tempo
           endpoint: ""     # --set tempo.tempo.storage.trace.s3.endpoint=<account_id>.r2.cloudflarestorage.com
           access_key: ""   # --set tempo.tempo.storage.trace.s3.access_key=...
           secret_key: ""   # --set tempo.tempo.storage.trace.s3.secret_key=...
@@ -99,9 +99,9 @@ loki:
         secretAccessKey: ""  # --set loki.loki.storage.s3.secretAccessKey=...
         s3ForcePathStyle: true
       bucketNames:
-        chunks: ""           # --set loki.loki.storage.bucketNames.chunks=sub2api-loki
-        ruler: ""            # --set loki.loki.storage.bucketNames.ruler=sub2api-loki
-        admin: ""            # --set loki.loki.storage.bucketNames.admin=sub2api-loki
+        chunks: ""           # --set loki.loki.storage.bucketNames.chunks=robust2api-loki
+        ruler: ""            # --set loki.loki.storage.bucketNames.ruler=robust2api-loki
+        admin: ""            # --set loki.loki.storage.bucketNames.admin=robust2api-loki
     schemaConfig:
       configs:
         - from: "2024-01-01"

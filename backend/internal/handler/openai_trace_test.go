@@ -9,10 +9,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/pkg/tlsfingerprint"
+	"github.com/wchen99998/robust2api/internal/server/middleware"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel"
@@ -142,8 +142,8 @@ func TestOpenAIResponses_RootSpanIncludesRetryEventsAndChildSpans(t *testing.T) 
 	require.Equal(t, http.StatusOK, w.Code)
 
 	rootSpan := findEndedSpanByName(t, recorder.Ended(), "gateway.responses")
-	require.True(t, spanHasEvent(rootSpan, "sub2api.failover_candidate_detected"))
-	require.True(t, spanHasEvent(rootSpan, "sub2api.same_account_retry"))
+	require.True(t, spanHasEvent(rootSpan, "robust2api.failover_candidate_detected"))
+	require.True(t, spanHasEvent(rootSpan, "robust2api.same_account_retry"))
 
 	authSpan := findEndedSpanByName(t, recorder.Ended(), "gateway.auth")
 	billingSpan := findEndedSpanByName(t, recorder.Ended(), "gateway.billing")
@@ -191,7 +191,7 @@ func assertHandlerRootAndAuthSpans(
 	rootSpan := findEndedSpanByName(t, recorder.Ended(), rootName)
 	authSpan := findEndedSpanByName(t, recorder.Ended(), "gateway.auth")
 	require.Equal(t, rootSpan.SpanContext().SpanID(), authSpan.Parent().SpanID())
-	require.Equal(t, wantTransport, spanAttributeValue(rootSpan, "sub2api.transport"))
+	require.Equal(t, wantTransport, spanAttributeValue(rootSpan, "robust2api.transport"))
 }
 
 func findEndedSpanByName(t *testing.T, spans []sdktrace.ReadOnlySpan, name string) sdktrace.ReadOnlySpan {

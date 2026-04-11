@@ -1,0 +1,79 @@
+{{- if .Values.billing.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "robust2api.fullname" . }}-billing
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: billing
+spec:
+  replicas: {{ .Values.billing.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "robust2api.billing.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/runtime-secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "robust2api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: billing
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "robust2api.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: {{ default 30 .Values.billing.terminationGracePeriodSeconds }}
+      containers:
+        - name: billing
+          image: "{{ .Values.image.billing.repository }}:{{ .Values.image.billing.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.billing.pullPolicy }}
+          ports:
+            - name: health
+              containerPort: {{ .Values.billing.healthPort }}
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "robust2api.fullname" . }}
+            - secretRef:
+                name: {{ include "robust2api.runtimeSecretName" . }}
+          startupProbe:
+            httpGet:
+              path: {{ default "/startupz" .Values.billing.probes.startup.path }}
+              port: health
+            failureThreshold: {{ default 30 .Values.billing.probes.startup.failureThreshold }}
+            periodSeconds: {{ default 2 .Values.billing.probes.startup.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ default "/livez" .Values.billing.probes.liveness.path }}
+              port: health
+            periodSeconds: {{ default 30 .Values.billing.probes.liveness.periodSeconds }}
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: {{ default "/readyz" .Values.billing.probes.readiness.path }}
+              port: health
+            periodSeconds: {{ default 10 .Values.billing.probes.readiness.periodSeconds }}
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.billing.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

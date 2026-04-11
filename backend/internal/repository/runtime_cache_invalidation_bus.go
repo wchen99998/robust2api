@@ -6,15 +6,15 @@ import (
 	"log"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/redis/go-redis/v9"
 )
 
 const (
-	settingsInvalidationChannel = "sub2api:invalidate:settings"
-	channelsInvalidationChannel = "sub2api:invalidate:channels"
-	accountsInvalidationChannel = "sub2api:invalidate:accounts"
-	pricingInvalidationChannel  = "sub2api:invalidate:pricing"
+	settingsInvalidationChannel = "robust2api:invalidate:settings"
+	channelsInvalidationChannel = "robust2api:invalidate:channels"
+	accountsInvalidationChannel = "robust2api:invalidate:accounts"
+	pricingInvalidationChannel  = "robust2api:invalidate:pricing"
 	runtimeCacheRetryDelay      = 5 * time.Second
 )
 

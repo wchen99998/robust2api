@@ -1,8 +1,8 @@
-# robust2api
+# Robust2API
 
-`robust2api` is an AI API gateway for routing requests across multiple upstream AI accounts behind a single authenticated control plane. It handles authentication, API key issuance, billing, load balancing, rate limits, and request forwarding for providers such as OpenAI, Anthropic, Gemini, and related integrations.
+`Robust2API` is an AI API gateway for routing requests across multiple upstream AI accounts behind a single authenticated control plane. It handles authentication, API key issuance, billing, load balancing, rate limits, and request forwarding for providers such as OpenAI, Anthropic, Gemini, and related integrations.
 
-This repository still uses legacy `sub2api` names in some paths, binaries, Helm chart directories, and configuration examples. Those identifiers are kept where they reflect the current codebase layout.
+Machine-facing identifiers such as repository paths, binary names, Helm chart directories, and configuration examples intentionally use lowercase `robust2api` for compatibility with filesystems, URLs, and shell tooling.
 
 ## Core Capabilities
 
@@ -53,28 +53,28 @@ Main services:
 ### Build From Source
 
 ```bash
-git clone https://github.com/Wei-Shaw/sub2api.git
-cd sub2api
+git clone https://github.com/wchen99998/robust2api.git
+cd robust2api
 
 cd frontend
 pnpm install
 pnpm build
 
 cd ../backend
-go build -o sub2api-gateway ./cmd/gateway
-go build -o sub2api-control ./cmd/control
-go build -o sub2api-bootstrap ./cmd/bootstrap
-go build -o sub2api-worker ./cmd/worker
+go build -o robust2api-gateway ./cmd/gateway
+go build -o robust2api-control ./cmd/control
+go build -o robust2api-bootstrap ./cmd/bootstrap
+go build -o robust2api-worker ./cmd/worker
 ```
 
-Create the runtime config file at `/etc/sub2api/config.yaml`, then export bootstrap secrets before the first run:
+Create the runtime config file at `/etc/robust2api/config.yaml`, then export bootstrap secrets before the first run:
 
 ```bash
 export DATABASE_HOST=localhost
 export DATABASE_PORT=5432
 export DATABASE_USER=postgres
 export DATABASE_PASSWORD=your_password
-export DATABASE_DBNAME=sub2api
+export DATABASE_DBNAME=robust2api
 export DATABASE_SSLMODE=disable
 export JWT_SECRET="$(openssl rand -hex 32)"
 export TOTP_ENCRYPTION_KEY="$(openssl rand -hex 32)"
@@ -85,15 +85,15 @@ export ADMIN_PASSWORD=change-me
 Run bootstrap once, then start the services:
 
 ```bash
-./sub2api-bootstrap
-./sub2api-gateway
-./sub2api-control
-./sub2api-worker
+./robust2api-bootstrap
+./robust2api-gateway
+./robust2api-control
+./robust2api-worker
 ```
 
 ## Configuration Notes
 
-- Runtime YAML config is loaded from `/etc/sub2api/config.yaml`
+- Runtime YAML config is loaded from `/etc/robust2api/config.yaml`
 - Bootstrap reads required secrets from environment variables
 - `JWT_SECRET` must be at least 32 bytes
 - `TOTP_ENCRYPTION_KEY` must be 64 hex characters
@@ -112,7 +112,7 @@ database:
   port: 5432
   user: "postgres"
   password: "your_password"
-  dbname: "sub2api"
+  dbname: "robust2api"
 
 redis:
   host: "localhost"
@@ -151,7 +151,7 @@ go generate ./cmd/worker
 
 - Kubernetes deployment and GitOps operations are documented in [DEPLOY.md](DEPLOY.md)
 - Terraform infrastructure lives under `infra/production/`
-- Helm manifests live under `deploy/helm/sub2api/`
+- Helm manifests live under `deploy/helm/robust2api/`
 - Production cluster manifests live under `clusters/production/`
 
 If you use Nginx in front of the gateway and need Codex CLI compatibility, add this to the `http` block:
@@ -163,7 +163,7 @@ underscores_in_headers on;
 ## Project Layout
 
 ```text
-sub2api/
+robust2api/
 ├── backend/
 │   ├── cmd/
 │   ├── ent/
@@ -172,7 +172,7 @@ sub2api/
 ├── frontend/
 ├── deploy/
 │   ├── Caddyfile
-│   └── helm/sub2api/
+│   └── helm/robust2api/
 ├── clusters/production/
 ├── infra/
 └── docs/

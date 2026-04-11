@@ -17,12 +17,12 @@ import (
 
 	"github.com/andybalholm/brotli"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
-	"github.com/Wei-Shaw/sub2api/internal/service"
-	"github.com/Wei-Shaw/sub2api/internal/util/urlvalidator"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/pkg/proxyurl"
+	"github.com/wchen99998/robust2api/internal/pkg/proxyutil"
+	"github.com/wchen99998/robust2api/internal/pkg/tlsfingerprint"
+	"github.com/wchen99998/robust2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/util/urlvalidator"
 )
 
 // 默认配置常量

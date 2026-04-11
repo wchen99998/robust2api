@@ -43,7 +43,7 @@ override.tf.json
 Create `infra/README.md`:
 
 ```markdown
-# Sub2API Infrastructure
+# Robust2API Infrastructure
 
 Terraform modules for provisioning DigitalOcean Kubernetes infrastructure.
 
@@ -70,15 +70,15 @@ terraform apply
 Configure kubectl:
 
 ```bash
-doctl kubernetes cluster kubeconfig save sub2api
+doctl kubernetes cluster kubeconfig save robust2api
 ```
 
-Deploy Sub2API via Helm:
+Deploy Robust2API via Helm:
 
 ```bash
-helm install sub2api ../../deploy/helm/sub2api \
-  -n sub2api \
-  -f ../../deploy/helm/sub2api/values-production.yaml \
+helm install robust2api ../../deploy/helm/robust2api \
+  -n robust2api \
+  -f ../../deploy/helm/robust2api/values-production.yaml \
   --set secrets.jwtSecret=<value> \
   --set secrets.totpEncryptionKey=<value> \
   --set secrets.adminPassword=<value>
@@ -124,7 +124,7 @@ Create `infra/modules/doks/variables.tf`:
 variable "cluster_name" {
   description = "Name of the DOKS cluster"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "region" {
@@ -172,7 +172,7 @@ variable "surge_upgrade" {
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = list(string)
-  default     = ["sub2api", "terraform"]
+  default     = ["robust2api", "terraform"]
 }
 ```
 
@@ -289,7 +289,7 @@ variable "letsencrypt_email" {
 variable "app_namespace" {
   description = "Namespace to create for the application"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 ```
 
@@ -323,7 +323,7 @@ resource "helm_release" "ingress_nginx" {
 
   set {
     name  = "controller.service.annotations.service\\.beta\\.kubernetes\\.io/do-loadbalancer-name"
-    value = "sub2api-lb"
+    value = "robust2api-lb"
   }
 
   set {
@@ -440,7 +440,7 @@ Create `infra/modules/database/variables.tf`:
 variable "cluster_name" {
   description = "Name prefix for the database cluster"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "region" {
@@ -463,13 +463,13 @@ variable "db_engine_version" {
 variable "db_name" {
   description = "Name of the database to create"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "db_user" {
   description = "Name of the database user to create"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "doks_cluster_id" {
@@ -480,7 +480,7 @@ variable "doks_cluster_id" {
 variable "tags" {
   description = "Tags to apply to database resources"
   type        = list(string)
-  default     = ["sub2api", "terraform"]
+  default     = ["robust2api", "terraform"]
 }
 ```
 
@@ -589,7 +589,7 @@ variable "cloudflare_zone_id" {
 }
 
 variable "record_name" {
-  description = "DNS record name (e.g. 'api' or 'sub2api')"
+  description = "DNS record name (e.g. 'api' or 'robust2api')"
   type        = string
 }
 
@@ -713,7 +713,7 @@ variable "region" {
 variable "cluster_name" {
   description = "DOKS cluster name"
   type        = string
-  default     = "sub2api"
+  default     = "robust2api"
 }
 
 variable "k8s_version" {
@@ -921,7 +921,7 @@ Create `infra/production/terraform.tfvars.example`:
 # DigitalOcean
 do_token     = "dop_v1_your_token_here"
 region       = "sgp1"
-cluster_name = "sub2api"
+cluster_name = "robust2api"
 k8s_version  = "1.31"
 node_size    = "s-2vcpu-4gb"
 min_nodes    = 1

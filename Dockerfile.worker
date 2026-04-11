@@ -1,5 +1,5 @@
 # =============================================================================
-# Sub2API Worker — Multi-Stage Dockerfile
+# Robust2API Worker — Multi-Stage Dockerfile
 # =============================================================================
 # Builds the worker binary for background maintenance tasks.
 # Produces a minimal image with only the binary and TLS/timezone support.
@@ -39,7 +39,7 @@ RUN VERSION_VALUE="${VERSION}" && \
     CGO_ENABLED=0 GOOS=linux go build \
     -ldflags="-s -w -X main.Version=${VERSION_VALUE} -X main.Commit=${COMMIT} -X main.Date=${DATE_VALUE} -X main.BuildType=release" \
     -trimpath \
-    -o /app/sub2api-worker \
+    -o /app/robust2api-worker \
     ./cmd/worker
 
 # -----------------------------------------------------------------------------
@@ -48,28 +48,28 @@ RUN VERSION_VALUE="${VERSION}" && \
 FROM ${ALPINE_IMAGE}
 
 LABEL maintainer="Wccccc <github.com/wchen99998>"
-LABEL description="Sub2API Worker - Background Maintenance Service"
-LABEL org.opencontainers.image.source="https://github.com/wchen99998/sub2api"
+LABEL description="Robust2API Worker - Background Maintenance Service"
+LABEL org.opencontainers.image.source="https://github.com/wchen99998/robust2api"
 
 RUN apk add --no-cache \
     ca-certificates \
     tzdata \
     && rm -rf /var/cache/apk/*
 
-RUN addgroup -g 1000 sub2api && \
-    adduser -u 1000 -G sub2api -s /bin/sh -D sub2api
+RUN addgroup -g 1000 robust2api && \
+    adduser -u 1000 -G robust2api -s /bin/sh -D robust2api
 
 WORKDIR /app
 
-COPY --from=backend-builder --chown=sub2api:sub2api /app/sub2api-worker /app/sub2api-worker
-COPY --from=backend-builder --chown=sub2api:sub2api /app/backend/resources /app/resources
-RUN mkdir -p /app/data && chown sub2api:sub2api /app/data
+COPY --from=backend-builder --chown=robust2api:robust2api /app/robust2api-worker /app/robust2api-worker
+COPY --from=backend-builder --chown=robust2api:robust2api /app/backend/resources /app/resources
+RUN mkdir -p /app/data && chown robust2api:robust2api /app/data
 
-USER sub2api
+USER robust2api
 
 EXPOSE 8081
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget -q -T 5 -O /dev/null http://localhost:${WORKER_HEALTH_PORT:-8081}/livez || exit 1
 
-ENTRYPOINT ["/app/sub2api-worker"]
+ENTRYPOINT ["/app/robust2api-worker"]

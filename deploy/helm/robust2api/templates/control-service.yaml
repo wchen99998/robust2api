@@ -1,0 +1,18 @@
+{{- if and .Values.frontend.enabled .Values.control.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "robust2api.frontendServiceName" . }}
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  type: {{ .Values.controlService.type }}
+  ports:
+    - port: {{ .Values.controlService.port }}
+      targetPort: frontend
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "robust2api.frontend.selectorLabels" . | nindent 4 }}
+{{- end }}

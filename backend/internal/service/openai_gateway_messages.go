@@ -12,11 +12,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
-	"github.com/Wei-Shaw/sub2api/internal/util/responseheaders"
+	"github.com/wchen99998/robust2api/internal/pkg/apicompat"
+	"github.com/wchen99998/robust2api/internal/pkg/claude"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
+	"github.com/wchen99998/robust2api/internal/util/responseheaders"
 	"github.com/gin-gonic/gin"
 	"go.uber.org/zap"
 )

@@ -5,6 +5,7 @@ package tlsfingerprint
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -38,15 +39,13 @@ type CapturedFingerprint struct {
 // TestDialerAgainstCaptureServer connects to the tls-fingerprint-web capture server
 // and verifies that the dialer's TLS fingerprint matches the configured Profile.
 //
-// Default capture server: https://tls.sub2api.org:8090
+// Default capture server: https://tls.robust2api.org:8090
+// Legacy fallback:       https://tls.sub2api.org:8090
 // Override with env: TLSFINGERPRINT_CAPTURE_URL=https://localhost:8443
 //
 // Run: go test -v -run TestDialerAgainstCaptureServer ./internal/pkg/tlsfingerprint/...
 func TestDialerAgainstCaptureServer(t *testing.T) {
-	captureURL := os.Getenv("TLSFINGERPRINT_CAPTURE_URL")
-	if captureURL == "" {
-		captureURL = "https://tls.sub2api.org:8090"
-	}
+	captureURLs := defaultCaptureURLs()
 
 	tests := []struct {
 		name    string
@@ -96,7 +95,7 @@ func TestDialerAgainstCaptureServer(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			captured := fetchCapturedFingerprint(t, captureURL, tc.profile)
+			captured := fetchCapturedFingerprint(t, captureURLs, tc.profile)
 			if captured == nil {
 				return
 			}
@@ -187,9 +186,39 @@ func TestDialerAgainstCaptureServer(t *testing.T) {
 	}
 }
 
-func fetchCapturedFingerprint(t *testing.T, captureURL string, profile *Profile) *CapturedFingerprint {
+func defaultCaptureURLs() []string {
+	if captureURL := os.Getenv("TLSFINGERPRINT_CAPTURE_URL"); captureURL != "" {
+		return []string{captureURL}
+	}
+
+	// Keep the renamed hostname first, but fall back to the legacy capture
+	// service until the new endpoint is serving TLS traffic consistently.
+	return []string{
+		"https://tls.robust2api.org:8090",
+		"https://tls.sub2api.org:8090",
+	}
+}
+
+func fetchCapturedFingerprint(t *testing.T, captureURLs []string, profile *Profile) *CapturedFingerprint {
 	t.Helper()
 
+	var failures []string
+	for idx, captureURL := range captureURLs {
+		fp, err := fetchCapturedFingerprintOnce(captureURL, profile)
+		if err == nil {
+			if idx > 0 {
+				t.Logf("capture server fallback in use: %s", captureURL)
+			}
+			return fp
+		}
+		failures = append(failures, fmt.Sprintf("%s: %v", captureURL, err))
+	}
+
+	t.Fatalf("request failed for all capture servers:\n  %s", strings.Join(failures, "\n  "))
+	return nil
+}
+
+func fetchCapturedFingerprintOnce(captureURL string, profile *Profile) (*CapturedFingerprint, error) {
 	dialer := NewDialer(profile, nil)
 	client := &http.Client{
 		Transport: &http.Transport{
@@ -203,33 +232,32 @@ func fetchCapturedFingerprint(t *testing.T, captureURL string, profile *Profile)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", captureURL, strings.NewReader(`{"model":"test"}`))
 	if err != nil {
-		t.Fatalf("create request: %v", err)
-		return nil
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer test-token")
 
 	resp, err := client.Do(req)
 	if err != nil {
-		t.Fatalf("request failed: %v", err)
-		return nil
+		return nil, fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		t.Fatalf("read body: %v", err)
-		return nil
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
 	}
 
 	var fp CapturedFingerprint
 	if err := json.Unmarshal(body, &fp); err != nil {
-		t.Logf("Response body: %s", string(body))
-		t.Fatalf("parse response: %v", err)
-		return nil
+		return nil, fmt.Errorf("parse response %q: %w", string(body), err)
 	}
 
-	return &fp
+	return &fp, nil
 }
 
 func uint16sToInts(vals []uint16) []int {

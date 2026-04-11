@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
+	"github.com/wchen99998/robust2api/internal/config"
+	middleware2 "github.com/wchen99998/robust2api/internal/server/middleware"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/wire"

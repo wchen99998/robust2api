@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-	gatewayapp "github.com/Wei-Shaw/sub2api/internal/app/gateway"
+	_ "github.com/wchen99998/robust2api/ent/runtime"
+	gatewayapp "github.com/wchen99998/robust2api/internal/app/gateway"
 )
 
 //go:embed VERSION
@@ -35,7 +35,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API Gateway %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		log.Printf("Robust2API Gateway %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
 

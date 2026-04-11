@@ -6,8 +6,8 @@ import (
 	"log"
 	"strings"
 
-	_ "github.com/Wei-Shaw/sub2api/ent/runtime"
-	workerapp "github.com/Wei-Shaw/sub2api/internal/app/worker"
+	_ "github.com/wchen99998/robust2api/ent/runtime"
+	workerapp "github.com/wchen99998/robust2api/internal/app/worker"
 )
 
 //go:embed VERSION
@@ -36,7 +36,7 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		log.Printf("Sub2API Worker %s (commit: %s, built: %s)\n", Version, Commit, Date)
+		log.Printf("Robust2API Worker %s (commit: %s, built: %s)\n", Version, Commit, Date)
 		return
 	}
 

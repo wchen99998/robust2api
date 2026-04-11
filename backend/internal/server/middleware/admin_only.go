@@ -1,7 +1,7 @@
 package middleware
 
 import (
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 )

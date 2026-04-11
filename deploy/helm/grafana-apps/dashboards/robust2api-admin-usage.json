@@ -1,0 +1,110 @@
+{
+  "title": "Robust2API Admin Usage",
+  "uid": "robust2api-admin-usage",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "timezone": "browser",
+  "time": { "from": "now-7d", "to": "now" },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Hourly Requests",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(bucket_start, '1h'), SUM(total_requests)::double precision AS requests FROM usage_dashboard_hourly WHERE $__timeFilter(bucket_start) GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Hourly Tokens",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(bucket_start, '1h'), SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens)::double precision AS total_tokens FROM usage_dashboard_hourly WHERE $__timeFilter(bucket_start) GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "title": "Actual Cost (Daily)",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "SELECT $__timeGroupAlias(bucket_date::timestamp, '1d'), SUM(actual_cost)::double precision AS actual_cost FROM usage_dashboard_daily WHERE $__timeFilter(bucket_date::timestamp) GROUP BY 1 ORDER BY 1"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "title": "Model Spend Top 12",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(NULLIF(requested_model, ''), NULLIF(model, ''), 'unknown') AS model, COUNT(*)::bigint AS requests, SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens)::bigint AS tokens, SUM(actual_cost)::double precision AS actual_cost FROM usage_logs WHERE $__timeFilter(created_at) GROUP BY 1 ORDER BY actual_cost DESC LIMIT 12"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Group Spend",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT COALESCE(g.name, CONCAT('group-', u.group_id::text)) AS group_name, COUNT(*)::bigint AS requests, SUM(actual_cost)::double precision AS actual_cost, SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens)::bigint AS tokens FROM usage_logs u LEFT JOIN groups g ON g.id = u.group_id WHERE $__timeFilter(u.created_at) GROUP BY 1 ORDER BY actual_cost DESC LIMIT 20"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "title": "Top Users by Actual Cost",
+      "type": "table",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "table",
+          "rawSql": "SELECT u.user_id, COALESCE(NULLIF(us.username, ''), us.email, u.user_id::text) AS user_name, COUNT(*)::bigint AS requests, SUM(actual_cost)::double precision AS actual_cost, SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens)::bigint AS tokens FROM usage_logs u LEFT JOIN users us ON us.id = u.user_id WHERE $__timeFilter(u.created_at) GROUP BY 1,2 ORDER BY actual_cost DESC LIMIT 12"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "title": "Top Users Token Trend",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 24 },
+      "datasource": { "type": "postgres", "uid": "sub2api-pg" },
+      "targets": [
+        {
+          "refId": "A",
+          "format": "time_series",
+          "rawSql": "WITH top_users AS (SELECT user_id FROM usage_logs WHERE $__timeFilter(created_at) GROUP BY user_id ORDER BY SUM(input_tokens + output_tokens + cache_creation_tokens + cache_read_tokens) DESC LIMIT 8) SELECT $__timeGroupAlias(u.created_at, '1h'), COALESCE(NULLIF(us.username, ''), us.email, u.user_id::text) AS metric, SUM(u.input_tokens + u.output_tokens + u.cache_creation_tokens + u.cache_read_tokens)::double precision AS value FROM usage_logs u LEFT JOIN users us ON us.id = u.user_id WHERE $__timeFilter(u.created_at) AND u.user_id IN (SELECT user_id FROM top_users) GROUP BY 1,2 ORDER BY 1"
+        }
+      ]
+    }
+  ]
+}

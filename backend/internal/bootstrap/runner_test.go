@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/repository"
+	"github.com/wchen99998/robust2api/internal/repository"
 )
 
 func TestRunBootstrap_ValidatesEnvFirst(t *testing.T) {
@@ -24,9 +24,9 @@ func TestRunBootstrap_FailsOnDBConnectionError(t *testing.T) {
 	env := BootstrapEnv{
 		DatabaseHost:      "invalid-host-that-does-not-exist",
 		DatabasePort:      "5432",
-		DatabaseUser:      "sub2api",
+		DatabaseUser:      "robust2api",
 		DatabasePassword:  "secret",
-		DatabaseDBName:    "sub2api",
+		DatabaseDBName:    "robust2api",
 		DatabaseSSLMode:   "disable",
 		JWTSecret:         "abcdefghijklmnopqrstuvwxyz123456",
 		TOTPEncryptionKey: strings.Repeat("a", 64),

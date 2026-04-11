@@ -1,0 +1,121 @@
+{{- if .Values.control.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "robust2api.fullname" . }}-control
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+    app.kubernetes.io/component: control
+spec:
+  {{- if not .Values.control.autoscaling.enabled }}
+  replicas: {{ .Values.control.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "robust2api.control.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        checksum/configmap: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret-shared: {{ include (print $.Template.BasePath "/runtime-secret.yaml") . | sha256sum }}
+        checksum/secret-control: {{ include (print $.Template.BasePath "/control-secret.yaml") . | sha256sum }}
+      labels:
+        {{- include "robust2api.labels" . | nindent 8 }}
+        app.kubernetes.io/component: control
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "robust2api.serviceAccountName" . }}
+      securityContext:
+        fsGroup: 1000
+      terminationGracePeriodSeconds: {{ default 20 .Values.control.terminationGracePeriodSeconds }}
+      containers:
+        - name: control
+          image: "{{ .Values.image.control.repository }}:{{ .Values.image.control.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.control.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          env:
+            - name: EXTRA_FRAME_SRC_ORIGINS
+              value: {{ include "robust2api.frameSrcOrigins" . | quote }}
+            {{- if ((.Values.observability).enabled) }}
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: APP_VERSION
+              value: {{ .Values.image.control.tag | default .Chart.AppVersion | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: {{ include "robust2api.otelServiceName" (dict "base" .Values.observability.otel.serviceName "component" "control") | quote }}
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: {{ include "robust2api.otelResourceAttributes" (dict "root" . "component" "control") | quote }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "robust2api.fullname" . }}
+            - secretRef:
+                name: {{ include "robust2api.runtimeSecretName" . }}
+            {{- if ne (include "robust2api.controlSecretName" .) (include "robust2api.runtimeSecretName" .) }}
+            - secretRef:
+                name: {{ include "robust2api.controlSecretName" . }}
+            {{- end }}
+          startupProbe:
+            httpGet:
+              path: {{ default "/startupz" .Values.control.probes.startup.path }}
+              port: http
+            failureThreshold: {{ default 30 .Values.control.probes.startup.failureThreshold }}
+            periodSeconds: {{ default 2 .Values.control.probes.startup.periodSeconds }}
+          livenessProbe:
+            httpGet:
+              path: {{ default "/livez" .Values.control.probes.liveness.path }}
+              port: http
+            periodSeconds: {{ default 30 .Values.control.probes.liveness.periodSeconds }}
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: {{ default "/readyz" .Values.control.probes.readiness.path }}
+              port: http
+            periodSeconds: {{ default 10 .Values.control.probes.readiness.periodSeconds }}
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml .Values.control.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.control.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- range . }}
+        - maxSkew: {{ .maxSkew }}
+          topologyKey: {{ .topologyKey }}
+          whenUnsatisfiable: {{ .whenUnsatisfiable }}
+          {{- if .labelSelector }}
+          labelSelector:
+            {{- toYaml .labelSelector | nindent 12 }}
+          {{- else }}
+          labelSelector:
+            matchLabels:
+              {{- include "robust2api.control.selectorLabels" $ | nindent 14 }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+{{- end }}

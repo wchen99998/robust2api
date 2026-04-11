@@ -1,0 +1,53 @@
+{{- if or .Values.gateway.enabled .Values.control.enabled .Values.worker.enabled .Values.bootstrap.enabled .Values.billing.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "robust2api.fullname" . }}
+  labels:
+    {{- include "robust2api.labels" . | nindent 4 }}
+data:
+  SERVER_HOST: "0.0.0.0"
+  SERVER_PORT: {{ .Values.config.serverPort | quote }}
+  SERVER_MODE: {{ .Values.config.serverMode | quote }}
+  SERVER_FRONTEND_URL: {{ include "robust2api.controlPublicURL" . | quote }}
+  RUN_MODE: {{ .Values.config.runMode | quote }}
+  TZ: {{ .Values.config.timezone | quote }}
+  GRAFANA_URL: {{ include "robust2api.grafanaPublicURL" . | quote }}
+  GATEWAY_URL: {{ include "robust2api.gatewayPublicURL" . | quote }}
+  # Database (non-sensitive)
+  DATABASE_HOST: {{ include "robust2api.databaseHost" . | quote }}
+  DATABASE_PORT: {{ include "robust2api.databasePort" . | quote }}
+  DATABASE_USER: {{ include "robust2api.databaseUser" . | quote }}
+  DATABASE_DBNAME: {{ include "robust2api.databaseName" . | quote }}
+  DATABASE_SSLMODE: {{ include "robust2api.databaseSSLMode" . | quote }}
+  DATABASE_MAX_OPEN_CONNS: {{ .Values.config.database.maxOpenConns | quote }}
+  DATABASE_MAX_IDLE_CONNS: {{ .Values.config.database.maxIdleConns | quote }}
+  DATABASE_CONN_MAX_LIFETIME_MINUTES: {{ .Values.config.database.connMaxLifetimeMinutes | quote }}
+  DATABASE_CONN_MAX_IDLE_TIME_MINUTES: {{ .Values.config.database.connMaxIdleTimeMinutes | quote }}
+  # Redis (non-sensitive)
+  REDIS_HOST: {{ include "robust2api.redisHost" . | quote }}
+  REDIS_PORT: {{ include "robust2api.redisPort" . | quote }}
+  REDIS_DB: {{ .Values.config.redis.db | quote }}
+  REDIS_POOL_SIZE: {{ .Values.config.redis.poolSize | quote }}
+  REDIS_MIN_IDLE_CONNS: {{ .Values.config.redis.minIdleConns | quote }}
+  REDIS_ENABLE_TLS: {{ .Values.config.redis.enableTLS | quote }}
+  # Security
+  SECURITY_URL_ALLOWLIST_ENABLED: {{ .Values.config.security.urlAllowlistEnabled | quote }}
+  SECURITY_URL_ALLOWLIST_ALLOW_INSECURE_HTTP: {{ .Values.config.security.urlAllowlistAllowInsecureHTTP | quote }}
+  SECURITY_URL_ALLOWLIST_ALLOW_PRIVATE_HOSTS: {{ .Values.config.security.urlAllowlistAllowPrivateHosts | quote }}
+  {{- if .Values.config.security.urlAllowlistUpstreamHosts }}
+  SECURITY_URL_ALLOWLIST_UPSTREAM_HOSTS: {{ .Values.config.security.urlAllowlistUpstreamHosts | quote }}
+  {{- end }}
+  WORKER_HEALTH_PORT: {{ .Values.worker.healthPort | quote }}
+  BILLING_HEALTH_PORT: {{ .Values.billing.healthPort | quote }}
+  {{- range $key, $value := .Values.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- if ((.Values.observability).enabled) }}
+  OTEL_ENABLED: "true"
+  OTEL_SERVICE_NAME: {{ .Values.observability.otel.serviceName | quote }}
+  OTEL_ENDPOINT: {{ .Values.observability.otel.endpoint | quote }}
+  OTEL_TRACE_SAMPLE_RATE: {{ .Values.observability.otel.traceSampleRate | quote }}
+  OTEL_METRICS_PORT: {{ .Values.observability.otel.metricsPort | quote }}
+  {{- end }}
+{{- end }}

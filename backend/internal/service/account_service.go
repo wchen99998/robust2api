@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"time"
 
-	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/pagination"
+	infraerrors "github.com/wchen99998/robust2api/internal/pkg/errors"
+	"github.com/wchen99998/robust2api/internal/pkg/pagination"
 )
 
 var (

@@ -11,9 +11,9 @@ func TestValidateBootstrapEnv_AllRequired(t *testing.T) {
 	env := BootstrapEnv{
 		DatabaseHost:      "localhost",
 		DatabasePort:      "5432",
-		DatabaseUser:      "sub2api",
+		DatabaseUser:      "robust2api",
 		DatabasePassword:  "secret",
-		DatabaseDBName:    "sub2api",
+		DatabaseDBName:    "robust2api",
 		DatabaseSSLMode:   "disable",
 		JWTSecret:         "abcdefghijklmnopqrstuvwxyz123456",
 		TOTPEncryptionKey: strings.Repeat("a", 64),
@@ -27,9 +27,9 @@ func TestValidateBootstrapEnv_MissingJWTSecret(t *testing.T) {
 	env := BootstrapEnv{
 		DatabaseHost:      "localhost",
 		DatabasePort:      "5432",
-		DatabaseUser:      "sub2api",
+		DatabaseUser:      "robust2api",
 		DatabasePassword:  "secret",
-		DatabaseDBName:    "sub2api",
+		DatabaseDBName:    "robust2api",
 		DatabaseSSLMode:   "disable",
 		TOTPEncryptionKey: strings.Repeat("a", 64),
 	}
@@ -43,9 +43,9 @@ func TestValidateBootstrapEnv_MissingTOTPKey(t *testing.T) {
 	env := BootstrapEnv{
 		DatabaseHost:     "localhost",
 		DatabasePort:     "5432",
-		DatabaseUser:     "sub2api",
+		DatabaseUser:     "robust2api",
 		DatabasePassword: "secret",
-		DatabaseDBName:   "sub2api",
+		DatabaseDBName:   "robust2api",
 		DatabaseSSLMode:  "disable",
 		JWTSecret:        "abcdefghijklmnopqrstuvwxyz123456",
 	}
@@ -59,9 +59,9 @@ func TestValidateBootstrapEnv_AdminEmailWithoutPassword(t *testing.T) {
 	env := BootstrapEnv{
 		DatabaseHost:      "localhost",
 		DatabasePort:      "5432",
-		DatabaseUser:      "sub2api",
+		DatabaseUser:      "robust2api",
 		DatabasePassword:  "secret",
-		DatabaseDBName:    "sub2api",
+		DatabaseDBName:    "robust2api",
 		DatabaseSSLMode:   "disable",
 		JWTSecret:         "abcdefghijklmnopqrstuvwxyz123456",
 		TOTPEncryptionKey: strings.Repeat("a", 64),
@@ -77,9 +77,9 @@ func TestValidateBootstrapEnv_AdminEmailAndPassword(t *testing.T) {
 	env := BootstrapEnv{
 		DatabaseHost:      "localhost",
 		DatabasePort:      "5432",
-		DatabaseUser:      "sub2api",
+		DatabaseUser:      "robust2api",
 		DatabasePassword:  "secret",
-		DatabaseDBName:    "sub2api",
+		DatabaseDBName:    "robust2api",
 		DatabaseSSLMode:   "disable",
 		JWTSecret:         "abcdefghijklmnopqrstuvwxyz123456",
 		TOTPEncryptionKey: strings.Repeat("a", 64),
@@ -94,9 +94,9 @@ func TestValidateBootstrapEnv_AdminEmailAndPassword(t *testing.T) {
 func TestLoadBootstrapEnvFromEnv(t *testing.T) {
 	t.Setenv("DATABASE_HOST", "db.example.com")
 	t.Setenv("DATABASE_PORT", "5432")
-	t.Setenv("DATABASE_USER", "sub2api")
+	t.Setenv("DATABASE_USER", "robust2api")
 	t.Setenv("DATABASE_PASSWORD", "secret")
-	t.Setenv("DATABASE_DBNAME", "sub2api")
+	t.Setenv("DATABASE_DBNAME", "robust2api")
 	t.Setenv("DATABASE_SSLMODE", "require")
 	t.Setenv("JWT_SECRET", "abcdefghijklmnopqrstuvwxyz123456")
 	t.Setenv("TOTP_ENCRYPTION_KEY", strings.Repeat("a", 64))
@@ -136,9 +136,9 @@ func TestValidateBootstrapEnv_InvalidTOTPKey(t *testing.T) {
 	env := BootstrapEnv{
 		DatabaseHost:      "localhost",
 		DatabasePort:      "5432",
-		DatabaseUser:      "sub2api",
+		DatabaseUser:      "robust2api",
 		DatabasePassword:  "secret",
-		DatabaseDBName:    "sub2api",
+		DatabaseDBName:    "robust2api",
 		DatabaseSSLMode:   "disable",
 		JWTSecret:         "abcdefghijklmnopqrstuvwxyz123456",
 		TOTPEncryptionKey: "not-hex",

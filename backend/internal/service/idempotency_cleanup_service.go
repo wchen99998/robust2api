@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
 )
 
 // IdempotencyCleanupService 定期清理已过期的幂等记录，避免表无限增长。

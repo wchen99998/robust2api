@@ -12,20 +12,20 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	"github.com/Wei-Shaw/sub2api/internal/domain"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
-	pkgerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
-	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/timezone"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/config"
+	"github.com/wchen99998/robust2api/internal/domain"
+	"github.com/wchen99998/robust2api/internal/pkg/antigravity"
+	"github.com/wchen99998/robust2api/internal/pkg/claude"
+	"github.com/wchen99998/robust2api/internal/pkg/ctxkey"
+	pkgerrors "github.com/wchen99998/robust2api/internal/pkg/errors"
+	pkghttputil "github.com/wchen99998/robust2api/internal/pkg/httputil"
+	"github.com/wchen99998/robust2api/internal/pkg/ip"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	"github.com/wchen99998/robust2api/internal/pkg/openai"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
+	"github.com/wchen99998/robust2api/internal/pkg/timezone"
+	middleware2 "github.com/wchen99998/robust2api/internal/server/middleware"
+	"github.com/wchen99998/robust2api/internal/service"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
@@ -111,7 +111,7 @@ func NewGatewayHandler(
 // POST /v1/messages
 func (h *GatewayHandler) Messages(c *gin.Context) {
 	ctx := c.Request.Context()
-	tracer := otel.Tracer("sub2api.gateway")
+	tracer := otel.Tracer("robust2api.gateway")
 	ctx, span := tracer.Start(ctx, "gateway.messages")
 	defer span.End()
 	c.Request = c.Request.WithContext(ctx)
@@ -492,7 +492,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
 			h.submitUsageRecordTask(func(ctx context.Context) {
-				usageTracer := otel.Tracer("sub2api.gateway")
+				usageTracer := otel.Tracer("robust2api.gateway")
 				_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,
@@ -843,7 +843,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
 			h.submitUsageRecordTask(func(ctx context.Context) {
-				usageTracer := otel.Tracer("sub2api.gateway")
+				usageTracer := otel.Tracer("robust2api.gateway")
 				_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
 				if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
 					Result:             result,

@@ -31,13 +31,13 @@ func TestMetricsPrometheusScrapeIncludesObservabilityContracts(t *testing.T) {
 	require.NoError(t, meterProvider.ForceFlush(ctx))
 
 	body := scrapePrometheus(t, registry)
-	require.Contains(t, body, `sub2api_tokens_total{direction="input",model="gpt-5.1",platform="openai"} 100`)
-	require.Contains(t, body, `sub2api_tokens_total{direction="output",model="gpt-5.1",platform="openai"} 200`)
-	require.Contains(t, body, `sub2api_http_request_duration_seconds_bucket{http_method="POST",http_route="/v1/responses",http_status_code="200",platform="openai",le="15"} 0`)
-	require.Contains(t, body, `sub2api_http_request_duration_seconds_bucket{http_method="POST",http_route="/v1/responses",http_status_code="200",platform="openai",le="20"} 1`)
-	require.Contains(t, body, `sub2api_http_request_ttft_seconds_bucket{model="gpt-5.1",platform="openai",le="3"} 1`)
-	require.Contains(t, body, `sub2api_upstream_request_duration_seconds_bucket{outcome="http_error",platform="openai",status_code="502",transport="ws",le="2.5"} 1`)
-	require.Contains(t, body, "sub2api_concurrency_queue_depth 0")
+	require.Contains(t, body, `robust2api_tokens_total{direction="input",model="gpt-5.1",platform="openai"} 100`)
+	require.Contains(t, body, `robust2api_tokens_total{direction="output",model="gpt-5.1",platform="openai"} 200`)
+	require.Contains(t, body, `robust2api_http_request_duration_seconds_bucket{http_method="POST",http_route="/v1/responses",http_status_code="200",platform="openai",le="15"} 0`)
+	require.Contains(t, body, `robust2api_http_request_duration_seconds_bucket{http_method="POST",http_route="/v1/responses",http_status_code="200",platform="openai",le="20"} 1`)
+	require.Contains(t, body, `robust2api_http_request_ttft_seconds_bucket{model="gpt-5.1",platform="openai",le="3"} 1`)
+	require.Contains(t, body, `robust2api_upstream_request_duration_seconds_bucket{outcome="http_error",platform="openai",status_code="502",transport="ws",le="2.5"} 1`)
+	require.Contains(t, body, "robust2api_concurrency_queue_depth 0")
 }
 
 func newTestMetrics(t *testing.T) (*Metrics, *sdkmetric.MeterProvider, *prometheus.Registry) {

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -96,7 +96,7 @@ func finishOpenAIUpstreamAttemptSpan(
 		appelotel.AttrUpstreamLatencyMs(duration.Milliseconds()),
 		appelotel.AttrUpstreamStatusCode(statusCode),
 		appelotel.AttrUpstreamRequestID(upstreamRequestID),
-		attribute.String("sub2api.upstream_outcome", strings.TrimSpace(outcome)),
+		attribute.String("robust2api.upstream_outcome", strings.TrimSpace(outcome)),
 	)
 	if err != nil {
 		sanitized := sanitizeUpstreamErrorMessage(err.Error())

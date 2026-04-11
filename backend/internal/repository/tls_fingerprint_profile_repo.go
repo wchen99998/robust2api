@@ -3,10 +3,10 @@ package repository
 import (
 	"context"
 
-	"github.com/Wei-Shaw/sub2api/ent"
-	"github.com/Wei-Shaw/sub2api/ent/tlsfingerprintprofile"
-	"github.com/Wei-Shaw/sub2api/internal/model"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/ent"
+	"github.com/wchen99998/robust2api/ent/tlsfingerprintprofile"
+	"github.com/wchen99998/robust2api/internal/model"
+	"github.com/wchen99998/robust2api/internal/service"
 )
 
 type tlsFingerprintProfileRepository struct {

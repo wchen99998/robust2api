@@ -55,7 +55,7 @@ const PixelBlast = defineAsyncComponent(() => import('@/components/effects/Pixel
 
 const appStore = useAppStore()
 
-const siteName = computed(() => appStore.siteName || 'robust2api')
+const siteName = computed(() => appStore.siteName || 'Robust2API')
 const siteLogo = computed(() => sanitizeUrl(appStore.siteLogo || '', { allowRelative: true, allowDataUrl: true }))
 const siteSubtitle = computed(() => appStore.cachedPublicSettings?.site_subtitle || 'Subscription to API Conversion Platform')
 const settingsLoaded = computed(() => appStore.publicSettingsLoaded)

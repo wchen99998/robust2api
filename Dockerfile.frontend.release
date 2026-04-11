@@ -7,7 +7,7 @@ ENV GATEWAY_UPSTREAM=http://127.0.0.1:8080
 ENV EXTRA_FRAME_SRC_ORIGINS=""
 
 COPY frontend/dist /usr/share/nginx/html
-COPY deploy/helm/sub2api/nginx/control-nginx.conf /etc/nginx/templates/default.conf.template
+COPY deploy/helm/robust2api/nginx/control-nginx.conf /etc/nginx/templates/default.conf.template
 
 EXPOSE 8081
 

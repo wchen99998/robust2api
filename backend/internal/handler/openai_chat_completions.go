@@ -6,12 +6,12 @@ import (
 	"net/http"
 	"time"
 
-	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	pkghttputil "github.com/wchen99998/robust2api/internal/pkg/httputil"
+	"github.com/wchen99998/robust2api/internal/pkg/ip"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
+	middleware2 "github.com/wchen99998/robust2api/internal/server/middleware"
+	"github.com/wchen99998/robust2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"go.opentelemetry.io/otel/attribute"
@@ -253,8 +253,8 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 						appelotel.AddSpanEvent(span, appelotel.EventSameAccountRetry,
 							appelotel.AttrAccountID(account.ID),
 							appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
-							attribute.Int("sub2api.retry_count", sameAccountRetryCount[account.ID]),
-							attribute.Int("sub2api.retry_limit", retryLimit),
+							attribute.Int("robust2api.retry_count", sameAccountRetryCount[account.ID]),
+							attribute.Int("robust2api.retry_limit", retryLimit),
 						)
 						reqLog.Warn("openai_chat_completions.pool_mode_same_account_retry",
 							zap.Int64("account_id", account.ID),
@@ -296,7 +296,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
 			if wroteFallback {
-				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("sub2api.stream_started", streamStarted))
+				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("robust2api.stream_started", streamStarted))
 			}
 			appelotel.RecordSpanError(span, err, err.Error())
 			reqLog.Warn("openai_chat_completions.forward_failed",

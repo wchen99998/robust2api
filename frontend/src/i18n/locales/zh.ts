@@ -99,8 +99,8 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: 'robust2api 安装向导',
-    description: '配置您的 robust2api 实例',
+    title: 'Robust2API 安装向导',
+    description: '配置您的 Robust2API 实例',
     database: {
       title: '数据库配置',
       description: '连接到您的 PostgreSQL 数据库',
@@ -2127,7 +2127,7 @@ export default {
       poolMode: '池模式',
       poolModeHint: '上游为账号池时启用，错误不标记本地账号状态',
       poolModeInfo:
-        '启用后，上游 429/403/401 错误将自动重试而不标记账号限流或错误，适用于上游指向另一个 sub2api 实例的场景。',
+        '启用后，上游 429/403/401 错误将自动重试而不标记账号限流或错误，适用于上游指向另一个 Robust2API 实例的场景。',
       poolModeRetryCount: '同账号重试次数',
       poolModeRetryCountHint: '仅在池模式下生效。0 表示不原地重试；默认 {default}，最大 {max}。',
       customErrorCodes: '自定义错误码',
@@ -4038,7 +4038,7 @@ export default {
       },
       linuxdo: {
         title: 'LinuxDo Connect 登录',
-        description: '配置 LinuxDo Connect OAuth，用于 robust2api 用户登录',
+        description: '配置 LinuxDo Connect OAuth，用于 Robust2API 用户登录',
         enable: '启用 LinuxDo 登录',
         enableHint: '在登录/注册页面显示 LinuxDo 登录入口',
         clientId: 'Client ID',
@@ -4104,7 +4104,7 @@ export default {
           '禁用用户注册、公开页面和自助服务功能。仅管理员可以登录和管理平台。',
         siteName: '站点名称',
         siteNameHint: '显示在邮件和页面标题中',
-        siteNamePlaceholder: 'robust2api',
+        siteNamePlaceholder: 'Robust2API',
         siteSubtitle: '站点副标题',
         siteSubtitleHint: '显示在登录和注册页面',
         siteSubtitlePlaceholder: '订阅转 API 转换平台',
@@ -4205,7 +4205,7 @@ export default {
         fromEmail: '发件人邮箱',
         fromEmailPlaceholder: "noreply{'@'}example.com",
         fromName: '发件人名称',
-        fromNamePlaceholder: 'robust2api',
+        fromNamePlaceholder: 'Robust2API',
         useTls: '使用 TLS',
         useTlsHint: '为 SMTP 连接启用 TLS 加密'
       },
@@ -4699,16 +4699,16 @@ export default {
     // Admin tour steps
     admin: {
       welcome: {
-        title: '👋 欢迎使用 robust2api',
+        title: '👋 欢迎使用 Robust2API',
         description:
-          '<div class="tour-step-description"><p>robust2api 是一个强大的 AI 服务中转平台，让您轻松管理和分发 AI 服务。</p><p><b>🎯 核心功能：</b></p><ul><li>📦 <b>分组管理</b> - 创建不同的服务套餐（VIP、免费试用等）</li><li>🔗 <b>账号池</b> - 连接多个上游 AI 服务商账号</li><li>🔑 <b>密钥分发</b> - 为用户生成独立的 API Key</li><li>💰 <b>计费管理</b> - 灵活的费率和配额控制</li></ul><p class="tour-cta">接下来，我们将用 3 分钟带您完成首次配置 →</p></div>',
+          '<div class="tour-step-description"><p>Robust2API 是一个强大的 AI 服务中转平台，让您轻松管理和分发 AI 服务。</p><p><b>🎯 核心功能：</b></p><ul><li>📦 <b>分组管理</b> - 创建不同的服务套餐（VIP、免费试用等）</li><li>🔗 <b>账号池</b> - 连接多个上游 AI 服务商账号</li><li>🔑 <b>密钥分发</b> - 为用户生成独立的 API Key</li><li>💰 <b>计费管理</b> - 灵活的费率和配额控制</li></ul><p class="tour-cta">接下来，我们将用 3 分钟带您完成首次配置 →</p></div>',
         nextBtn: '开始配置 🚀',
         prevBtn: '跳过'
       },
       groupManage: {
         title: '📦 第一步：分组管理',
         description:
-          '<div class="tour-step-description"><p><b>什么是分组？</b></p><p>分组是 robust2api 的核心概念，它就像一个"服务套餐"：</p><ul><li>🎯 每个分组可以包含多个上游账号</li><li>💰 每个分组有独立的计费倍率</li><li>👥 可以设置为公开或专属分组</li></ul><p class="tour-success-box"><b>💡 示例：</b>您可以创建"VIP专线"（高倍率）和"免费试用"（低倍率）两个分组</p><p class="tour-cta">👉 点击左侧的"分组管理"开始</p></div>'
+          '<div class="tour-step-description"><p><b>什么是分组？</b></p><p>分组是 Robust2API 的核心概念，它就像一个"服务套餐"：</p><ul><li>🎯 每个分组可以包含多个上游账号</li><li>💰 每个分组有独立的计费倍率</li><li>👥 可以设置为公开或专属分组</li></ul><p class="tour-success-box"><b>💡 示例：</b>您可以创建"VIP专线"（高倍率）和"免费试用"（低倍率）两个分组</p><p class="tour-cta">👉 点击左侧的"分组管理"开始</p></div>'
       },
       createGroup: {
         title: '➕ 创建新分组',
@@ -4820,9 +4820,9 @@ export default {
     // User tour steps
     user: {
       welcome: {
-        title: '👋 欢迎使用 robust2api',
+        title: '👋 欢迎使用 Robust2API',
         description:
-          '<div class="tour-step-description"><p>您好！欢迎来到 robust2api AI 服务平台。</p><p><b>🎯 快速开始：</b></p><ul><li>🔑 创建 API 密钥</li><li>📋 复制密钥到您的应用</li><li>🚀 开始使用 AI 服务</li></ul><p class="tour-cta">只需 1 分钟，让我们开始吧 →</p></div>',
+          '<div class="tour-step-description"><p>您好！欢迎来到 Robust2API AI 服务平台。</p><p><b>🎯 快速开始：</b></p><ul><li>🔑 创建 API 密钥</li><li>📋 复制密钥到您的应用</li><li>🚀 开始使用 AI 服务</li></ul><p class="tour-cta">只需 1 分钟，让我们开始吧 →</p></div>',
         nextBtn: '开始 🚀',
         prevBtn: '跳过'
       },

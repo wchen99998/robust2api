@@ -11,13 +11,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Wei-Shaw/sub2api/internal/config"
-	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
-	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
-	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
-	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/wchen99998/robust2api/internal/config"
+	pkghttputil "github.com/wchen99998/robust2api/internal/pkg/httputil"
+	"github.com/wchen99998/robust2api/internal/pkg/ip"
+	"github.com/wchen99998/robust2api/internal/pkg/logger"
+	appelotel "github.com/wchen99998/robust2api/internal/pkg/otel"
+	middleware2 "github.com/wchen99998/robust2api/internal/server/middleware"
+	"github.com/wchen99998/robust2api/internal/service"
 
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
@@ -364,8 +364,8 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 						appelotel.AddSpanEvent(span, appelotel.EventSameAccountRetry,
 							appelotel.AttrAccountID(account.ID),
 							appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
-							attribute.Int("sub2api.retry_count", sameAccountRetryCount[account.ID]),
-							attribute.Int("sub2api.retry_limit", retryLimit),
+							attribute.Int("robust2api.retry_count", sameAccountRetryCount[account.ID]),
+							attribute.Int("robust2api.retry_limit", retryLimit),
 						)
 						reqLog.Warn("openai.pool_mode_same_account_retry",
 							zap.Int64("account_id", account.ID),
@@ -407,7 +407,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureForwardErrorResponse(c, streamStarted)
 			if wroteFallback {
-				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("sub2api.stream_started", streamStarted))
+				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("robust2api.stream_started", streamStarted))
 			}
 			appelotel.RecordSpanError(span, err, err.Error())
 			fields := []zap.Field{
@@ -847,8 +847,8 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 						appelotel.AddSpanEvent(span, appelotel.EventSameAccountRetry,
 							appelotel.AttrAccountID(account.ID),
 							appelotel.AttrUpstreamStatusCode(failoverErr.StatusCode),
-							attribute.Int("sub2api.retry_count", sameAccountRetryCount[account.ID]),
-							attribute.Int("sub2api.retry_limit", retryLimit),
+							attribute.Int("robust2api.retry_count", sameAccountRetryCount[account.ID]),
+							attribute.Int("robust2api.retry_limit", retryLimit),
 						)
 						reqLog.Warn("openai_messages.pool_mode_same_account_retry",
 							zap.Int64("account_id", account.ID),
@@ -890,7 +890,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
 			wroteFallback := h.ensureAnthropicErrorResponse(c, streamStarted)
 			if wroteFallback {
-				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("sub2api.stream_started", streamStarted))
+				appelotel.AddSpanEvent(span, appelotel.EventFallbackResponse, attribute.Bool("robust2api.stream_started", streamStarted))
 			}
 			appelotel.RecordSpanError(span, err, err.Error())
 			reqLog.Warn("openai_messages.forward_failed",
@@ -1062,7 +1062,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesUserSlot(
 		appelotel.AttrTransport(string(service.GetOpenAIClientTransport(c))),
 	)
 	defer func() {
-		appelotel.SetSpanAttributes(queueSpan, attribute.Int64("sub2api.queue_wait_ms", time.Since(queueStart).Milliseconds()))
+		appelotel.SetSpanAttributes(queueSpan, attribute.Int64("robust2api.queue_wait_ms", time.Since(queueStart).Milliseconds()))
 		queueSpan.End()
 	}()
 	userReleaseFunc, userAcquired, err := h.concurrencyHelper.TryAcquireUserSlot(ctx, userID, userConcurrency)
@@ -1073,7 +1073,7 @@ func (h *OpenAIGatewayHandler) acquireResponsesUserSlot(
 		return nil, false
 	}
 	if userAcquired {
-		appelotel.SetSpanAttributes(queueSpan, attribute.Bool("sub2api.acquired_immediately", true))
+		appelotel.SetSpanAttributes(queueSpan, attribute.Bool("robust2api.acquired_immediately", true))
 		return wrapReleaseOnDone(ctx, userReleaseFunc), true
 	}
 
@@ -1138,11 +1138,11 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 		appelotel.AttrTransport(string(service.GetOpenAIClientTransport(c))),
 	)
 	defer func() {
-		appelotel.SetSpanAttributes(queueSpan, attribute.Int64("sub2api.queue_wait_ms", time.Since(queueStart).Milliseconds()))
+		appelotel.SetSpanAttributes(queueSpan, attribute.Int64("robust2api.queue_wait_ms", time.Since(queueStart).Milliseconds()))
 		queueSpan.End()
 	}()
 	if selection.Acquired {
-		appelotel.SetSpanAttributes(queueSpan, attribute.Bool("sub2api.acquired_immediately", true))
+		appelotel.SetSpanAttributes(queueSpan, attribute.Bool("robust2api.acquired_immediately", true))
 		return wrapReleaseOnDone(ctx, selection.ReleaseFunc), true
 	}
 	if selection.WaitPlan == nil {

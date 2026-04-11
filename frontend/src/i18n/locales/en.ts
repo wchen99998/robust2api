@@ -99,8 +99,8 @@ export default {
 
   // Setup Wizard
   setup: {
-    title: 'robust2api Setup',
-    description: 'Configure your robust2api instance',
+    title: 'Robust2API Setup',
+    description: 'Configure your Robust2API instance',
     database: {
       title: 'Database Configuration',
       description: 'Connect to your PostgreSQL database',
@@ -1980,7 +1980,7 @@ export default {
       poolMode: 'Pool Mode',
       poolModeHint: 'Enable when upstream is an account pool; errors won\'t mark local account status',
       poolModeInfo:
-        'When enabled, upstream 429/403/401 errors will auto-retry without marking the account as rate-limited or errored. Suitable for upstream pointing to another sub2api instance.',
+        'When enabled, upstream 429/403/401 errors will auto-retry without marking the account as rate-limited or errored. Suitable for upstream pointing to another Robust2API instance.',
       poolModeRetryCount: 'Same-Account Retries',
       poolModeRetryCountHint:
         'Only applies in pool mode. Use 0 to disable in-place retry. Default {default}, maximum {max}.',
@@ -3871,7 +3871,7 @@ export default {
         secretKeyConfiguredHint: 'Secret key configured. Leave empty to keep the current value.'      },
       linuxdo: {
         title: 'LinuxDo Connect Login',
-        description: 'Configure LinuxDo Connect OAuth for robust2api end-user login',
+        description: 'Configure LinuxDo Connect OAuth for Robust2API end-user login',
         enable: 'Enable LinuxDo Login',
         enableHint: 'Show LinuxDo login on the login/register pages',
         clientId: 'Client ID',
@@ -3940,7 +3940,7 @@ export default {
         backendModeDescription:
           'Disables user registration, public site, and self-service features. Only admin can log in and manage the platform.',
         siteName: 'Site Name',
-        siteNamePlaceholder: 'robust2api',
+        siteNamePlaceholder: 'Robust2API',
         siteNameHint: 'Displayed in emails and page titles',
         siteSubtitle: 'Site Subtitle',
         siteSubtitlePlaceholder: 'Subscription to API Conversion Platform',
@@ -4044,7 +4044,7 @@ export default {
         fromEmail: 'From Email',
         fromEmailPlaceholder: "noreply{'@'}example.com",
         fromName: 'From Name',
-        fromNamePlaceholder: 'robust2api',
+        fromNamePlaceholder: 'Robust2API',
         useTls: 'Use TLS',
         useTlsHint: 'Enable TLS encryption for SMTP connection'
       },
@@ -4541,14 +4541,14 @@ export default {
     // Admin tour steps
     admin: {
       welcome: {
-        title: '👋 Welcome to robust2api',
-        description: '<div class="tour-step-description"><p>robust2api is a powerful AI service gateway platform that helps you easily manage and distribute AI services.</p><p><b>🎯 Core Features:</b></p><ul><li>📦 <b>Group Management</b> - Create service tiers (VIP, Free Trial, etc.)</li><li>🔗 <b>Account Pool</b> - Connect multiple upstream AI service accounts</li><li>🔑 <b>Key Distribution</b> - Generate independent API Keys for users</li><li>💰 <b>Billing Control</b> - Flexible rate and quota management</li></ul><p class="tour-cta">Let\'s complete the initial setup in 3 minutes →</p></div>',
+        title: '👋 Welcome to Robust2API',
+        description: '<div class="tour-step-description"><p>Robust2API is a powerful AI service gateway platform that helps you easily manage and distribute AI services.</p><p><b>🎯 Core Features:</b></p><ul><li>📦 <b>Group Management</b> - Create service tiers (VIP, Free Trial, etc.)</li><li>🔗 <b>Account Pool</b> - Connect multiple upstream AI service accounts</li><li>🔑 <b>Key Distribution</b> - Generate independent API Keys for users</li><li>💰 <b>Billing Control</b> - Flexible rate and quota management</li></ul><p class="tour-cta">Let\'s complete the initial setup in 3 minutes →</p></div>',
         nextBtn: 'Start Setup 🚀',
         prevBtn: 'Skip'
       },
       groupManage: {
         title: '📦 Step 1: Group Management',
-        description: '<div class="tour-step-description"><p><b>What is a Group?</b></p><p>Groups are the core concept of robust2api, like a "service package":</p><ul><li>🎯 Each group can contain multiple upstream accounts</li><li>💰 Each group has independent billing multiplier</li><li>👥 Can be set as public or exclusive</li></ul><p class="tour-success-box"><b>💡 Example:</b> You can create "VIP Premium" (high rate) and "Free Trial" (low rate) groups</p><p class="tour-cta">👉 Click "Group Management" on the left sidebar</p></div>'
+        description: '<div class="tour-step-description"><p><b>What is a Group?</b></p><p>Groups are the core concept of Robust2API, like a "service package":</p><ul><li>🎯 Each group can contain multiple upstream accounts</li><li>💰 Each group has independent billing multiplier</li><li>👥 Can be set as public or exclusive</li></ul><p class="tour-success-box"><b>💡 Example:</b> You can create "VIP Premium" (high rate) and "Free Trial" (low rate) groups</p><p class="tour-cta">👉 Click "Group Management" on the left sidebar</p></div>'
       },
       createGroup: {
         title: '➕ Create New Group',
@@ -4641,8 +4641,8 @@ export default {
     // User tour steps
     user: {
       welcome: {
-        title: '👋 Welcome to robust2api',
-        description: '<div class="tour-step-description"><p>Hello! Welcome to the robust2api AI service platform.</p><p><b>🎯 Quick Start:</b></p><ul><li>🔑 Create API Key</li><li>📋 Copy key to your application</li><li>🚀 Start using AI services</li></ul><p class="tour-cta">Just 1 minute, let\'s get started →</p></div>',
+        title: '👋 Welcome to Robust2API',
+        description: '<div class="tour-step-description"><p>Hello! Welcome to the Robust2API AI service platform.</p><p><b>🎯 Quick Start:</b></p><ul><li>🔑 Create API Key</li><li>📋 Copy key to your application</li><li>🚀 Start using AI services</li></ul><p class="tour-cta">Just 1 minute, let\'s get started →</p></div>',
         nextBtn: 'Start 🚀',
         prevBtn: 'Skip'
       },

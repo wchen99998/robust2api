@@ -1,7 +1,7 @@
 # DigitalOcean
 do_token     = "dop_v1_your_token_here"
 region       = "sgp1"
-cluster_name = "sub2api"
+cluster_name = "robust2api"
 k8s_version  = "1.34"
 node_size    = "s-2vcpu-4gb"
 min_nodes    = 1

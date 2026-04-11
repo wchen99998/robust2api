@@ -1,0 +1,16 @@
+apiVersion: v2
+name: robust2api
+description: Robust2API - AI API Gateway Platform for subscription quota distribution
+type: application
+version: 0.2.0
+appVersion: "0.2.0"
+
+dependencies:
+  - name: postgresql
+    version: "~18"
+    repository: oci://registry-1.docker.io/bitnamicharts
+    condition: postgresql.enabled
+  - name: redis
+    version: "~25"
+    repository: oci://registry-1.docker.io/bitnamicharts
+    condition: redis.enabled
