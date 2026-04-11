@@ -39,7 +39,7 @@ type AuthSession struct {
 	// RevokedAt holds the value of the "revoked_at" field.
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 	// CurrentRefreshTokenHash holds the value of the "current_refresh_token_hash" field.
-	CurrentRefreshTokenHash string `json:"current_refresh_token_hash,omitempty"`
+	CurrentRefreshTokenHash string `json:"-"`
 	// AuthVersion holds the value of the "auth_version" field.
 	AuthVersion  int64 `json:"auth_version,omitempty"`
 	selectValues sql.SelectValues
@@ -220,8 +220,7 @@ func (_m *AuthSession) String() string {
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	builder.WriteString("current_refresh_token_hash=")
-	builder.WriteString(_m.CurrentRefreshTokenHash)
+	builder.WriteString("current_refresh_token_hash=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("auth_version=")
 	builder.WriteString(fmt.Sprintf("%v", _m.AuthVersion))

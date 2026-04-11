@@ -29,7 +29,7 @@ type AuthEmailVerification struct {
 	// Email holds the value of the "email" field.
 	Email string `json:"email,omitempty"`
 	// CodeHash holds the value of the "code_hash" field.
-	CodeHash string `json:"code_hash,omitempty"`
+	CodeHash string `json:"-"`
 	// ExpiresAt holds the value of the "expires_at" field.
 	ExpiresAt time.Time `json:"expires_at,omitempty"`
 	// ConsumedAt holds the value of the "consumed_at" field.
@@ -174,8 +174,7 @@ func (_m *AuthEmailVerification) String() string {
 	builder.WriteString("email=")
 	builder.WriteString(_m.Email)
 	builder.WriteString(", ")
-	builder.WriteString("code_hash=")
-	builder.WriteString(_m.CodeHash)
+	builder.WriteString("code_hash=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("expires_at=")
 	builder.WriteString(_m.ExpiresAt.Format(time.ANSIC))

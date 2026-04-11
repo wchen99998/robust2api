@@ -33,6 +33,7 @@ func (AuthPasswordCredential) Fields() []ent.Field {
 			StorageKey("subject_id"),
 		field.String("password_hash").
 			NotEmpty().
+			Sensitive().
 			SchemaType(map[string]string{
 				dialect.Postgres: "text",
 			}),

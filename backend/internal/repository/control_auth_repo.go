@@ -34,38 +34,22 @@ func (r *controlAuthRepository) EnsureSubjectAccount(ctx context.Context, user *
 		return nil, err
 	}
 
-	subject, err := r.getSubjectByLegacyUserID(ctx, exec, user.ID)
-	if err != nil && !errors.Is(err, service.ErrSubjectNotFound) {
-		return nil, err
-	}
-	if errors.Is(err, service.ErrSubjectNotFound) {
-		subject = &service.SubjectRecord{
-			SubjectID:    uuid.NewString(),
-			LegacyUserID: user.ID,
-			Email:        user.Email,
-			Status:       user.Status,
-			AuthVersion:  1,
-		}
-		if _, err := exec.ExecContext(
-			ctx,
-			`INSERT INTO auth_subjects (subject_id, legacy_user_id, email, status, auth_version, created_at, updated_at)
-			 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())`,
-			subject.SubjectID, subject.LegacyUserID, subject.Email, subject.Status, subject.AuthVersion,
-		); err != nil {
-			return nil, fmt.Errorf("insert auth_subject: %w", err)
-		}
-	}
-
-	if _, err := exec.ExecContext(
+	row := queryRowContext(
 		ctx,
-		`UPDATE auth_subjects
-		    SET email = $2,
-		        status = $3,
-		        updated_at = NOW()
-		  WHERE subject_id = $1`,
-		subject.SubjectID, user.Email, user.Status,
-	); err != nil {
-		return nil, fmt.Errorf("update auth_subject: %w", err)
+		exec,
+		`INSERT INTO auth_subjects (subject_id, legacy_user_id, email, status, auth_version, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+		 ON CONFLICT (legacy_user_id)
+		 DO UPDATE SET
+		    email = EXCLUDED.email,
+		    status = EXCLUDED.status,
+		    updated_at = NOW()
+		 RETURNING subject_id, legacy_user_id, email, status, auth_version, created_at, updated_at`,
+		uuid.NewString(), user.ID, user.Email, user.Status, int64(1),
+	)
+	subject, err := scanSubject(row)
+	if err != nil {
+		return nil, fmt.Errorf("upsert auth_subject: %w", err)
 	}
 
 	if _, err := exec.ExecContext(

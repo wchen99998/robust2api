@@ -40,6 +40,7 @@ func (AuthPasswordResetToken) Fields() []ent.Field {
 		field.String("token_hash").
 			Unique().
 			NotEmpty().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.Time("expires_at"),
 		field.Time("consumed_at").

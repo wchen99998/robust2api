@@ -140,3 +140,71 @@ func TestControlAuthRepositoryConsumeAuthFlowNotFound(t *testing.T) {
 	require.ErrorIs(t, err, service.ErrAuthFlowNotFound)
 	require.NoError(t, mock.ExpectationsWereMet())
 }
+
+func TestControlAuthRepositoryEnsureSubjectAccountUsesAtomicUpsert(t *testing.T) {
+	db, mock := newSQLMock(t)
+	repo := &controlAuthRepository{sql: db}
+
+	user := &service.User{
+		ID:       42,
+		Email:    "user@example.com",
+		Status:   service.StatusActive,
+		Username: "tester",
+		Notes:    "hello",
+		Role:     service.RoleUser,
+	}
+	subjectID := "subject-1"
+	authVersion := int64(3)
+	createdAt := time.Date(2026, 4, 11, 8, 0, 0, 0, time.UTC)
+	updatedAt := createdAt.Add(5 * time.Minute)
+
+	mock.ExpectQuery("INSERT INTO auth_subjects").
+		WithArgs(sqlmock.AnyArg(), user.ID, user.Email, user.Status, int64(1)).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"subject_id", "legacy_user_id", "email", "status", "auth_version", "created_at", "updated_at",
+		}).AddRow(subjectID, user.ID, user.Email, user.Status, authVersion, createdAt, updatedAt))
+
+	mock.ExpectExec("UPDATE users").
+		WithArgs(user.ID, subjectID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectExec("INSERT INTO control_user_profiles").
+		WithArgs(subjectID, user.ID, user.Email, user.Username, user.Notes).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectExec("DELETE FROM control_subject_roles").
+		WithArgs(subjectID).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+	mock.ExpectExec("INSERT INTO control_subject_roles").
+		WithArgs(subjectID, user.Role).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	mock.ExpectQuery("SELECT subject_id, legacy_user_id, email, username, notes, created_at, updated_at\\s+FROM control_user_profiles").
+		WithArgs(subjectID).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"subject_id", "legacy_user_id", "email", "username", "notes", "created_at", "updated_at",
+		}).AddRow(subjectID, user.ID, user.Email, user.Username, user.Notes, createdAt, updatedAt))
+
+	mock.ExpectQuery("SELECT role\\s+FROM control_subject_roles").
+		WithArgs(subjectID).
+		WillReturnRows(sqlmock.NewRows([]string{"role"}).AddRow(user.Role))
+
+	mock.ExpectQuery("SELECT subject_id, secret_encrypted, enabled, enabled_at, created_at, updated_at\\s+FROM auth_mfa_totp_factors").
+		WithArgs(subjectID).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"subject_id", "secret_encrypted", "enabled", "enabled_at", "created_at", "updated_at",
+		}))
+
+	bundle, err := repo.EnsureSubjectAccount(context.Background(), user)
+	require.NoError(t, err)
+	require.NotNil(t, bundle)
+	require.NotNil(t, bundle.Subject)
+	require.Equal(t, subjectID, bundle.Subject.SubjectID)
+	require.Equal(t, authVersion, bundle.Subject.AuthVersion)
+	require.NotNil(t, bundle.Profile)
+	require.Equal(t, user.Email, bundle.Profile.Email)
+	require.Equal(t, []string{user.Role}, bundle.Roles)
+	require.NotNil(t, bundle.TOTP)
+	require.Equal(t, subjectID, bundle.TOTP.SubjectID)
+	require.NoError(t, mock.ExpectationsWereMet())
+}

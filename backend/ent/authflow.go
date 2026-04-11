@@ -29,11 +29,11 @@ type AuthFlow struct {
 	// Issuer holds the value of the "issuer" field.
 	Issuer string `json:"issuer,omitempty"`
 	// StateHash holds the value of the "state_hash" field.
-	StateHash string `json:"state_hash,omitempty"`
+	StateHash string `json:"-"`
 	// CodeVerifier holds the value of the "code_verifier" field.
-	CodeVerifier *string `json:"code_verifier,omitempty"`
+	CodeVerifier *string `json:"-"`
 	// Nonce holds the value of the "nonce" field.
-	Nonce *string `json:"nonce,omitempty"`
+	Nonce *string `json:"-"`
 	// RedirectTo holds the value of the "redirect_to" field.
 	RedirectTo string `json:"redirect_to,omitempty"`
 	// ExpiresAt holds the value of the "expires_at" field.
@@ -195,18 +195,11 @@ func (_m *AuthFlow) String() string {
 	builder.WriteString("issuer=")
 	builder.WriteString(_m.Issuer)
 	builder.WriteString(", ")
-	builder.WriteString("state_hash=")
-	builder.WriteString(_m.StateHash)
+	builder.WriteString("state_hash=<sensitive>")
 	builder.WriteString(", ")
-	if v := _m.CodeVerifier; v != nil {
-		builder.WriteString("code_verifier=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("code_verifier=<sensitive>")
 	builder.WriteString(", ")
-	if v := _m.Nonce; v != nil {
-		builder.WriteString("nonce=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("nonce=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("redirect_to=")
 	builder.WriteString(_m.RedirectTo)

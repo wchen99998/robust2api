@@ -663,12 +663,20 @@ func (s *ControlAuthService) RotateCurrentSession(ctx context.Context, identity 
 	}
 
 	user := s.tryGetLinkedUser(ctx, identity.LegacyUserID)
+	tx, err := s.entClient.Tx(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+	txCtx := dbent.NewTxContext(ctx, tx)
+
 	var bundle *IdentityBundle
-	var err error
 	if user != nil {
-		bundle, err = s.authRepo.SyncLocalCredentialState(ctx, user)
+		bundle, err = s.authRepo.SyncLocalCredentialState(txCtx, user)
 	} else {
-		bundle, err = s.authRepo.GetIdentityBundleBySubjectID(ctx, identity.SubjectID)
+		bundle, err = s.authRepo.GetIdentityBundleBySubjectID(txCtx, identity.SubjectID)
 	}
 	if err != nil {
 		return nil, nil, err
@@ -678,10 +686,15 @@ func (s *ControlAuthService) RotateCurrentSession(ctx context.Context, identity 
 	}
 
 	now := time.Now()
-	if err := s.authRepo.RevokeAllSessions(ctx, bundle.Subject.SubjectID, now); err != nil {
+	nextAuthVersion := bundle.Subject.AuthVersion + 1
+	if err := s.authRepo.UpdateSubjectAuthVersion(txCtx, bundle.Subject.SubjectID, nextAuthVersion); err != nil {
 		return nil, nil, err
 	}
-	_ = s.sessionCache.DeleteSessionSnapshot(ctx, identity.SessionID)
+	bundle.Subject.AuthVersion = nextAuthVersion
+
+	if err := s.authRepo.RevokeAllSessions(txCtx, bundle.Subject.SubjectID, now); err != nil {
+		return nil, nil, err
+	}
 
 	nextAMR := strings.TrimSpace(amr)
 	if nextAMR == "" {
@@ -691,7 +704,16 @@ func (s *ControlAuthService) RotateCurrentSession(ctx context.Context, identity 
 		nextAMR = "pwd"
 	}
 
-	return s.createAuthenticatedSession(ctx, bundle, user, nextAMR)
+	nextIdentity, tokens, snapshot, err := s.createSessionInTransaction(txCtx, bundle, user, nextAMR)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, nil, err
+	}
+	_ = s.sessionCache.DeleteSessionSnapshot(ctx, identity.SessionID)
+	s.tryStoreSessionSnapshot(ctx, snapshot)
+	return nextIdentity, tokens, nil
 }
 
 func (s *ControlAuthService) IssueEmbedToken(ctx context.Context, identity *AuthenticatedIdentity) (*ControlEmbedToken, error) {

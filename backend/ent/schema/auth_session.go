@@ -49,6 +49,7 @@ func (AuthSession) Fields() []ent.Field {
 			Nillable(),
 		field.String("current_refresh_token_hash").
 			NotEmpty().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.Int64("auth_version"),
 	}

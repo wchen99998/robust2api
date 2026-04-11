@@ -44,6 +44,7 @@ func (AuthEmailVerification) Fields() []ent.Field {
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.String("code_hash").
 			NotEmpty().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.Time("expires_at"),
 		field.Time("consumed_at").

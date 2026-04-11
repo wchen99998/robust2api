@@ -37,7 +37,7 @@ type AuthRefreshToken struct {
 	// RevokedAt holds the value of the "revoked_at" field.
 	RevokedAt *time.Time `json:"revoked_at,omitempty"`
 	// ReplacedByTokenHash holds the value of the "replaced_by_token_hash" field.
-	ReplacedByTokenHash *string `json:"replaced_by_token_hash,omitempty"`
+	ReplacedByTokenHash *string `json:"-"`
 	selectValues        sql.SelectValues
 }
 
@@ -205,10 +205,7 @@ func (_m *AuthRefreshToken) String() string {
 		builder.WriteString(v.Format(time.ANSIC))
 	}
 	builder.WriteString(", ")
-	if v := _m.ReplacedByTokenHash; v != nil {
-		builder.WriteString("replaced_by_token_hash=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("replaced_by_token_hash=<sensitive>")
 	builder.WriteByte(')')
 	return builder.String()
 }

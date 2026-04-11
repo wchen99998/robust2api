@@ -23,7 +23,7 @@ type AuthMFATOTPFactor struct {
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// SecretEncrypted holds the value of the "secret_encrypted" field.
-	SecretEncrypted *string `json:"secret_encrypted,omitempty"`
+	SecretEncrypted *string `json:"-"`
 	// Enabled holds the value of the "enabled" field.
 	Enabled bool `json:"enabled,omitempty"`
 	// EnabledAt holds the value of the "enabled_at" field.
@@ -139,10 +139,7 @@ func (_m *AuthMFATOTPFactor) String() string {
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	if v := _m.SecretEncrypted; v != nil {
-		builder.WriteString("secret_encrypted=")
-		builder.WriteString(*v)
-	}
+	builder.WriteString("secret_encrypted=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("enabled=")
 	builder.WriteString(fmt.Sprintf("%v", _m.Enabled))

@@ -44,14 +44,17 @@ func (AuthFlow) Fields() []ent.Field {
 		field.String("state_hash").
 			Unique().
 			NotEmpty().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.String("code_verifier").
 			Optional().
 			Nillable().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.String("nonce").
 			Optional().
 			Nillable().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.String("redirect_to").
 			Default("/").

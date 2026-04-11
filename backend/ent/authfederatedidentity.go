@@ -68,7 +68,10 @@ func (_m *AuthFederatedIdentity) assignValues(columns []string, values []any) er
 		case authfederatedidentity.FieldID:
 			value, ok := values[i].(*sql.NullInt64)
 			if !ok {
-				return fmt.Errorf("unexpected type %T for field id", value)
+				return fmt.Errorf("unexpected type %T for field id", values[i])
+			}
+			if !value.Valid {
+				return fmt.Errorf("unexpected NULL value for field id")
 			}
 			_m.ID = int64(value.Int64)
 		case authfederatedidentity.FieldCreatedAt:

@@ -33,6 +33,7 @@ func (AuthRefreshToken) Fields() []ent.Field {
 		field.String("id").
 			StorageKey("token_hash").
 			NotEmpty().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.UUID("sid", uuid.UUID{}),
 		field.UUID("subject_id", uuid.UUID{}),
@@ -48,6 +49,7 @@ func (AuthRefreshToken) Fields() []ent.Field {
 		field.String("replaced_by_token_hash").
 			Optional().
 			Nillable().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 	}
 }

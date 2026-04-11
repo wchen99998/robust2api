@@ -34,6 +34,7 @@ func (AuthMFATOTPFactor) Fields() []ent.Field {
 		field.String("secret_encrypted").
 			Optional().
 			Nillable().
+			Sensitive().
 			SchemaType(map[string]string{dialect.Postgres: "text"}),
 		field.Bool("enabled").
 			Default(false),

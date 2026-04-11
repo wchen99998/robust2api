@@ -23,7 +23,7 @@ type AuthPasswordCredential struct {
 	// UpdatedAt holds the value of the "updated_at" field.
 	UpdatedAt time.Time `json:"updated_at,omitempty"`
 	// PasswordHash holds the value of the "password_hash" field.
-	PasswordHash string `json:"password_hash,omitempty"`
+	PasswordHash string `json:"-"`
 	// ChangedAt holds the value of the "changed_at" field.
 	ChangedAt    time.Time `json:"changed_at,omitempty"`
 	selectValues sql.SelectValues
@@ -127,8 +127,7 @@ func (_m *AuthPasswordCredential) String() string {
 	builder.WriteString("updated_at=")
 	builder.WriteString(_m.UpdatedAt.Format(time.ANSIC))
 	builder.WriteString(", ")
-	builder.WriteString("password_hash=")
-	builder.WriteString(_m.PasswordHash)
+	builder.WriteString("password_hash=<sensitive>")
 	builder.WriteString(", ")
 	builder.WriteString("changed_at=")
 	builder.WriteString(_m.ChangedAt.Format(time.ANSIC))
