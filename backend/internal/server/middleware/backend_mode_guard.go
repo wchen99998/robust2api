@@ -27,31 +27,22 @@ func BackendModeUserGuard(settingService *service.SettingService) gin.HandlerFun
 	}
 }
 
-// BackendModeAuthGuard selectively blocks auth endpoints when backend mode is enabled.
-// Allows: login, login/2fa, logout, refresh, bootstrap, and external OAuth callbacks.
-// Blocks: registration, forgot-password, reset-password, and other self-service auth flows.
+// BackendModeAuthGuard selectively blocks unauthenticated auth endpoints when backend mode is enabled.
+// Allows bootstrap, session establishment/rotation, and external OAuth login/callback.
+// Blocks registration, password reset, and other public self-service auth flows.
 func BackendModeAuthGuard(settingService *service.SettingService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		if settingService == nil || !settingService.IsBackendModeEnabled(c.Request.Context()) {
 			c.Next()
 			return
 		}
+
 		path := c.Request.URL.Path
 		allowedSuffixes := []string{
-			"/auth/login",
-			"/auth/login/2fa",
-			"/auth/logout",
-			"/auth/refresh",
 			"/bootstrap",
 			"/session/login",
 			"/session/login/totp",
-			"/session/logout",
 			"/session/refresh",
-			"/oauth/linuxdo/start",
-			"/oauth/linuxdo/callback",
-			"/oauth/oidc/start",
-			"/oauth/oidc/callback",
-			"/jwks",
 		}
 		for _, suffix := range allowedSuffixes {
 			if strings.HasSuffix(path, suffix) {
@@ -59,6 +50,12 @@ func BackendModeAuthGuard(settingService *service.SettingService) gin.HandlerFun
 				return
 			}
 		}
+		if strings.Contains(path, "/oauth/") &&
+			(strings.HasSuffix(path, "/start") || strings.HasSuffix(path, "/callback")) {
+			c.Next()
+			return
+		}
+
 		response.Forbidden(c, "Backend mode is active. Registration and self-service auth flows are disabled.")
 		c.Abort()
 	}

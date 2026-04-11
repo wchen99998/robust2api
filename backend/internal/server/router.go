@@ -50,8 +50,10 @@ func SetupControlRouter(
 	applySharedRouterMiddleware(r, cfg)
 	r.Use(middleware2.CORS(cfg.CORS))
 	r.Use(middleware2.SecurityHeaders(cfg.Security.CSP, nil))
+	r.Use(middleware2.ControlCSRFMiddleware())
 
 	routes.RegisterHealthRoutes(r, healthChecker)
+	r.GET("/.well-known/jwks.json", handlers.Auth.JWKS)
 
 	v1 := r.Group("/api/v1")
 	routes.RegisterAuthRoutes(v1, handlers, jwtAuth, redisClient, settingService)

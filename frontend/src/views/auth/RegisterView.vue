@@ -11,19 +11,18 @@
         </p>
       </div>
 
-      <div v-if="!backendModeEnabled && (linuxdoOAuthEnabled || oidcOAuthEnabled)" class="space-y-4">
-        <LinuxDoOAuthSection
-          v-if="linuxdoOAuthEnabled"
+      <div v-if="!backendModeEnabled && authProviders.length > 0" class="space-y-4">
+        <button
+          v-for="provider in authProviders"
+          :key="provider.id"
+          type="button"
+          class="btn btn-secondary w-full"
           :disabled="isLoading"
-          :show-divider="false"
-        />
-        <OidcOAuthSection
-          v-if="oidcOAuthEnabled"
-          :disabled="isLoading"
-          :provider-name="oidcOAuthProviderName"
-          :show-divider="false"
-        />
-        <div class="flex items-center gap-3">
+          @click="startProviderLogin(provider.start_path)"
+        >
+          {{ t('auth.oidc.signIn', { providerName: provider.display_name }) }}
+        </button>
+        <div v-if="registrationEnabled" class="flex items-center gap-3">
           <div class="h-px flex-1 bg-gray-200 dark:bg-dark-700"></div>
           <span class="text-xs text-gray-500 dark:text-dark-400">
             {{ t('auth.oauthOrContinue') }}
@@ -306,17 +305,16 @@ import { ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { AuthLayout } from '@/components/layout'
-import LinuxDoOAuthSection from '@/components/auth/LinuxDoOAuthSection.vue'
-import OidcOAuthSection from '@/components/auth/OidcOAuthSection.vue'
 import Icon from '@/components/icons/Icon.vue'
 import TurnstileWidget from '@/components/TurnstileWidget.vue'
 import { useAuthStore, useAppStore } from '@/stores'
-import { getPublicSettings, validatePromoCode, validateInvitationCode } from '@/api/auth'
+import { bootstrap, validatePromoCode, validateInvitationCode } from '@/api/auth'
 import { buildAuthErrorMessage } from '@/utils/authError'
 import {
   isRegistrationEmailSuffixAllowed,
   normalizeRegistrationEmailSuffixWhitelist
 } from '@/utils/registrationEmailPolicy'
+import type { BootstrapAuthProvider } from '@/types'
 
 const { t, locale } = useI18n()
 
@@ -342,9 +340,7 @@ const invitationCodeEnabled = ref<boolean>(false)
 const turnstileEnabled = ref<boolean>(false)
 const turnstileSiteKey = ref<string>('')
 const siteName = ref<string>('robust2api')
-const linuxdoOAuthEnabled = ref<boolean>(false)
-const oidcOAuthEnabled = ref<boolean>(false)
-const oidcOAuthProviderName = ref<string>('OIDC')
+const authProviders = ref<BootstrapAuthProvider[]>([])
 const backendModeEnabled = ref<boolean>(false)
 const registrationEmailSuffixWhitelist = ref<string[]>([])
 
@@ -389,7 +385,9 @@ const errors = reactive({
 
 onMounted(async () => {
   try {
-    const settings = await getPublicSettings()
+    const boot = await bootstrap()
+    const settings = boot.public_settings
+    const capabilities = boot.auth_capabilities
     registrationEnabled.value = settings.registration_enabled
     emailVerifyEnabled.value = settings.email_verify_enabled
     promoCodeEnabled.value = settings.promo_code_enabled
@@ -397,10 +395,12 @@ onMounted(async () => {
     turnstileEnabled.value = settings.turnstile_enabled
     turnstileSiteKey.value = settings.turnstile_site_key || ''
     siteName.value = settings.site_name || 'robust2api'
-    linuxdoOAuthEnabled.value = settings.linuxdo_oauth_enabled
-    oidcOAuthEnabled.value = settings.oidc_oauth_enabled
-    oidcOAuthProviderName.value = settings.oidc_oauth_provider_name || 'OIDC'
+    authProviders.value = boot.auth_providers || []
     backendModeEnabled.value = settings.backend_mode_enabled
+    if (capabilities) {
+      registrationEnabled.value = capabilities.registration_enabled
+      emailVerifyEnabled.value = capabilities.email_verification_enabled
+    }
     if (backendModeEnabled.value) {
       registrationEnabled.value = false
     }
@@ -423,6 +423,24 @@ onMounted(async () => {
     settingsLoaded.value = true
   }
 })
+
+function startProviderLogin(startPath: string): void {
+  const redirectTo = (route.query.redirect as string) || '/dashboard'
+  if (!startPath) {
+    return
+  }
+  try {
+    const isAbsolute = /^https?:\/\//.test(startPath)
+    const target = isAbsolute
+      ? new URL(startPath)
+      : new URL(startPath.startsWith('/') ? startPath : `/${startPath}`, window.location.origin)
+    target.searchParams.set('redirect', redirectTo)
+    window.location.href = target.toString()
+  } catch {
+    const delimiter = startPath.includes('?') ? '&' : '?'
+    window.location.href = `${startPath}${delimiter}redirect=${encodeURIComponent(redirectTo)}`
+  }
+}
 
 onUnmounted(() => {
   if (promoValidateTimeout) {

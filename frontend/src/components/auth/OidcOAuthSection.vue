@@ -47,7 +47,7 @@ function startLogin(): void {
   const redirectTo = (route.query.redirect as string) || '/dashboard'
   const apiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined) || '/api/v1'
   const normalized = apiBase.replace(/\/$/, '')
-  const startURL = `${normalized}/auth/oauth/oidc/start?redirect=${encodeURIComponent(redirectTo)}`
+  const startURL = `${normalized}/oauth/oidc/start?redirect=${encodeURIComponent(redirectTo)}`
   window.location.href = startURL
 }
 </script>

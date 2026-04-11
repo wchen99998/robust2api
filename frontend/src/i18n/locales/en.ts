@@ -298,6 +298,8 @@ export default {
     passwordRequired: 'Password is required',
     passwordMinLength: 'Password must be at least 6 characters',
     loginFailed: 'Login failed. Please check your credentials and try again.',
+    passwordLoginDisabled: 'Email and password login is disabled for this deployment. Use a sign-in provider.',
+    noSignInMethods: 'No sign-in methods are currently available. Please contact the administrator.',
     registrationFailed: 'Registration failed. Please try again.',
     emailSuffixNotAllowed: 'This email domain is not allowed for registration.',
     emailSuffixNotAllowedWithAllowed:
@@ -317,6 +319,9 @@ export default {
     clickToResend: 'Click to resend code',
     resendCode: 'Resend verification code',
     sendCodeDesc: "We'll send a verification code to",
+    emailVerificationDisabled: 'Email verification is unavailable',
+    emailVerificationManagedExternally:
+      'This deployment uses an external identity provider for verification.',
     codeSentSuccess: 'Verification code sent! Please check your inbox.',
     verifying: 'Verifying...',
     verifyAndCreate: 'Verify & Create Account',
@@ -381,6 +386,9 @@ export default {
     forgotPassword: 'Forgot password?',
     forgotPasswordTitle: 'Reset Your Password',
     forgotPasswordHint: 'Enter your email address and we will send you a link to reset your password.',
+    forgotPasswordDisabled: 'Password reset is unavailable',
+    passwordResetManagedExternally:
+      'Password reset is managed by your identity provider. Use the provider reset flow.',
     showPassword: 'Show password',
     hidePassword: 'Hide password',
     sendResetLink: 'Send Reset Link',
@@ -393,6 +401,7 @@ export default {
     // Reset password
     resetPasswordTitle: 'Set New Password',
     resetPasswordHint: 'Enter your new password below.',
+    resetPasswordDisabled: 'Password reset is unavailable',
     newPassword: 'New Password',
     newPasswordPlaceholder: 'Enter your new password',
     confirmPassword: 'Confirm Password',
@@ -3883,7 +3892,7 @@ export default {
         clientSecretConfiguredPlaceholder: '********',
         clientSecretConfiguredHint: 'Secret configured. Leave empty to keep the current value.',
         redirectUrl: 'Redirect URL',
-        redirectUrlPlaceholder: 'https://your-domain.com/api/v1/auth/oauth/linuxdo/callback',
+        redirectUrlPlaceholder: 'https://your-domain.com/api/v1/oauth/linuxdo/callback',
         redirectUrlHint:
           'Must match the redirect URL configured in Connect.Linux.Do (must be an absolute http(s) URL)',
         quickSetCopy: 'Generate & Copy (current site)',
@@ -4072,29 +4081,6 @@ export default {
         queryModePreagg: 'Preagg (fastest, requires aggregation)',
         metricsInterval: 'Metrics Collection Interval (seconds)',
         metricsIntervalHint: 'How often to collect system/request metrics (60-3600 seconds)'
-      },
-      adminApiKey: {
-        title: 'Admin API Key',
-        description: 'Global API key for external system integration with full admin access',
-        notConfigured: 'Admin API key not configured',
-        configured: 'Admin API key is active',
-        currentKey: 'Current Key',
-        regenerate: 'Regenerate',
-        regenerating: 'Regenerating...',
-        delete: 'Delete',
-        deleting: 'Deleting...',
-        create: 'Create Key',
-        creating: 'Creating...',
-        regenerateConfirm: 'Are you sure? The current key will be immediately invalidated.',
-        deleteConfirm:
-          'Are you sure you want to delete the admin API key? External integrations will stop working.',
-        keyGenerated: 'New admin API key generated',
-        keyDeleted: 'Admin API key deleted',
-        copyKey: 'Copy Key',
-        keyCopied: 'Key copied to clipboard',
-        keyWarning: 'This key will only be shown once. Please copy it now.',
-        securityWarning: 'Warning: This key provides full admin access. Keep it secure.',
-        usage: 'Usage: Add to request header - x-api-key: <your-admin-api-key>'
       },
       soraS3: {
         title: 'Sora Storage',

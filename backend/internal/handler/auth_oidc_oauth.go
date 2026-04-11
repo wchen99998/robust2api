@@ -32,7 +32,7 @@ import (
 )
 
 const (
-	oidcOAuthCookiePath        = "/api/v1/auth/oauth/oidc"
+	oidcOAuthCookiePath        = "/api/v1/oauth/oidc"
 	oidcOAuthStateCookieName   = "oidc_oauth_state"
 	oidcOAuthVerifierCookie    = "oidc_oauth_verifier"
 	oidcOAuthRedirectCookie    = "oidc_oauth_redirect"

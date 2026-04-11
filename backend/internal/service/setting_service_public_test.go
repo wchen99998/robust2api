@@ -120,7 +120,7 @@ func TestSettingService_GetPublicSettings_DoesNotTriggerOIDCDiscovery(t *testing
 			ClientSecret:        "client-secret",
 			IssuerURL:           discoveryServer.URL,
 			DiscoveryURL:        discoveryServer.URL + "/.well-known/openid-configuration",
-			RedirectURL:         "https://control.example.com/api/v1/auth/oauth/oidc/callback",
+			RedirectURL:         "https://control.example.com/api/v1/oauth/oidc/callback",
 			FrontendRedirectURL: "/auth/oidc/callback",
 			Scopes:              "openid email profile",
 			TokenAuthMethod:     "client_secret_post",

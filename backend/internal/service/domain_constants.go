@@ -128,9 +128,6 @@ const (
 	SettingKeyDefaultBalance       = "default_balance"       // 新用户默认余额
 	SettingKeyDefaultSubscriptions = "default_subscriptions" // 新用户默认订阅列表（JSON）
 
-	// 管理员 API Key
-	SettingKeyAdminAPIKey = "admin_api_key" // 全局管理员 API Key（用于外部系统集成）
-
 	// Gemini 配额策略（JSON）
 	SettingKeyGeminiQuotaPolicy = "gemini_quota_policy"
 
@@ -197,6 +194,3 @@ const (
 	// SettingKeyEnableCCHSigning 是否对 billing header 中的 cch 进行 xxHash64 签名（默认 false）
 	SettingKeyEnableCCHSigning = "enable_cch_signing"
 )
-
-// AdminAPIKeyPrefix is the prefix for admin API keys (distinct from user "sk-" keys).
-const AdminAPIKeyPrefix = "admin-"
