@@ -609,44 +609,42 @@ func (r *controlAuthRepository) ConsumeEmailVerification(ctx context.Context, pu
 	if err != nil {
 		return nil, err
 	}
+	var subjectArg any
+	if subjectID != nil {
+		subjectArg = *subjectID
+	}
 	row := queryRowContext(
 		ctx,
 		exec,
-		`SELECT verification_id, subject_id, purpose, email, code_hash, expires_at, consumed_at, created_at, updated_at
-		   FROM auth_email_verifications
-		  WHERE purpose = $1
-		    AND email = $2
-		    AND code_hash = $3
-		    AND consumed_at IS NULL
-		  ORDER BY created_at DESC
-		  LIMIT 1`,
-		purpose, email, codeHash,
+		`WITH candidate AS (
+		    SELECT verification_id
+		      FROM auth_email_verifications
+		     WHERE purpose = $1
+		       AND email = $2
+		       AND code_hash = $3
+		       AND consumed_at IS NULL
+		       AND expires_at > $5
+		       AND ($4::text IS NULL OR subject_id IS NULL OR subject_id = $4)
+		     ORDER BY created_at DESC
+		     LIMIT 1
+		)
+		UPDATE auth_email_verifications AS verifications
+		   SET consumed_at = $5,
+		       updated_at = NOW()
+		  FROM candidate
+		 WHERE verifications.verification_id = candidate.verification_id
+		   AND verifications.consumed_at IS NULL
+		   AND verifications.expires_at > $5
+		RETURNING verification_id, subject_id, purpose, email, code_hash, expires_at, consumed_at, created_at, updated_at`,
+		purpose, email, codeHash, subjectArg, now,
 	)
 	record, err := scanEmailVerification(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrEmailVerificationNotFound
 		}
-		return nil, err
-	}
-	if now.After(record.ExpiresAt) {
-		return nil, service.ErrEmailVerificationNotFound
-	}
-	if subjectID != nil && record.SubjectID != nil && *record.SubjectID != *subjectID {
-		return nil, service.ErrEmailVerificationNotFound
-	}
-	_, err = exec.ExecContext(
-		ctx,
-		`UPDATE auth_email_verifications
-		    SET consumed_at = $2,
-		        updated_at = NOW()
-		  WHERE verification_id = $1`,
-		record.VerificationID, now,
-	)
-	if err != nil {
 		return nil, fmt.Errorf("consume email verification: %w", err)
 	}
-	record.ConsumedAt = &now
 	return record, nil
 }
 
@@ -679,37 +677,33 @@ func (r *controlAuthRepository) ConsumePasswordResetToken(ctx context.Context, e
 	row := queryRowContext(
 		ctx,
 		exec,
-		`SELECT reset_id, subject_id, email, token_hash, expires_at, consumed_at, created_at, updated_at
-		   FROM auth_password_reset_tokens
-		  WHERE email = $1
-		    AND token_hash = $2
-		    AND consumed_at IS NULL
-		  ORDER BY created_at DESC
-		  LIMIT 1`,
-		email, tokenHash,
+		`WITH candidate AS (
+		    SELECT reset_id
+		      FROM auth_password_reset_tokens
+		     WHERE email = $1
+		       AND token_hash = $2
+		       AND consumed_at IS NULL
+		       AND expires_at > $3
+		     ORDER BY created_at DESC
+		     LIMIT 1
+		)
+		UPDATE auth_password_reset_tokens AS tokens
+		   SET consumed_at = $3,
+		       updated_at = NOW()
+		  FROM candidate
+		 WHERE tokens.reset_id = candidate.reset_id
+		   AND tokens.consumed_at IS NULL
+		   AND tokens.expires_at > $3
+		RETURNING reset_id, subject_id, email, token_hash, expires_at, consumed_at, created_at, updated_at`,
+		email, tokenHash, now,
 	)
 	record, err := scanPasswordResetToken(row)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, service.ErrPasswordResetTokenNotFound
 		}
-		return nil, err
-	}
-	if now.After(record.ExpiresAt) {
-		return nil, service.ErrPasswordResetTokenNotFound
-	}
-	_, err = exec.ExecContext(
-		ctx,
-		`UPDATE auth_password_reset_tokens
-		    SET consumed_at = $2,
-		        updated_at = NOW()
-		  WHERE reset_id = $1`,
-		record.ResetID, now,
-	)
-	if err != nil {
 		return nil, fmt.Errorf("consume password reset token: %w", err)
 	}
-	record.ConsumedAt = &now
 	return record, nil
 }
 
@@ -758,29 +752,30 @@ func (r *controlAuthRepository) GetAuthFlow(ctx context.Context, flowID string) 
 }
 
 func (r *controlAuthRepository) ConsumeAuthFlow(ctx context.Context, flowID, stateHash string, now time.Time) (*service.AuthFlowRecord, error) {
-	record, err := r.GetAuthFlow(ctx, flowID)
-	if err != nil {
-		return nil, err
-	}
-	if record.StateHash != stateHash || record.ConsumedAt != nil || now.After(record.ExpiresAt) {
-		return nil, service.ErrAuthFlowNotFound
-	}
 	exec, err := sqlExecutorFromContext(ctx, r.sql)
 	if err != nil {
 		return nil, err
 	}
-	_, err = exec.ExecContext(
+	row := queryRowContext(
 		ctx,
+		exec,
 		`UPDATE auth_flows
-		    SET consumed_at = $2,
+		    SET consumed_at = $3,
 		        updated_at = NOW()
-		  WHERE flow_id = $1`,
-		flowID, now,
+		  WHERE flow_id = $1
+		    AND state_hash = $2
+		    AND consumed_at IS NULL
+		    AND expires_at > $3
+		RETURNING flow_id, provider, purpose, issuer, state_hash, code_verifier, nonce, redirect_to, expires_at, consumed_at, created_at, updated_at`,
+		flowID, stateHash, now,
 	)
+	record, err := scanAuthFlow(row)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, service.ErrAuthFlowNotFound
+		}
 		return nil, fmt.Errorf("consume auth flow: %w", err)
 	}
-	record.ConsumedAt = &now
 	return record, nil
 }
 
