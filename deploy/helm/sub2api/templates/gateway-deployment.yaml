@@ -10,6 +10,12 @@ spec:
   {{- if not .Values.gateway.autoscaling.enabled }}
   replicas: {{ .Values.gateway.replicaCount }}
   {{- end }}
+  strategy:
+    type: {{ default "RollingUpdate" .Values.gateway.strategy.type }}
+    {{- if eq (default "RollingUpdate" .Values.gateway.strategy.type) "RollingUpdate" }}
+    rollingUpdate:
+      {{- toYaml .Values.gateway.strategy.rollingUpdate | nindent 6 }}
+    {{- end }}
   selector:
     matchLabels:
       {{- include "sub2api.gateway.selectorLabels" . | nindent 6 }}

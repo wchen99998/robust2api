@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -104,6 +105,11 @@ func TestHelmTemplate_ProductionValuesEnableGatewayAvailabilitySettings(t *testi
 	topologySpread := nestedSlice(t, gatewayDeployment, "spec", "template", "spec", "topologySpreadConstraints")
 	require.Len(t, topologySpread, 2)
 	require.Equal(t, "sub2api-gateway", containerEnvValue(t, gatewayDeployment, "OTEL_SERVICE_NAME"))
+	gatewayStrategy := nestedMap(t, gatewayDeployment, "spec", "strategy")
+	require.Equal(t, "RollingUpdate", stringValue(gatewayStrategy["type"]))
+	gatewayRollingUpdate := nestedMap(t, gatewayStrategy, "rollingUpdate")
+	require.Equal(t, "0", stringValue(gatewayRollingUpdate["maxUnavailable"]))
+	require.Equal(t, "1", stringValue(gatewayRollingUpdate["maxSurge"]))
 
 	controlValuesPath := productionValuesPath(t, "sub2api-control")
 	controlSecretsPath := writeValuesFile(t, map[string]any{
@@ -149,8 +155,8 @@ func TestHelmTemplate_DefaultValuesRenderLegacySingleReleaseTopology(t *testing.
 	findManifest(t, manifests, "Ingress", "sub2api-gateway")
 	findManifest(t, manifests, "Ingress", "sub2api-control")
 
-	bootstrapJob := findManifest(t, manifests, "Job", "sub2api-bootstrap")
-	require.Equal(t, "sub2api-bootstrap", stringValue(nestedMap(t, bootstrapJob, "metadata")["name"]))
+	bootstrapJob := findManifestByNamePrefix(t, manifests, "Job", "sub2api-bootstrap-")
+	require.True(t, strings.HasPrefix(stringValue(nestedMap(t, bootstrapJob, "metadata")["name"]), "sub2api-bootstrap-"))
 
 	controlContainers := nestedSlice(t, controlDeployment, "spec", "template", "spec", "containers")
 	require.Len(t, controlContainers, 1)
@@ -222,13 +228,13 @@ func TestHelmTemplate_ComponentSelectiveControlReleaseRendersWithoutGatewayAndWo
 
 	requireManifestAbsent(t, manifests, "Deployment", "sub2api-gateway")
 	requireManifestAbsent(t, manifests, "Deployment", "sub2api-worker")
-	requireManifestAbsent(t, manifests, "Job", "sub2api-bootstrap")
+	requireManifestAbsentByNamePrefix(t, manifests, "Job", "sub2api-bootstrap-")
 	requireManifestAbsent(t, manifests, "Ingress", "sub2api-gateway")
 
 	require.Equal(t, "http://sub2api-gateway-gateway:80", containerEnvValue(t, frontendDeployment, "GATEWAY_UPSTREAM"))
 }
 
-func TestHelmTemplate_BootstrapChecksumTracksOnlyBootstrapInputs(t *testing.T) {
+func TestHelmTemplate_BootstrapChecksumTracksTemplateAffectingInputsOnly(t *testing.T) {
 	baseValues := map[string]any{
 		"gateway": map[string]any{
 			"enabled": false,
@@ -282,6 +288,13 @@ func TestHelmTemplate_BootstrapChecksumTracksOnlyBootstrapInputs(t *testing.T) {
 	checksumUnrelated := renderBootstrapChecksum(t, unrelatedValues)
 	require.Equal(t, checksumA, checksumUnrelated)
 
+	pullSecretValues := cloneMap(t, baseValues)
+	pullSecretValues["imagePullSecrets"] = []map[string]any{
+		{"name": "ghcr-pull"},
+	}
+	checksumWithPullSecrets := renderBootstrapChecksum(t, pullSecretValues)
+	require.NotEqual(t, checksumA, checksumWithPullSecrets)
+
 	tokenValues := cloneMap(t, baseValues)
 	tokenValues["bootstrap"] = map[string]any{
 		"enabled":          true,
@@ -293,10 +306,11 @@ func TestHelmTemplate_BootstrapChecksumTracksOnlyBootstrapInputs(t *testing.T) {
 
 func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 	tests := []struct {
-		releaseName    string
-		secrets        map[string]any
-		expectedKind   string
-		expectedObject string
+		releaseName          string
+		secrets              map[string]any
+		expectedKind         string
+		expectedObject       string
+		expectedObjectPrefix string
 	}{
 		{
 			releaseName: "sub2api",
@@ -337,8 +351,8 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 					"password": "redis-password",
 				},
 			},
-			expectedKind:   "Job",
-			expectedObject: "sub2api-bootstrap-bootstrap",
+			expectedKind:         "Job",
+			expectedObjectPrefix: "sub2api-bootstrap-bootstrap-",
 		},
 		{
 			releaseName: "sub2api-gateway",
@@ -398,7 +412,11 @@ func TestHelmTemplate_ProductionMultiReleaseValuesRender(t *testing.T) {
 			valuesPath := productionValuesPath(t, tc.releaseName)
 			secretsPath := writeValuesFile(t, tc.secrets)
 			manifests := renderChartWithReleaseName(t, tc.releaseName, valuesPath, secretsPath)
-			findManifest(t, manifests, tc.expectedKind, tc.expectedObject)
+			if tc.expectedObjectPrefix != "" {
+				findManifestByNamePrefix(t, manifests, tc.expectedKind, tc.expectedObjectPrefix)
+			} else {
+				findManifest(t, manifests, tc.expectedKind, tc.expectedObject)
+			}
 			if tc.releaseName == "sub2api" {
 				findManifest(t, manifests, "Secret", "sub2api-postgresql-crt")
 				postgresqlStatefulSet := findManifest(t, manifests, "StatefulSet", "sub2api-postgresql")
@@ -579,6 +597,27 @@ func findManifest(t *testing.T, manifests []map[string]any, kind, name string) m
 	return nil
 }
 
+func findManifestByNamePrefix(t *testing.T, manifests []map[string]any, kind, prefix string) map[string]any {
+	t.Helper()
+
+	var matches []map[string]any
+	for _, manifest := range manifests {
+		if stringValue(manifest["kind"]) != kind {
+			continue
+		}
+		metadata, ok := manifest["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(stringValue(metadata["name"]), prefix) {
+			matches = append(matches, manifest)
+		}
+	}
+
+	require.Len(t, matches, 1, "expected exactly one manifest %s with prefix %q", kind, prefix)
+	return matches[0]
+}
+
 func requireManifestAbsent(t *testing.T, manifests []map[string]any, kind, name string) {
 	t.Helper()
 
@@ -592,6 +631,23 @@ func requireManifestAbsent(t *testing.T, manifests []map[string]any, kind, name 
 		}
 		if stringValue(metadata["name"]) == name {
 			t.Fatalf("manifest %s/%s unexpectedly rendered", kind, name)
+		}
+	}
+}
+
+func requireManifestAbsentByNamePrefix(t *testing.T, manifests []map[string]any, kind, prefix string) {
+	t.Helper()
+
+	for _, manifest := range manifests {
+		if stringValue(manifest["kind"]) != kind {
+			continue
+		}
+		metadata, ok := manifest["metadata"].(map[string]any)
+		if !ok {
+			continue
+		}
+		if strings.HasPrefix(stringValue(metadata["name"]), prefix) {
+			t.Fatalf("manifest %s with prefix %q unexpectedly rendered", kind, prefix)
 		}
 	}
 }
@@ -666,7 +722,7 @@ func renderBootstrapChecksum(t *testing.T, values map[string]any) string {
 
 	overlayPath := writeValuesFile(t, values)
 	manifests := renderChart(t, overlayPath)
-	job := findManifest(t, manifests, "Job", "sub2api-bootstrap")
+	job := findManifestByNamePrefix(t, manifests, "Job", "sub2api-bootstrap-")
 
 	metadataAnnotations := nestedStringMap(t, job, "metadata", "annotations")
 	templateAnnotations := nestedStringMap(t, job, "spec", "template", "metadata", "annotations")

@@ -322,11 +322,49 @@ Bootstrap Job name.
 {{- end }}
 
 {{/*
-Bootstrap rerun checksum keyed only to bootstrap-relevant inputs.
+Bootstrap job checksum keyed to template-affecting inputs. This keeps
+completed Jobs stable across unrelated reconciles while forcing a new Job
+name when the rendered pod template would otherwise hit Job immutability.
 */}}
 {{- define "sub2api.bootstrapInputsChecksum" -}}
 {{- $databasePassword := ternary .Values.postgresql.auth.password .Values.externalDatabase.password .Values.postgresql.enabled -}}
+{{- $fullName := include "sub2api.fullname" . | trim -}}
+{{- $runtimeSecretName := include "sub2api.runtimeSecretName" . | trim -}}
+{{- $controlSecretName := include "sub2api.controlSecretName" . | trim -}}
+{{- $envFrom := list
+  (dict "configMapRef" (dict "name" $fullName))
+  (dict "secretRef" (dict "name" $runtimeSecretName))
+-}}
+{{- if ne $controlSecretName $runtimeSecretName -}}
+{{- $envFrom = append $envFrom (dict "secretRef" (dict "name" $controlSecretName)) -}}
+{{- end -}}
 {{- $inputs := dict
+  "selectorLabels" (include "sub2api.selectorLabels" . | trim)
+  "component" "bootstrap"
+  "serviceAccountName" (include "sub2api.serviceAccountName" . | trim)
+  "imagePullSecrets" .Values.imagePullSecrets
+  "podSecurityContext" (dict
+    "fsGroup" 1000
+  )
+  "restartPolicy" "OnFailure"
+  "envFrom" $envFrom
+  "containerSecurityContext" (dict
+    "runAsNonRoot" true
+    "runAsUser" 1000
+  )
+  "resources" (dict
+    "requests" (dict
+      "cpu" "100m"
+      "memory" "128Mi"
+    )
+    "limits" (dict
+      "cpu" "500m"
+      "memory" "256Mi"
+    )
+  )
+  "nodeSelector" .Values.nodeSelector
+  "tolerations" .Values.tolerations
+  "affinity" .Values.affinity
   "bootstrapImage" (dict
     "repository" .Values.image.bootstrap.repository
     "tag" (.Values.image.bootstrap.tag | default .Chart.AppVersion)
