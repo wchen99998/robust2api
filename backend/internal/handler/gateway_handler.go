@@ -30,6 +30,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -318,8 +319,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		}
 
 		for {
+			geminiSelectStart := time.Now()
 			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, "", int64(0)) // Gemini 不使用会话限制
 			if err != nil {
+				appelotel.M().RecordAccountSelectionDuration(c.Request.Context(), time.Since(geminiSelectStart).Seconds(), service.PlatformGemini)
 				if len(fs.FailedAccountIDs) == 0 {
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
@@ -342,6 +345,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 			account := selection.Account
+			appelotel.M().RecordAccountSelectionDuration(c.Request.Context(), time.Since(geminiSelectStart).Seconds(), account.Platform)
 
 			// 检查请求拦截（预热请求、SUGGESTION MODE等）
 			if account.IsInterceptWarmupEnabled() {
@@ -418,6 +422,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
+				appelotel.SetSpanAttributes(trace.SpanFromContext(c.Request.Context()), appelotel.AttrFailoverSwitchCount(fs.SwitchCount))
 			}
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
 			writerSizeBeforeForward := c.Writer.Size()
@@ -545,14 +550,20 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 		for {
 			// 选择支持该模型的账号
+			selectStart := time.Now()
 			_, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
 			selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), currentAPIKey.GroupID, sessionKey, reqModel, fs.FailedAccountIDs, parsedReq.MetadataUserID, int64(0))
 			if err != nil {
+				appelotel.M().RecordAccountSelectionDuration(c.Request.Context(), time.Since(selectStart).Seconds(), platform)
 				selectSpan.End()
 				if len(fs.FailedAccountIDs) == 0 {
 					h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts: "+err.Error(), streamStarted)
 					return
 				}
+				appelotel.AddSpanEvent(trace.SpanFromContext(c.Request.Context()), appelotel.EventSelectionExhausted,
+					attribute.Int("failed_accounts", len(fs.FailedAccountIDs)),
+					attribute.Int("switch_count", fs.SwitchCount),
+				)
 				action := fs.HandleSelectionExhausted(c.Request.Context())
 				switch action {
 				case FailoverContinue:
@@ -571,6 +582,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 			}
 			account := selection.Account
+			appelotel.M().RecordAccountSelectionDuration(c.Request.Context(), time.Since(selectStart).Seconds(), account.Platform)
 			selectSpan.SetAttributes(
 				attribute.Int64("account_id", int64(account.ID)),
 				attribute.String("platform", string(account.Platform)),
@@ -711,6 +723,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
+				appelotel.SetSpanAttributes(trace.SpanFromContext(c.Request.Context()), appelotel.AttrFailoverSwitchCount(fs.SwitchCount))
 			}
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
 			writerSizeBeforeForward := c.Writer.Size()

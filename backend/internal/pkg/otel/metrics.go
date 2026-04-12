@@ -40,6 +40,13 @@ type Metrics struct {
 	rateLimitRejectionsTotal metric.Int64Counter
 	concurrencyQueueDepth    metric.Int64Gauge
 	upstreamAccountsActive   metric.Int64Gauge
+
+	// Gateway upstream provider observability
+	upstreamRetryTotal          metric.Int64Counter
+	accountSelectionDuration    metric.Float64Histogram
+	connectionPoolSize          metric.Int64Gauge
+	connectionPoolEvictionsTotal metric.Int64Counter
+	connectionPoolMissesTotal   metric.Int64Counter
 }
 
 // NewMetrics creates and registers all application metric instruments.
@@ -131,6 +138,47 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
+	m.upstreamRetryTotal, err = meter.Int64Counter("sub2api.upstream.retry",
+		metric.WithDescription("Total upstream retry attempts"),
+		metric.WithUnit("{attempt}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.accountSelectionDuration, err = meter.Float64Histogram("sub2api.upstream.account_selection.duration",
+		metric.WithDescription("Account selection duration in seconds"),
+		metric.WithUnit("s"),
+		metric.WithExplicitBucketBoundaries(0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.connectionPoolSize, err = meter.Int64Gauge("sub2api.upstream.connection_pool.size",
+		metric.WithDescription("Current number of upstream HTTP clients in the connection pool"),
+		metric.WithUnit("{client}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.connectionPoolEvictionsTotal, err = meter.Int64Counter("sub2api.upstream.connection_pool.evictions",
+		metric.WithDescription("Total upstream HTTP client evictions from the connection pool"),
+		metric.WithUnit("{eviction}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.connectionPoolMissesTotal, err = meter.Int64Counter("sub2api.upstream.connection_pool.misses",
+		metric.WithDescription("Total upstream HTTP client cache misses (new client created)"),
+		metric.WithUnit("{miss}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return m, nil
 }
 
@@ -193,11 +241,43 @@ func (m *Metrics) RecordUpstreamError(ctx context.Context, platform, errorKind s
 	)
 }
 
-func (m *Metrics) RecordAccountFailover(ctx context.Context, platform string) {
+func (m *Metrics) RecordAccountFailover(ctx context.Context, platform, reason string) {
 	attrs := appendOptionalStringAttr(nil, "platform", platform)
+	attrs = appendOptionalStringAttr(attrs, "reason", reason)
 	m.accountFailoversTotal.Add(ctx, 1,
 		metric.WithAttributes(attrs...),
 	)
+}
+
+func (m *Metrics) RecordUpstreamRetry(ctx context.Context, platform, retryKind string, attempt int) {
+	attrs := appendOptionalStringAttr(nil, "platform", platform)
+	attrs = appendOptionalStringAttr(attrs, "retry_kind", retryKind)
+	attrs = append(attrs, attribute.Int("attempt", attempt))
+	m.upstreamRetryTotal.Add(ctx, 1,
+		metric.WithAttributes(attrs...),
+	)
+}
+
+func (m *Metrics) RecordAccountSelectionDuration(ctx context.Context, durationSec float64, platform string) {
+	attrs := appendOptionalStringAttr(nil, "platform", platform)
+	m.accountSelectionDuration.Record(ctx, durationSec,
+		metric.WithAttributes(attrs...),
+	)
+}
+
+func (m *Metrics) SetConnectionPoolSize(ctx context.Context, size int64) {
+	m.connectionPoolSize.Record(ctx, size)
+}
+
+func (m *Metrics) RecordConnectionPoolEviction(ctx context.Context, reason string) {
+	attrs := appendOptionalStringAttr(nil, "reason", reason)
+	m.connectionPoolEvictionsTotal.Add(ctx, 1,
+		metric.WithAttributes(attrs...),
+	)
+}
+
+func (m *Metrics) RecordConnectionPoolMiss(ctx context.Context) {
+	m.connectionPoolMissesTotal.Add(ctx, 1)
 }
 
 func (m *Metrics) RecordRateLimitRejection(ctx context.Context, limiterType string) {

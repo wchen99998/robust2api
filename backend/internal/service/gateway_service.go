@@ -3963,6 +3963,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			attribute.String("platform", string(account.Platform)),
 		)
 	}
+	if parsed != nil {
+		span.SetAttributes(
+			attribute.String("requested_model", parsed.Model),
+			attribute.Bool("stream", parsed.Stream),
+		)
+	}
 	c.Request = c.Request.WithContext(ctx)
 
 	startTime := time.Now()
@@ -4123,17 +4129,32 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 		}
 
 		// 发送请求
+		attemptStart := time.Now()
 		_, upstreamSpan := tracer.Start(ctx, "gateway.upstream_request")
-		upstreamSpan.SetAttributes(attribute.String("upstream_url", safeUpstreamURL(upstreamReq.URL.String())))
+		upstreamSpan.SetAttributes(
+			attribute.String("upstream_url", safeUpstreamURL(upstreamReq.URL.String())),
+			attribute.Int("attempt", attempt),
+			attribute.Int("max_attempts", maxRetryAttempts),
+		)
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, tlsProfile)
+		attemptDuration := time.Since(attemptStart)
+		statusCode := 0
+		outcome := "success"
 		if resp != nil {
-			upstreamSpan.SetAttributes(attribute.Int("upstream_status", resp.StatusCode))
+			statusCode = resp.StatusCode
+			upstreamSpan.SetAttributes(attribute.Int("upstream_status", statusCode))
+			if statusCode >= 400 {
+				outcome = "http_error"
+			}
 		}
 		if err != nil {
+			outcome = "request_error"
 			upstreamSpan.RecordError(err)
 			upstreamSpan.SetStatus(codes.Error, err.Error())
 		}
+		upstreamSpan.SetAttributes(attribute.String("outcome", outcome))
 		upstreamSpan.End()
+		appelotel.M().RecordUpstreamDuration(ctx, attemptDuration.Seconds(), account.Platform, "http", strconv.Itoa(statusCode), outcome)
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
@@ -4200,6 +4221,10 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 						break
 					}
 					logger.LegacyPrintf("service.gateway", "[warn] Account %d: thinking blocks have invalid signature, retrying with filtered blocks", account.ID)
+					appelotel.AddSpanEvent(span, appelotel.EventSignatureRetry,
+						attribute.Int64("account_id", int64(account.ID)),
+						attribute.String("retry_stage", "thinking_block_filter"),
+					)
 
 					// Conservative two-stage fallback:
 					// 1) Disable thinking + thinking->text (preserve content)
@@ -4373,6 +4398,12 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				})
 				logger.LegacyPrintf("service.gateway", "Account %d: upstream error %d, retry %d/%d after %v (elapsed=%v/%v)",
 					account.ID, resp.StatusCode, attempt, maxRetryAttempts, delay, elapsed, maxRetryElapsed)
+				appelotel.AddSpanEvent(span, appelotel.EventUpstreamRetry,
+					attribute.Int("attempt", attempt),
+					attribute.Int("upstream_status", resp.StatusCode),
+					attribute.Float64("backoff_sec", delay.Seconds()),
+				)
+				appelotel.M().RecordUpstreamRetry(ctx, account.Platform, "backoff", attempt)
 				if err := sleepWithContext(ctx, delay); err != nil {
 					return nil, err
 				}
@@ -4409,6 +4440,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 				account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 			s.handleRetryExhaustedSideEffects(ctx, resp, account)
+			appelotel.AddSpanEvent(span, appelotel.EventFailoverCandidate,
+				attribute.Int64("account_id", int64(account.ID)),
+				attribute.Int("upstream_status", resp.StatusCode),
+				attribute.String("trigger", "retry_exhausted"),
+			)
 			appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 				Platform:           account.Platform,
 				AccountID:          account.ID,
@@ -4445,6 +4481,11 @@ func (s *GatewayService) Forward(ctx context.Context, c *gin.Context, account *A
 			account.ID, account.Name, resp.StatusCode, resp.Header.Get("x-request-id"), truncateString(string(respBody), 1000))
 
 		s.handleFailoverSideEffects(ctx, resp, account)
+		appelotel.AddSpanEvent(span, appelotel.EventFailoverCandidate,
+			attribute.Int64("account_id", int64(account.ID)),
+			attribute.Int("upstream_status", resp.StatusCode),
+			attribute.String("trigger", "direct_failover"),
+		)
 		appelotel.M().RecordUpstreamError(ctx, account.Platform, strconv.Itoa(resp.StatusCode))
 		appendOpsUpstreamError(c, OpsUpstreamErrorEvent{
 			Platform:           account.Platform,
@@ -4629,7 +4670,21 @@ func (s *GatewayService) forwardAnthropicAPIKeyPassthroughWithInput(
 			return nil, err
 		}
 
+		passthroughAttemptStart := time.Now()
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, s.tlsFPProfileService.ResolveTLSProfile(account))
+		passthroughAttemptDuration := time.Since(passthroughAttemptStart)
+		passthroughStatusCode := 0
+		passthroughOutcome := "success"
+		if resp != nil {
+			passthroughStatusCode = resp.StatusCode
+			if passthroughStatusCode >= 400 {
+				passthroughOutcome = "http_error"
+			}
+		}
+		if err != nil {
+			passthroughOutcome = "request_error"
+		}
+		appelotel.M().RecordUpstreamDuration(ctx, passthroughAttemptDuration.Seconds(), account.Platform, "http", strconv.Itoa(passthroughStatusCode), passthroughOutcome)
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()
@@ -5350,7 +5405,21 @@ func (s *GatewayService) executeBedrockUpstream(
 			return nil, err
 		}
 
+		bedrockAttemptStart := time.Now()
 		resp, err = s.httpUpstream.DoWithTLS(upstreamReq, proxyURL, account.ID, account.Concurrency, nil)
+		bedrockAttemptDuration := time.Since(bedrockAttemptStart)
+		bedrockStatusCode := 0
+		bedrockOutcome := "success"
+		if resp != nil {
+			bedrockStatusCode = resp.StatusCode
+			if bedrockStatusCode >= 400 {
+				bedrockOutcome = "http_error"
+			}
+		}
+		if err != nil {
+			bedrockOutcome = "request_error"
+		}
+		appelotel.M().RecordUpstreamDuration(ctx, bedrockAttemptDuration.Seconds(), account.Platform, "http", strconv.Itoa(bedrockStatusCode), bedrockOutcome)
 		if err != nil {
 			if resp != nil && resp.Body != nil {
 				_ = resp.Body.Close()

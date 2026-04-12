@@ -13,13 +13,17 @@ import (
 const gatewayTracerName = "sub2api.gateway"
 
 const (
-	EventFailoverCandidate = "sub2api.failover_candidate_detected"
-	EventSameAccountRetry  = "sub2api.same_account_retry"
-	EventAccountSwitch     = "sub2api.account_switch"
-	EventUpstreamTimeout   = "sub2api.upstream_timeout"
-	EventStreamIdleTimeout = "sub2api.stream_idle_timeout"
-	EventClientDisconnect  = "sub2api.client_disconnect"
-	EventFallbackResponse  = "sub2api.fallback_response_written"
+	EventFailoverCandidate  = "sub2api.failover_candidate_detected"
+	EventSameAccountRetry   = "sub2api.same_account_retry"
+	EventAccountSwitch      = "sub2api.account_switch"
+	EventUpstreamTimeout    = "sub2api.upstream_timeout"
+	EventStreamIdleTimeout  = "sub2api.stream_idle_timeout"
+	EventClientDisconnect   = "sub2api.client_disconnect"
+	EventFallbackResponse   = "sub2api.fallback_response_written"
+	EventUpstreamRetry      = "sub2api.upstream_retry"
+	EventSignatureRetry     = "sub2api.signature_retry"
+	EventFailoverExhausted  = "sub2api.failover_exhausted"
+	EventSelectionExhausted = "sub2api.selection_exhausted"
 )
 
 func GatewayTracer() trace.Tracer {
@@ -84,6 +88,18 @@ func AttrFailoverSwitchCount(value int) attribute.KeyValue {
 
 func AttrStatusCodeLabel(value int) attribute.KeyValue {
 	return attribute.String("sub2api.status_code", strconv.Itoa(value))
+}
+
+func AttrUpstreamAttempt(value int) attribute.KeyValue {
+	return attribute.Int("sub2api.upstream_attempt", value)
+}
+
+func AttrRetryReason(value string) attribute.KeyValue {
+	return attribute.String("sub2api.retry_reason", strings.TrimSpace(value))
+}
+
+func AttrUpstreamOutcome(value string) attribute.KeyValue {
+	return attribute.String("sub2api.upstream_outcome", strings.TrimSpace(value))
 }
 
 func SetSpanAttributes(span trace.Span, attrs ...attribute.KeyValue) {

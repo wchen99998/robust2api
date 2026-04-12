@@ -3,6 +3,7 @@ package repository
 import (
 	"compress/flate"
 	"compress/gzip"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -18,6 +19,7 @@ import (
 	"github.com/andybalholm/brotli"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyurl"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/proxyutil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/tlsfingerprint"
@@ -295,10 +297,13 @@ func (s *httpUpstreamService) getClientEntryWithTLS(proxyURL string, accountID i
 		atomic.StoreInt64(&entry.inFlight, 1)
 	}
 	s.clients[cacheKey] = entry
+	appelotel.M().RecordConnectionPoolMiss(context.Background())
 
 	s.evictIdleLocked(now)
 	s.evictOverLimitLocked()
+	poolSize := int64(len(s.clients))
 	s.mu.Unlock()
+	appelotel.M().SetConnectionPoolSize(context.Background(), poolSize)
 	return entry, nil
 }
 
@@ -438,11 +443,14 @@ func (s *httpUpstreamService) getClientEntry(proxyURL string, accountID int64, a
 		atomic.StoreInt64(&entry.inFlight, 1)
 	}
 	s.clients[cacheKey] = entry
+	appelotel.M().RecordConnectionPoolMiss(context.Background())
 
 	// 执行淘汰策略：先淘汰空闲超时的，再淘汰超出数量限制的
 	s.evictIdleLocked(now)
 	s.evictOverLimitLocked()
+	poolSize := int64(len(s.clients))
 	s.mu.Unlock()
+	appelotel.M().SetConnectionPoolSize(context.Background(), poolSize)
 	return entry, nil
 }
 
@@ -474,6 +482,7 @@ func (s *httpUpstreamService) removeClientLocked(key string, entry *upstreamClie
 		// 注意：这不会中断活跃连接
 		entry.client.CloseIdleConnections()
 	}
+	appelotel.M().RecordConnectionPoolEviction(context.Background(), "idle")
 }
 
 // evictIdleLocked 淘汰空闲超时的客户端（需持有锁）

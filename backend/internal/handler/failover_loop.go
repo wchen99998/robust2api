@@ -3,11 +3,14 @@ package handler
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -86,6 +89,12 @@ func (s *FailoverState) HandleFailoverError(
 			zap.Int("same_account_retry_count", s.SameAccountRetryCount[accountID]),
 			zap.Int("same_account_retry_max", maxSameAccountRetries),
 		)
+		appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventSameAccountRetry,
+			attribute.Int64("account_id", accountID),
+			attribute.Int("upstream_status", failoverErr.StatusCode),
+			attribute.Int("retry_count", s.SameAccountRetryCount[accountID]),
+		)
+		appelotel.M().RecordUpstreamRetry(ctx, platform, "same_account", s.SameAccountRetryCount[accountID])
 		if !sleepWithContext(ctx, sameAccountRetryDelay) {
 			return FailoverCanceled
 		}
@@ -107,7 +116,14 @@ func (s *FailoverState) HandleFailoverError(
 
 	// 递增切换计数
 	s.SwitchCount++
-	appelotel.M().RecordAccountFailover(ctx, platform)
+	failoverReason := strconv.Itoa(failoverErr.StatusCode)
+	appelotel.M().RecordAccountFailover(ctx, platform, failoverReason)
+	appelotel.AddSpanEvent(trace.SpanFromContext(ctx), appelotel.EventAccountSwitch,
+		attribute.Int64("account_id", accountID),
+		attribute.Int("upstream_status", failoverErr.StatusCode),
+		attribute.Int("switch_count", s.SwitchCount),
+		attribute.Int("max_switches", s.MaxSwitches),
+	)
 	logger.FromContext(ctx).Warn("gateway.failover_switch_account",
 		zap.Int64("account_id", accountID),
 		zap.Int("upstream_status", failoverErr.StatusCode),
