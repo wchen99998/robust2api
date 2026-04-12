@@ -435,8 +435,9 @@ func TestRelay_OnTurnComplete_PerTerminalEvent(t *testing.T) {
 
 	turns := make([]RelayTurnResult, 0, 2)
 	result, relayExit := Relay(ctx, clientConn, upstreamConn, firstPayload, RelayOptions{
-		OnTurnComplete: func(turn RelayTurnResult) {
+		OnTurnComplete: func(turn RelayTurnResult) error {
 			turns = append(turns, turn)
+			return nil
 		},
 	})
 	require.Nil(t, relayExit)
@@ -482,8 +483,9 @@ func TestRelay_OnTurnComplete_ProvidesTurnMetrics(t *testing.T) {
 	var turn RelayTurnResult
 	result, relayExit := Relay(ctx, clientConn, upstreamConn, firstPayload, RelayOptions{
 		Now: nowFn,
-		OnTurnComplete: func(current RelayTurnResult) {
+		OnTurnComplete: func(current RelayTurnResult) error {
 			turn = current
+			return nil
 		},
 	})
 	require.Nil(t, relayExit)

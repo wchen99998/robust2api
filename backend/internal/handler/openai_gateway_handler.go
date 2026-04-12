@@ -1711,6 +1711,8 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		zap.Bool("has_previous_response_id", previousResponseID != ""),
 		zap.String("previous_response_id_kind", previousResponseIDKind),
 	)
+	streamingBillingV2 := streamingV2Enabled(h.cfg, true)
+	wsBillingBaseRequestID := streamingBillingRequestID(ctx)
 	setOpenAIRequestSpanIdentity(span, apiKey, subject.UserID, reqModel, true)
 	// 解析渠道级模型映射
 	channelMappingWS, _ := h.gatewayService.ResolveChannelMappingAndRestrict(ctx, apiKey.GroupID, reqModel)
@@ -1729,6 +1731,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	}
 	// 必须尽早注册，确保任何 early return 都能释放已获取的并发槽位。
 	defer releaseTurnSlots()
+	currentTurnBillingRequestID := ""
+	currentTurnReserved := false
+	currentTurnFinalized := false
 
 	userReleaseFunc, userAcquired, err := h.concurrencyHelper.TryAcquireUserSlot(ctx, subject.UserID, subject.Concurrency)
 	if err != nil {
@@ -1835,39 +1840,114 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	)
 
 	hooks := &service.OpenAIWSIngressHooks{
-		BeforeTurn: func(turn int) error {
-			if turn == 1 {
+		BeforeTurn: func(turn service.OpenAIWSIngressTurn) error {
+			if turn.Turn != 1 {
+				// 防御式清理：避免异常路径下旧槽位覆盖导致泄漏。
+				releaseTurnSlots()
+				// 非首轮 turn 需要重新抢占并发槽位，避免长连接空闲占槽。
+				userReleaseFunc, userAcquired, err := h.concurrencyHelper.TryAcquireUserSlot(ctx, subject.UserID, subject.Concurrency)
+				if err != nil {
+					return service.NewOpenAIWSClientCloseError(coderws.StatusInternalError, "failed to acquire user concurrency slot", err)
+				}
+				if !userAcquired {
+					return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "too many concurrent requests, please retry later", nil)
+				}
+				accountReleaseFunc, accountAcquired, err := h.concurrencyHelper.TryAcquireAccountSlot(ctx, account.ID, accountMaxConcurrency)
+				if err != nil {
+					if userReleaseFunc != nil {
+						userReleaseFunc()
+					}
+					return service.NewOpenAIWSClientCloseError(coderws.StatusInternalError, "failed to acquire account concurrency slot", err)
+				}
+				if !accountAcquired {
+					if userReleaseFunc != nil {
+						userReleaseFunc()
+					}
+					return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "account is busy, please retry later", nil)
+				}
+				currentUserRelease = wrapReleaseOnDone(ctx, userReleaseFunc)
+				currentAccountRelease = wrapReleaseOnDone(ctx, accountReleaseFunc)
+			}
+			currentTurnBillingRequestID = fmt.Sprintf("%s:turn:%d", wsBillingBaseRequestID, turn.Turn)
+			currentTurnReserved = false
+			currentTurnFinalized = false
+			if !streamingBillingV2 {
 				return nil
 			}
-			// 防御式清理：避免异常路径下旧槽位覆盖导致泄漏。
-			releaseTurnSlots()
-			// 非首轮 turn 需要重新抢占并发槽位，避免长连接空闲占槽。
-			userReleaseFunc, userAcquired, err := h.concurrencyHelper.TryAcquireUserSlot(ctx, subject.UserID, subject.Concurrency)
-			if err != nil {
-				return service.NewOpenAIWSClientCloseError(coderws.StatusInternalError, "failed to acquire user concurrency slot", err)
+			if err := h.executeUsageRecordTask(func(taskCtx context.Context) error {
+				return h.gatewayService.PublishStreamingReserve(taskCtx, &service.StreamingBillingLifecycleInput{
+					RequestID:          currentTurnBillingRequestID,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					Model:              coalesceOpenAIWSTurnModel(turn.OriginalModel, reqModel),
+					RequestPayloadHash: turn.RequestPayloadHash,
+				})
+			}); err != nil {
+				return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "billing temporarily unavailable", err)
 			}
-			if !userAcquired {
-				return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "too many concurrent requests, please retry later", nil)
-			}
-			accountReleaseFunc, accountAcquired, err := h.concurrencyHelper.TryAcquireAccountSlot(ctx, account.ID, accountMaxConcurrency)
-			if err != nil {
-				if userReleaseFunc != nil {
-					userReleaseFunc()
-				}
-				return service.NewOpenAIWSClientCloseError(coderws.StatusInternalError, "failed to acquire account concurrency slot", err)
-			}
-			if !accountAcquired {
-				if userReleaseFunc != nil {
-					userReleaseFunc()
-				}
-				return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "account is busy, please retry later", nil)
-			}
-			currentUserRelease = wrapReleaseOnDone(ctx, userReleaseFunc)
-			currentAccountRelease = wrapReleaseOnDone(ctx, accountReleaseFunc)
+			currentTurnReserved = true
 			return nil
 		},
-		AfterTurn: func(turn int, result *service.OpenAIForwardResult, turnErr error) {
+		BeforeTurnComplete: func(turn service.OpenAIWSIngressTurn, result *service.OpenAIForwardResult) error {
+			if !streamingBillingV2 || result == nil {
+				return nil
+			}
+			if currentTurnBillingRequestID == "" {
+				currentTurnBillingRequestID = fmt.Sprintf("%s:turn:%d", wsBillingBaseRequestID, turn.Turn)
+			}
+			return h.executeUsageRecordTask(func(taskCtx context.Context) error {
+				usageCtx := openAIRequestSpanContext(c.Request.Context(), taskCtx)
+				usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")
+				setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, coalesceOpenAIWSTurnModel(turn.OriginalModel, reqModel), true)
+				setOpenAIAccountSpanIdentity(usageSpan, account, result.UpstreamModel)
+				defer usageSpan.End()
+				if err := h.gatewayService.RecordUsage(usageCtx, &service.OpenAIRecordUsageInput{
+					Result:             result,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					BillingRequestID:   currentTurnBillingRequestID,
+					BillingEventKind:   service.UsageChargeEventKindFinalize,
+					InboundEndpoint:    GetInboundEndpoint(c),
+					UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
+					UserAgent:          userAgent,
+					IPAddress:          clientIP,
+					RequestPayloadHash: turn.RequestPayloadHash,
+					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMappingWS.ToUsageFields(coalesceOpenAIWSTurnModel(turn.OriginalModel, reqModel), result.UpstreamModel),
+				}); err != nil {
+					appelotel.RecordSpanError(usageSpan, err, err.Error())
+					return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "billing temporarily unavailable", err)
+				}
+				currentTurnFinalized = true
+				return nil
+			})
+		},
+		AfterTurn: func(turn service.OpenAIWSIngressTurn, result *service.OpenAIForwardResult, turnErr error) {
 			releaseTurnSlots()
+			if streamingBillingV2 && currentTurnReserved && !currentTurnFinalized {
+				if err := h.executeUsageRecordTask(func(taskCtx context.Context) error {
+					return h.gatewayService.PublishStreamingRelease(taskCtx, &service.StreamingBillingLifecycleInput{
+						RequestID:          currentTurnBillingRequestID,
+						APIKey:             apiKey,
+						User:               apiKey.User,
+						Account:            account,
+						Subscription:       subscription,
+						Model:              coalesceOpenAIWSTurnModel(turn.OriginalModel, reqModel),
+						RequestPayloadHash: turn.RequestPayloadHash,
+					})
+				}); err != nil {
+					reqLog.Error("openai.websocket_streaming_release_failed",
+						zap.Int64("account_id", account.ID),
+						zap.Int("turn", turn.Turn),
+						zap.String("request_id", currentTurnBillingRequestID),
+						zap.Error(err),
+					)
+				}
+			}
 			if turnErr != nil || result == nil {
 				if turnErr != nil {
 					appelotel.RecordSpanError(span, turnErr, turnErr.Error())
@@ -1882,10 +1962,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			if result.RequestID != "" {
 				appelotel.SetSpanAttributes(span, appelotel.AttrUpstreamRequestID(result.RequestID))
 			}
+			if streamingBillingV2 {
+				return
+			}
+			recordLegacyStreamingBilling("/openai/v1/realtime")
+			reqLog.Debug("openai.websocket.legacy_streaming_billing")
 			h.submitUsageRecordTask(func(taskCtx context.Context) {
 				usageCtx := openAIRequestSpanContext(c.Request.Context(), taskCtx)
 				usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")
-				setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, reqModel, true)
+				setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, coalesceOpenAIWSTurnModel(turn.OriginalModel, reqModel), true)
 				setOpenAIAccountSpanIdentity(usageSpan, account, result.UpstreamModel)
 				defer usageSpan.End()
 				if err := h.gatewayService.RecordUsage(usageCtx, &service.OpenAIRecordUsageInput{
@@ -1898,9 +1983,9 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
 					UserAgent:          userAgent,
 					IPAddress:          clientIP,
-					RequestPayloadHash: service.HashUsageRequestPayload(firstMessage),
+					RequestPayloadHash: turn.RequestPayloadHash,
 					APIKeyService:      h.apiKeyService,
-					ChannelUsageFields: channelMappingWS.ToUsageFields(reqModel, result.UpstreamModel),
+					ChannelUsageFields: channelMappingWS.ToUsageFields(coalesceOpenAIWSTurnModel(turn.OriginalModel, reqModel), result.UpstreamModel),
 				}); err != nil {
 					appelotel.RecordSpanError(usageSpan, err, err.Error())
 					reqLog.Error("openai.websocket_record_usage_failed",
