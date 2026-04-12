@@ -4550,6 +4550,8 @@ type OpenAIRecordUsageInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
+	BillingRequestID   string
+	BillingEventKind   UsageChargeEventKind
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string // 请求的 User-Agent
@@ -4662,7 +4664,10 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	// Create usage log
 	durationMs := int(result.Duration.Milliseconds())
 	accountRateMultiplier := account.BillingRateMultiplier()
-	requestID := resolveUsageBillingRequestID(ctx, result.RequestID)
+	requestID := strings.TrimSpace(input.BillingRequestID)
+	if requestID == "" {
+		requestID = resolveUsageBillingRequestID(ctx, result.RequestID)
+	}
 
 	// 确定 RequestedModel（渠道映射前的原始模型）
 	requestedModel := result.Model
@@ -4755,7 +4760,11 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	if apiKey.GroupID != nil {
 		groupID = *apiKey.GroupID
 	}
-	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.HasRateLimits())
+	eventKind := input.BillingEventKind
+	if strings.TrimSpace(string(eventKind)) == "" {
+		eventKind = UsageChargeEventKindCharge
+	}
+	event := NewUsageChargeEventWithKind(eventKind, cmd, usageLog, groupID, apiKey.HasRateLimits())
 	if s.billingPublisher == nil {
 		logger.LegacyPrintf("service.openai_gateway", "billing event publisher unavailable: request_id=%s user_id=%d",
 			requestID, user.ID)
