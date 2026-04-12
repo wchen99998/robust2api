@@ -393,7 +393,7 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatchMissingRange(t *testing.T) {
 	db, _ := newSQLMock(t)
 	repo := &usageCleanupRepository{sql: db}
 
-	_, err := repo.DeleteUsageLogsBatch(context.Background(), service.UsageCleanupFilters{}, 10)
+	_, err := repo.DeleteUsageLogsBatch(context.Background(), 1, service.UsageCleanupFilters{}, 10)
 	require.Error(t, err)
 }
 
@@ -412,11 +412,11 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatch(t *testing.T) {
 		Model:     &model,
 	}
 
-	mock.ExpectQuery("DELETE FROM usage_logs").
-		WithArgs(start, end, userID, "gpt-4", 2).
-		WillReturnRows(sqlmock.NewRows([]string{"id"}).AddRow(int64(1)).AddRow(int64(2)))
+	mock.ExpectQuery("WITH target AS").
+		WithArgs(start, end, userID, "gpt-4", 2, usageLogDeleteReasonCleanupTask, int64(7)).
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(int64(2)))
 
-	deleted, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 2)
+	deleted, err := repo.DeleteUsageLogsBatch(context.Background(), 7, filters, 2)
 	require.NoError(t, err)
 	require.Equal(t, int64(2), deleted)
 	require.NoError(t, mock.ExpectationsWereMet())
@@ -430,11 +430,11 @@ func TestUsageCleanupRepositoryDeleteUsageLogsBatchQueryError(t *testing.T) {
 	end := start.Add(24 * time.Hour)
 	filters := service.UsageCleanupFilters{StartTime: start, EndTime: end}
 
-	mock.ExpectQuery("DELETE FROM usage_logs").
-		WithArgs(start, end, 5).
+	mock.ExpectQuery("WITH target AS").
+		WithArgs(start, end, 5, usageLogDeleteReasonCleanupTask, int64(9)).
 		WillReturnError(sql.ErrConnDone)
 
-	_, err := repo.DeleteUsageLogsBatch(context.Background(), filters, 5)
+	_, err := repo.DeleteUsageLogsBatch(context.Background(), 9, filters, 5)
 	require.Error(t, err)
 	require.NoError(t, mock.ExpectationsWereMet())
 }

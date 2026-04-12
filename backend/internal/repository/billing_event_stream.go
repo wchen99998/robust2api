@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -53,11 +54,13 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 	}
 
 	var lastErr error
+	startedAt := time.Now()
 	for attempt := 0; attempt < p.retries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(1<<uint(attempt-1)) * 100 * time.Millisecond
 			select {
 			case <-ctx.Done():
+				appelotel.M().RecordBillingPublish(ctx, "canceled", time.Since(startedAt).Seconds())
 				return ctx.Err()
 			case <-time.After(backoff):
 			}
@@ -74,6 +77,7 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 		}
 		lastErr = p.rdb.XAdd(ctx, args).Err()
 		if lastErr == nil {
+			appelotel.M().RecordBillingPublish(ctx, "success", time.Since(startedAt).Seconds())
 			return nil
 		}
 		logger.L().Warn("billing event publish retry",
@@ -82,5 +86,6 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 			zap.Error(lastErr),
 		)
 	}
+	appelotel.M().RecordBillingPublish(ctx, "failure", time.Since(startedAt).Seconds())
 	return fmt.Errorf("billing event publish failed after %d attempts: %w", p.retries, lastErr)
 }

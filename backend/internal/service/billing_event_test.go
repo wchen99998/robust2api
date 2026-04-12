@@ -61,6 +61,7 @@ func TestUsageChargeEventJSONSchemaUsesExplicitFieldNames(t *testing.T) {
 
 	command, ok := decoded["command"].(map[string]any)
 	require.True(t, ok)
+	require.Equal(t, "charge", decoded["kind"])
 	require.Contains(t, command, "request_id")
 	require.Contains(t, command, "api_key_id")
 	require.NotContains(t, command, "RequestID")
@@ -74,6 +75,7 @@ func TestUsageChargeEventJSONSchemaUsesExplicitFieldNames(t *testing.T) {
 
 	var roundTripped UsageChargeEvent
 	require.NoError(t, json.Unmarshal(data, &roundTripped))
+	require.Equal(t, UsageChargeEventKindCharge, roundTripped.Kind)
 	require.NotNil(t, roundTripped.Command)
 	require.Equal(t, "req-123", roundTripped.Command.RequestID)
 	require.NotNil(t, roundTripped.UsageLog)
