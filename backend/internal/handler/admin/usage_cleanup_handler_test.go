@@ -98,7 +98,7 @@ func (s *cleanupRepoStub) MarkTaskFailed(ctx context.Context, taskID int64, dele
 	return nil
 }
 
-func (s *cleanupRepoStub) DeleteUsageLogsBatch(ctx context.Context, filters service.UsageCleanupFilters, limit int) (int64, error) {
+func (s *cleanupRepoStub) DeleteUsageLogsBatch(ctx context.Context, taskID int64, filters service.UsageCleanupFilters, limit int) (int64, error) {
 	return 0, nil
 }
 

@@ -40,6 +40,17 @@ type Metrics struct {
 	rateLimitRejectionsTotal metric.Int64Counter
 	concurrencyQueueDepth    metric.Int64Gauge
 	upstreamAccountsActive   metric.Int64Gauge
+	billingPublishTotal      metric.Int64Counter
+	billingPublishFailures   metric.Int64Counter
+	billingPublishLatency    metric.Float64Histogram
+	billingApplyTotal        metric.Int64Counter
+	billingApplyFailures     metric.Int64Counter
+	billingPendingMessages   metric.Int64Gauge
+	billingPendingOldestAge  metric.Float64Gauge
+	billingDLQMessages       metric.Int64Gauge
+	billingLastApplySuccess  metric.Int64Gauge
+	billingLastApplyFailure  metric.Int64Gauge
+	legacyStreamingBilling   metric.Int64Counter
 }
 
 // NewMetrics creates and registers all application metric instruments.
@@ -131,6 +142,95 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
+	m.billingPublishTotal, err = meter.Int64Counter("sub2api.billing.publish",
+		metric.WithDescription("Total billing publish attempts"),
+		metric.WithUnit("{event}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingPublishFailures, err = meter.Int64Counter("sub2api.billing.publish_failures",
+		metric.WithDescription("Total failed billing publish attempts"),
+		metric.WithUnit("{event}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingPublishLatency, err = meter.Float64Histogram("sub2api.billing.publish_latency",
+		metric.WithDescription("Billing publish latency in seconds"),
+		metric.WithUnit("s"),
+		metric.WithExplicitBucketBoundaries(0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingApplyTotal, err = meter.Int64Counter("sub2api.billing.apply",
+		metric.WithDescription("Total billing apply attempts"),
+		metric.WithUnit("{event}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingApplyFailures, err = meter.Int64Counter("sub2api.billing.apply_failures",
+		metric.WithDescription("Total failed billing apply attempts"),
+		metric.WithUnit("{event}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingPendingMessages, err = meter.Int64Gauge("sub2api.billing.pending_messages",
+		metric.WithDescription("Current number of pending billing stream messages"),
+		metric.WithUnit("{event}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingPendingOldestAge, err = meter.Float64Gauge("sub2api.billing.pending_oldest_age",
+		metric.WithDescription("Age in seconds of the oldest pending billing message"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingDLQMessages, err = meter.Int64Gauge("sub2api.billing.dlq_messages",
+		metric.WithDescription("Current number of billing DLQ messages"),
+		metric.WithUnit("{event}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingLastApplySuccess, err = meter.Int64Gauge("sub2api.billing.last_apply_success_timestamp",
+		metric.WithDescription("Unix timestamp of the last successful billing apply"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.billingLastApplyFailure, err = meter.Int64Gauge("sub2api.billing.last_apply_failure_timestamp",
+		metric.WithDescription("Unix timestamp of the last failed billing apply"),
+		metric.WithUnit("s"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	m.legacyStreamingBilling, err = meter.Int64Counter("sub2api.billing.legacy_streaming_requests",
+		metric.WithDescription("Total streaming requests still using legacy post-response billing"),
+		metric.WithUnit("{request}"),
+	)
+	if err != nil {
+		return nil, err
+	}
+
 	return m, nil
 }
 
@@ -217,6 +317,48 @@ func (m *Metrics) SetUpstreamAccountsActive(ctx context.Context, count int64, pl
 	m.upstreamAccountsActive.Record(ctx, count,
 		metric.WithAttributes(attrs...),
 	)
+}
+
+func (m *Metrics) RecordBillingPublish(ctx context.Context, outcome string, durationSec float64) {
+	attrs := appendOptionalStringAttr(nil, "outcome", outcome)
+	m.billingPublishTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+	m.billingPublishLatency.Record(ctx, durationSec, metric.WithAttributes(attrs...))
+	if outcome != "success" {
+		m.billingPublishFailures.Add(ctx, 1, metric.WithAttributes(attrs...))
+	}
+}
+
+func (m *Metrics) RecordBillingApply(ctx context.Context, outcome string) {
+	attrs := appendOptionalStringAttr(nil, "outcome", outcome)
+	m.billingApplyTotal.Add(ctx, 1, metric.WithAttributes(attrs...))
+	if outcome != "success" {
+		m.billingApplyFailures.Add(ctx, 1, metric.WithAttributes(attrs...))
+	}
+}
+
+func (m *Metrics) SetBillingPendingMessages(ctx context.Context, count int64) {
+	m.billingPendingMessages.Record(ctx, count)
+}
+
+func (m *Metrics) SetBillingPendingOldestAge(ctx context.Context, ageSec float64) {
+	m.billingPendingOldestAge.Record(ctx, ageSec)
+}
+
+func (m *Metrics) SetBillingDLQMessages(ctx context.Context, count int64) {
+	m.billingDLQMessages.Record(ctx, count)
+}
+
+func (m *Metrics) SetBillingLastApplySuccessTimestamp(ctx context.Context, unixSec int64) {
+	m.billingLastApplySuccess.Record(ctx, unixSec)
+}
+
+func (m *Metrics) SetBillingLastApplyFailureTimestamp(ctx context.Context, unixSec int64) {
+	m.billingLastApplyFailure.Record(ctx, unixSec)
+}
+
+func (m *Metrics) RecordLegacyStreamingBilling(ctx context.Context, endpoint string) {
+	attrs := appendOptionalStringAttr(nil, "endpoint", endpoint)
+	m.legacyStreamingBilling.Add(ctx, 1, metric.WithAttributes(attrs...))
 }
 
 func appendOptionalStringAttr(attrs []attribute.KeyValue, key, value string) []attribute.KeyValue {

@@ -282,7 +282,7 @@ func (r *usageCleanupRepository) MarkTaskFailed(ctx context.Context, taskID int6
 	return err
 }
 
-func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filters service.UsageCleanupFilters, limit int) (int64, error) {
+func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, taskID int64, filters service.UsageCleanupFilters, limit int) (int64, error) {
 	if filters.StartTime.IsZero() || filters.EndTime.IsZero() {
 		return 0, fmt.Errorf("cleanup filters missing time range")
 	}
@@ -290,34 +290,11 @@ func (r *usageCleanupRepository) DeleteUsageLogsBatch(ctx context.Context, filte
 	if whereClause == "" {
 		return 0, fmt.Errorf("cleanup filters missing time range")
 	}
-	args = append(args, limit)
-	query := fmt.Sprintf(`
-		WITH target AS (
-			SELECT id
-			FROM usage_logs
-			WHERE %s
-			ORDER BY created_at ASC, id ASC
-			LIMIT $%d
-		)
-		DELETE FROM usage_logs
-		WHERE id IN (SELECT id FROM target)
-		RETURNING id
-	`, whereClause, len(args))
-
-	rows, err := r.sql.QueryContext(ctx, query, args...)
-	if err != nil {
-		return 0, err
+	var sourceTaskID *int64
+	if taskID > 0 {
+		sourceTaskID = &taskID
 	}
-	defer func() { _ = rows.Close() }()
-
-	var deleted int64
-	for rows.Next() {
-		deleted++
-	}
-	if err := rows.Err(); err != nil {
-		return 0, err
-	}
-	return deleted, nil
+	return deleteUsageLogsWithTombstones(ctx, r.sql, whereClause, args, limit, usageLogDeleteReasonCleanupTask, sourceTaskID)
 }
 
 func buildUsageCleanupWhere(filters service.UsageCleanupFilters) (string, []any) {

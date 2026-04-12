@@ -215,27 +215,24 @@ func (r *dashboardAggregationRepository) CleanupUsageLogs(ctx context.Context, c
 		return err
 	}
 	if isPartitioned {
-		return r.dropUsageLogsPartitions(ctx, cutoff)
+		if err := r.dropUsageLogsPartitions(ctx, cutoff.UTC()); err != nil {
+			return err
+		}
 	}
 	for {
-		res, err := r.sql.ExecContext(ctx, `
-			WITH victims AS (
-				SELECT ctid
-				FROM usage_logs
-				WHERE created_at < $1
-				LIMIT $2
-			)
-			DELETE FROM usage_logs
-			WHERE ctid IN (SELECT ctid FROM victims)
-		`, cutoff.UTC(), usageLogsCleanupBatchSize)
+		deleted, err := deleteUsageLogsWithTombstones(
+			ctx,
+			r.sql,
+			"created_at < $1",
+			[]any{cutoff.UTC()},
+			usageLogsCleanupBatchSize,
+			usageLogDeleteReasonRetention,
+			nil,
+		)
 		if err != nil {
 			return err
 		}
-		affected, err := res.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected < usageLogsCleanupBatchSize {
+		if deleted < usageLogsCleanupBatchSize {
 			return nil
 		}
 	}
@@ -501,6 +498,30 @@ func (r *dashboardAggregationRepository) dropUsageLogsPartitions(ctx context.Con
 		}
 		month = month.UTC()
 		if month.Before(cutoffMonth) {
+			tombstoneQuery := fmt.Sprintf(`
+				INSERT INTO usage_log_tombstones (
+					request_id,
+					api_key_id,
+					usage_log_id,
+					user_id,
+					account_id,
+					original_created_at,
+					delete_reason
+				)
+				SELECT
+					request_id,
+					api_key_id,
+					id,
+					user_id,
+					account_id,
+					created_at,
+					$1
+				FROM %s
+				ON CONFLICT (request_id, api_key_id) DO NOTHING
+			`, pq.QuoteIdentifier(name))
+			if _, err := r.sql.ExecContext(ctx, tombstoneQuery, usageLogDeleteReasonRetention); err != nil {
+				return err
+			}
 			if _, err := r.sql.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", pq.QuoteIdentifier(name))); err != nil {
 				return err
 			}

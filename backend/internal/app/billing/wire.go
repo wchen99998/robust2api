@@ -23,8 +23,9 @@ import (
 )
 
 type Application struct {
-	Health  *platformhealth.Checker
-	Cleanup func()
+	Health          *platformhealth.Checker
+	BillingConsumer *service.BillingConsumerService
+	Cleanup         func()
 }
 
 func initialize() (*Application, error) {
@@ -37,7 +38,7 @@ func initialize() (*Application, error) {
 		service.BillingConsumerProviderSet,
 		platformhealth.ProviderSet,
 		provideCleanup,
-		wire.Struct(new(Application), "Health", "Cleanup"),
+		wire.Struct(new(Application), "Health", "BillingConsumer", "Cleanup"),
 	)
 	return nil, nil
 }

@@ -4,6 +4,7 @@ package billing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -42,6 +43,44 @@ func Run() error {
 
 	mux := http.NewServeMux()
 	app.Health.RegisterOnMux(mux)
+	mux.HandleFunc("/billingz", func(w http.ResponseWriter, r *http.Request) {
+		if app.BillingConsumer == nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status": "fail",
+				"error":  "billing consumer unavailable",
+			})
+			return
+		}
+
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		snapshot, err := app.BillingConsumer.StatusSnapshot(ctx)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusServiceUnavailable)
+			_ = json.NewEncoder(w).Encode(map[string]any{
+				"status": "fail",
+				"error":  err.Error(),
+			})
+			return
+		}
+
+		payload := map[string]any{
+			"status":                     "ok",
+			"stream":                     snapshot.StreamKey,
+			"group":                      snapshot.Group,
+			"pending_count":              snapshot.PendingCount,
+			"oldest_pending_age_seconds": snapshot.OldestPendingAge.Seconds(),
+			"dlq_depth":                  snapshot.DLQDepth,
+			"last_apply_success_at":      snapshot.LastApplySuccessAt,
+			"last_apply_failure_at":      snapshot.LastApplyFailureAt,
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(payload)
+	})
 	healthServer := &http.Server{
 		Addr:    fmt.Sprintf(":%s", healthPort),
 		Handler: mux,

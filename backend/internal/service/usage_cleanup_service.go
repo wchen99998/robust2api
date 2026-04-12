@@ -213,7 +213,7 @@ func (s *UsageCleanupService) executeTask(ctx context.Context, task *UsageCleanu
 		}
 
 		batchNum++
-		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, task.Filters, batchSize)
+		deleted, err := s.repo.DeleteUsageLogsBatch(ctx, task.ID, task.Filters, batchSize)
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				// 任务被中断（例如服务停止/超时），保持 running 状态，后续通过 stale reclaim 续跑。
