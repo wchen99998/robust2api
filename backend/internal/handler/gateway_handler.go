@@ -173,6 +173,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 	reqModel := parsedReq.Model
 	reqStream := parsedReq.Stream
+	queueFirstBilling := queueFirstNonStreamEnabled(h.cfg, reqStream)
+	streamingBillingV2 := streamingV2Enabled(h.cfg, reqStream)
+	requestPayloadHash := service.HashUsageRequestPayload(body)
 	span.SetAttributes(
 		attribute.String("model", reqModel),
 		attribute.Bool("stream", reqStream),
@@ -309,6 +312,38 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 
 	if platform == service.PlatformGemini {
 		fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
+		streamReservationID := ""
+		streamReservationPublished := false
+		streamReservationFinalized := false
+		var streamReservationAccount *service.Account
+		var terminalCapture *streamingTerminalCapture
+		if streamingBillingV2 {
+			streamReservationID = streamingBillingRequestID(c.Request.Context())
+			defer func() {
+				if !streamReservationPublished || streamReservationFinalized {
+					return
+				}
+				if terminalCapture != nil {
+					terminalCapture.DiscardTerminal(c)
+				}
+				if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+					return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+						RequestID:          streamReservationID,
+						APIKey:             apiKey,
+						User:               apiKey.User,
+						Account:            streamReservationAccount,
+						Subscription:       subscription,
+						Model:              reqModel,
+						RequestPayloadHash: requestPayloadHash,
+					})
+				}); err != nil {
+					reqLog.Error("gateway.streaming_release_failed",
+						zap.String("request_id", streamReservationID),
+						zap.Error(err),
+					)
+				}
+			}()
+		}
 
 		// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 		// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -419,6 +454,34 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if fs.SwitchCount > 0 {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
+			if streamingBillingV2 && !streamReservationPublished {
+				if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+					return h.gatewayService.PublishStreamingReserve(ctx, &service.StreamingBillingLifecycleInput{
+						RequestID:          streamReservationID,
+						APIKey:             apiKey,
+						User:               apiKey.User,
+						Account:            account,
+						Subscription:       subscription,
+						Model:              reqModel,
+						RequestPayloadHash: requestPayloadHash,
+					})
+				}); err != nil {
+					if accountReleaseFunc != nil {
+						accountReleaseFunc()
+					}
+					reqLog.Error("gateway.streaming_reserve_failed",
+						zap.Int64("account_id", account.ID),
+						zap.String("request_id", streamReservationID),
+						zap.Error(err),
+					)
+					h.errorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+					return
+				}
+				streamReservationPublished = true
+				streamReservationAccount = account
+				terminalCapture = beginStreamingTerminalCapture(c, true, streamingTerminalModeAnthropic)
+			}
+			responseCapture := beginBufferedResponseCapture(c, queueFirstBilling)
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
 			writerSizeBeforeForward := c.Writer.Size()
 			if account.Platform == service.PlatformAntigravity {
@@ -435,16 +498,32 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					// 流式内容已写入客户端，无法撤销，禁止 failover 以防止流拼接腐化
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleFailoverExhausted(c, failoverErr, service.PlatformGemini, true)
+						if responseCapture != nil {
+							if commitErr := responseCapture.Commit(c); commitErr != nil {
+								reqLog.Error("gateway.commit_buffered_response_failed", zap.Error(commitErr))
+							}
+						}
 						return
 					}
 					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 					switch action {
 					case FailoverContinue:
+						if responseCapture != nil {
+							responseCapture.Discard(c)
+						}
 						continue
 					case FailoverExhausted:
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, service.PlatformGemini, streamStarted)
+						if responseCapture != nil {
+							if commitErr := responseCapture.Commit(c); commitErr != nil {
+								reqLog.Error("gateway.commit_buffered_response_failed", zap.Error(commitErr))
+							}
+						}
 						return
 					case FailoverCanceled:
+						if responseCapture != nil {
+							responseCapture.Discard(c)
+						}
 						return
 					}
 				}
@@ -467,6 +546,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					forwardFailedFields = append(forwardFailedFields, zap.Int64p("proxy_id", account.ProxyID))
 				}
 				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
+				if responseCapture != nil {
+					if commitErr := responseCapture.Commit(c); commitErr != nil {
+						reqLog.Error("gateway.commit_buffered_response_failed", zap.Error(commitErr))
+					}
+				}
 				return
 			}
 
@@ -482,12 +566,98 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
-			requestPayloadHash := service.HashUsageRequestPayload(body)
 			inboundEndpoint := GetInboundEndpoint(c)
 			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 
 			if result.ReasoningEffort == nil {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
+			}
+
+			if streamingBillingV2 {
+				err = h.executeUsageRecordTask(func(ctx context.Context) error {
+					usageTracer := otel.Tracer("sub2api.gateway")
+					_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
+					defer usageSpan.End()
+					return h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+						Result:             result,
+						APIKey:             apiKey,
+						User:               apiKey.User,
+						Account:            account,
+						Subscription:       subscription,
+						BillingRequestID:   streamReservationID,
+						BillingEventKind:   service.UsageChargeEventKindFinalize,
+						InboundEndpoint:    inboundEndpoint,
+						UpstreamEndpoint:   upstreamEndpoint,
+						UserAgent:          userAgent,
+						IPAddress:          clientIP,
+						RequestPayloadHash: requestPayloadHash,
+						ForceCacheBilling:  fs.ForceCacheBilling,
+						APIKeyService:      h.apiKeyService,
+						ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+					})
+				})
+				if err != nil {
+					reqLog.Error("gateway.record_stream_finalize_failed",
+						zap.Int64("account_id", account.ID),
+						zap.String("request_id", streamReservationID),
+						zap.Error(err),
+					)
+					if terminalCapture != nil {
+						terminalCapture.DiscardTerminal(c)
+					}
+					return
+				}
+				streamReservationFinalized = true
+				if terminalCapture != nil {
+					if commitErr := terminalCapture.CommitTerminal(c); commitErr != nil {
+						reqLog.Error("gateway.commit_terminal_stream_failed", zap.Error(commitErr))
+					}
+				}
+				return
+			}
+
+			if queueFirstBilling {
+				err = h.executeUsageRecordTask(func(ctx context.Context) error {
+					usageTracer := otel.Tracer("sub2api.gateway")
+					_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
+					defer usageSpan.End()
+					return h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+						Result:             result,
+						APIKey:             apiKey,
+						User:               apiKey.User,
+						Account:            account,
+						Subscription:       subscription,
+						InboundEndpoint:    inboundEndpoint,
+						UpstreamEndpoint:   upstreamEndpoint,
+						UserAgent:          userAgent,
+						IPAddress:          clientIP,
+						RequestPayloadHash: requestPayloadHash,
+						ForceCacheBilling:  fs.ForceCacheBilling,
+						APIKeyService:      h.apiKeyService,
+						ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+					})
+				})
+				if err != nil {
+					reqLog.Error("gateway.record_usage_failed",
+						zap.Int64("account_id", account.ID),
+						zap.Error(err),
+					)
+					if responseCapture != nil {
+						responseCapture.Discard(c)
+					}
+					h.errorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+					return
+				}
+				if responseCapture != nil {
+					if commitErr := responseCapture.Commit(c); commitErr != nil {
+						reqLog.Error("gateway.commit_buffered_response_failed", zap.Error(commitErr))
+					}
+				}
+				return
+			}
+			if reqStream {
+				recordLegacyStreamingBilling("/v1/messages")
+				reqLog.Debug("gateway.legacy_streaming_billing")
 			}
 
 			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
@@ -531,6 +701,38 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		fallbackGroupID = apiKey.Group.FallbackGroupIDOnInvalidRequest
 	}
 	fallbackUsed := false
+	streamReservationID := ""
+	streamReservationPublished := false
+	streamReservationFinalized := false
+	var streamReservationAccount *service.Account
+	var terminalCapture *streamingTerminalCapture
+	if streamingBillingV2 {
+		streamReservationID = streamingBillingRequestID(c.Request.Context())
+		defer func() {
+			if !streamReservationPublished || streamReservationFinalized {
+				return
+			}
+			if terminalCapture != nil {
+				terminalCapture.DiscardTerminal(c)
+			}
+			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+					RequestID:          streamReservationID,
+					APIKey:             currentAPIKey,
+					User:               currentAPIKey.User,
+					Account:            streamReservationAccount,
+					Subscription:       currentSubscription,
+					Model:              reqModel,
+					RequestPayloadHash: requestPayloadHash,
+				})
+			}); err != nil {
+				reqLog.Error("gateway.streaming_release_failed",
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+			}
+		}()
+	}
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -712,6 +914,50 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if fs.SwitchCount > 0 {
 				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
+			if streamingBillingV2 && !streamReservationPublished {
+				if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+					return h.gatewayService.PublishStreamingReserve(ctx, &service.StreamingBillingLifecycleInput{
+						RequestID:          streamReservationID,
+						APIKey:             currentAPIKey,
+						User:               currentAPIKey.User,
+						Account:            account,
+						Subscription:       currentSubscription,
+						Model:              reqModel,
+						RequestPayloadHash: requestPayloadHash,
+					})
+				}); err != nil {
+					if accountReleaseFunc != nil {
+						accountReleaseFunc()
+					}
+					if queueRelease != nil {
+						queueRelease()
+					}
+					reqLog.Error("gateway.streaming_reserve_failed",
+						zap.Int64("account_id", account.ID),
+						zap.String("request_id", streamReservationID),
+						zap.Error(err),
+					)
+					h.errorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+					return
+				}
+				streamReservationPublished = true
+				streamReservationAccount = account
+				terminalCapture = beginStreamingTerminalCapture(c, true, streamingTerminalModeAnthropic)
+			}
+			responseCapture := beginBufferedResponseCapture(c, queueFirstBilling)
+			commitBufferedResponse := func() {
+				if responseCapture != nil {
+					if commitErr := responseCapture.Commit(c); commitErr != nil {
+						reqLog.Error("gateway.commit_buffered_response_failed", zap.Error(commitErr))
+					}
+				}
+			}
+			discardBufferedResponse := func() {
+				if responseCapture != nil {
+					responseCapture.Discard(c)
+				}
+			}
+
 			// 记录 Forward 前已写入字节数，Forward 后若增加则说明 SSE 内容已发，禁止 failover
 			writerSizeBeforeForward := c.Writer.Size()
 			if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
@@ -735,6 +981,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				var betaBlockedErr *service.BetaBlockedError
 				if errors.As(err, &betaBlockedErr) {
 					h.errorResponse(c, http.StatusBadRequest, "invalid_request_error", betaBlockedErr.Message)
+					commitBufferedResponse()
 					return
 				}
 
@@ -750,6 +997,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						if err != nil {
 							reqLog.Warn("gateway.resolve_fallback_group_failed", zap.Int64("fallback_group_id", *fallbackGroupID), zap.Error(err))
 							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
+							commitBufferedResponse()
 							return
 						}
 						if fallbackGroup.Platform != service.PlatformAnthropic ||
@@ -761,12 +1009,14 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 								zap.String("fallback_subscription_type", fallbackGroup.SubscriptionType),
 							)
 							_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
+							commitBufferedResponse()
 							return
 						}
 						fallbackAPIKey := cloneAPIKeyWithGroup(apiKey, fallbackGroup)
 						if err := h.billingCacheService.CheckBillingEligibility(c.Request.Context(), fallbackAPIKey.User, fallbackAPIKey, fallbackGroup, nil); err != nil {
 							status, code, message := billingErrorDetails(err)
 							h.handleStreamingAwareError(c, status, code, message, streamStarted)
+							commitBufferedResponse()
 							return
 						}
 						// 兜底重试按"直接请求兜底分组"处理：清除强制平台，允许按分组平台调度
@@ -776,9 +1026,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						currentSubscription = nil
 						fallbackUsed = true
 						retryWithFallback = true
+						discardBufferedResponse()
 						break
 					}
 					_ = h.antigravityGatewayService.WriteMappedClaudeError(c, account, promptTooLongErr.StatusCode, promptTooLongErr.RequestID, promptTooLongErr.Body)
+					commitBufferedResponse()
 					return
 				}
 				var failoverErr *service.UpstreamFailoverError
@@ -786,16 +1038,20 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					// 流式内容已写入客户端，无法撤销，禁止 failover 以防止流拼接腐化
 					if c.Writer.Size() != writerSizeBeforeForward {
 						h.handleFailoverExhausted(c, failoverErr, account.Platform, true)
+						commitBufferedResponse()
 						return
 					}
 					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 					switch action {
 					case FailoverContinue:
+						discardBufferedResponse()
 						continue
 					case FailoverExhausted:
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, account.Platform, streamStarted)
+						commitBufferedResponse()
 						return
 					case FailoverCanceled:
+						discardBufferedResponse()
 						return
 					}
 				}
@@ -818,6 +1074,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					forwardFailedFields = append(forwardFailedFields, zap.Int64p("proxy_id", account.ProxyID))
 				}
 				reqLog.Error("gateway.forward_failed", forwardFailedFields...)
+				commitBufferedResponse()
 				return
 			}
 
@@ -833,7 +1090,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			// 捕获请求信息（用于异步记录，避免在 goroutine 中访问 gin.Context）
 			userAgent := c.GetHeader("User-Agent")
 			clientIP := ip.GetClientIP(c)
-			requestPayloadHash := service.HashUsageRequestPayload(body)
 			inboundEndpoint := GetInboundEndpoint(c)
 			upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
 
@@ -841,7 +1097,87 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				result.ReasoningEffort = service.NormalizeClaudeOutputEffort(parsedReq.OutputEffort)
 			}
 
-			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
+			if streamingBillingV2 {
+				err = h.executeUsageRecordTask(func(ctx context.Context) error {
+					usageTracer := otel.Tracer("sub2api.gateway")
+					_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
+					defer usageSpan.End()
+					return h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+						Result:             result,
+						APIKey:             currentAPIKey,
+						User:               currentAPIKey.User,
+						Account:            account,
+						Subscription:       currentSubscription,
+						BillingRequestID:   streamReservationID,
+						BillingEventKind:   service.UsageChargeEventKindFinalize,
+						InboundEndpoint:    inboundEndpoint,
+						UpstreamEndpoint:   upstreamEndpoint,
+						UserAgent:          userAgent,
+						IPAddress:          clientIP,
+						RequestPayloadHash: requestPayloadHash,
+						ForceCacheBilling:  fs.ForceCacheBilling,
+						APIKeyService:      h.apiKeyService,
+						ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+					})
+				})
+				if err != nil {
+					reqLog.Error("gateway.record_stream_finalize_failed",
+						zap.Int64("account_id", account.ID),
+						zap.String("request_id", streamReservationID),
+						zap.Error(err),
+					)
+					if terminalCapture != nil {
+						terminalCapture.DiscardTerminal(c)
+					}
+					return
+				}
+				streamReservationFinalized = true
+				if terminalCapture != nil {
+					if commitErr := terminalCapture.CommitTerminal(c); commitErr != nil {
+						reqLog.Error("gateway.commit_terminal_stream_failed", zap.Error(commitErr))
+					}
+				}
+				return
+			}
+
+			if queueFirstBilling {
+				err = h.executeUsageRecordTask(func(ctx context.Context) error {
+					usageTracer := otel.Tracer("sub2api.gateway")
+					_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
+					defer usageSpan.End()
+					return h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+						Result:             result,
+						APIKey:             currentAPIKey,
+						User:               currentAPIKey.User,
+						Account:            account,
+						Subscription:       currentSubscription,
+						InboundEndpoint:    inboundEndpoint,
+						UpstreamEndpoint:   upstreamEndpoint,
+						UserAgent:          userAgent,
+						IPAddress:          clientIP,
+						RequestPayloadHash: requestPayloadHash,
+						ForceCacheBilling:  fs.ForceCacheBilling,
+						APIKeyService:      h.apiKeyService,
+						ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+					})
+				})
+				if err != nil {
+					reqLog.Error("gateway.record_usage_failed",
+						zap.Int64("account_id", account.ID),
+						zap.Error(err),
+					)
+					discardBufferedResponse()
+					h.errorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+					return
+				}
+				commitBufferedResponse()
+				return
+			}
+			if reqStream {
+				recordLegacyStreamingBilling("/v1/messages")
+				reqLog.Debug("gateway.legacy_streaming_billing")
+			}
+			discardBufferedResponse()
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				usageTracer := otel.Tracer("sub2api.gateway")
 				_, usageSpan := usageTracer.Start(ctx, "gateway.record_usage")
@@ -1761,13 +2097,11 @@ func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger
 	)
 }
 
-func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
+func (h *GatewayHandler) executeUsageRecordTask(task usageRecordErrTask) (err error) {
 	if task == nil {
-		return
+		return nil
 	}
-	// Billing publish is authoritative, so execute inline after the response is finalized
-	// instead of buffering behind an in-process worker queue.
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), usageRecordTaskTimeout(h.cfg))
 	defer cancel()
 	defer func() {
 		if recovered := recover(); recovered != nil {
@@ -1775,9 +2109,20 @@ func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
 				zap.String("component", "handler.gateway.messages"),
 				zap.Any("panic", recovered),
 			).Error("gateway.usage_record_task_panic_recovered")
+			err = fmt.Errorf("usage record task panic: %v", recovered)
 		}
 	}()
-	task(ctx)
+	return task(ctx)
+}
+
+func (h *GatewayHandler) submitUsageRecordTask(task service.UsageRecordTask) {
+	if task == nil {
+		return
+	}
+	_ = h.executeUsageRecordTask(func(ctx context.Context) error {
+		task(ctx)
+		return nil
+	})
 }
 
 // getUserMsgQueueMode 获取当前请求的 UMQ 模式

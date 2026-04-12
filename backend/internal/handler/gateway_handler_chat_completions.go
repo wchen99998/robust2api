@@ -73,6 +73,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 	reqModel := modelResult.String()
 	reqStream := gjson.GetBytes(body, "stream").Bool()
+	queueFirstBilling := queueFirstNonStreamEnabled(h.cfg, reqStream)
+	streamingBillingV2 := streamingV2Enabled(h.cfg, reqStream)
+	requestPayloadHash := service.HashUsageRequestPayload(body)
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 
 	// 解析渠道级模型映射
@@ -150,6 +153,38 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 
 	// 3. Account selection + failover loop
 	fs := NewFailoverState(h.maxAccountSwitches, false)
+	streamReservationID := ""
+	streamReservationPublished := false
+	streamReservationFinalized := false
+	var streamReservationAccount *service.Account
+	var terminalCapture *streamingTerminalCapture
+	if streamingBillingV2 {
+		streamReservationID = streamingBillingRequestID(c.Request.Context())
+		defer func() {
+			if !streamReservationPublished || streamReservationFinalized {
+				return
+			}
+			if terminalCapture != nil {
+				terminalCapture.DiscardTerminal(c)
+			}
+			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+					RequestID:          streamReservationID,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            streamReservationAccount,
+					Subscription:       subscription,
+					Model:              reqModel,
+					RequestPayloadHash: requestPayloadHash,
+				})
+			}); err != nil {
+				reqLog.Error("gateway.cc.streaming_release_failed",
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+			}
+		}()
+	}
 
 	for {
 		selection, err := h.gatewayService.SelectAccountWithLoadAwareness(c.Request.Context(), apiKey.GroupID, sessionHash, reqModel, fs.FailedAccountIDs, "", int64(0))
@@ -198,7 +233,36 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 		}
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
+		if streamingBillingV2 && !streamReservationPublished {
+			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.PublishStreamingReserve(ctx, &service.StreamingBillingLifecycleInput{
+					RequestID:          streamReservationID,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					Model:              reqModel,
+					RequestPayloadHash: requestPayloadHash,
+				})
+			}); err != nil {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				reqLog.Error("gateway.cc.streaming_reserve_failed",
+					zap.Int64("account_id", account.ID),
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+				h.chatCompletionsErrorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+				return
+			}
+			streamReservationPublished = true
+			streamReservationAccount = account
+			terminalCapture = beginStreamingTerminalCapture(c, true, streamingTerminalModeChatCompletions)
+		}
+
 		// 5. Forward request
+		responseCapture := beginBufferedResponseCapture(c, queueFirstBilling)
 		writerSizeBeforeForward := c.Writer.Size()
 		forwardBody := body
 		if channelMapping.Mapped {
@@ -215,16 +279,32 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			if errors.As(err, &failoverErr) {
 				if c.Writer.Size() != writerSizeBeforeForward {
 					h.handleCCFailoverExhausted(c, failoverErr, true)
+					if responseCapture != nil {
+						if commitErr := responseCapture.Commit(c); commitErr != nil {
+							reqLog.Error("gateway.cc.commit_buffered_response_failed", zap.Error(commitErr))
+						}
+					}
 					return
 				}
 				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 				switch action {
 				case FailoverContinue:
+					if responseCapture != nil {
+						responseCapture.Discard(c)
+					}
 					continue
 				case FailoverExhausted:
 					h.handleCCFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
+					if responseCapture != nil {
+						if commitErr := responseCapture.Commit(c); commitErr != nil {
+							reqLog.Error("gateway.cc.commit_buffered_response_failed", zap.Error(commitErr))
+						}
+					}
 					return
 				case FailoverCanceled:
+					if responseCapture != nil {
+						responseCapture.Discard(c)
+					}
 					return
 				}
 			}
@@ -233,15 +313,101 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Int64("account_id", account.ID),
 				zap.Error(err),
 			)
+			if responseCapture != nil {
+				if commitErr := responseCapture.Commit(c); commitErr != nil {
+					reqLog.Error("gateway.cc.commit_buffered_response_failed", zap.Error(commitErr))
+				}
+			}
 			return
 		}
 
 		// 6. Record usage
 		userAgent := c.GetHeader("User-Agent")
 		clientIP := ip.GetClientIP(c)
-		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+
+		if streamingBillingV2 {
+			err = h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+					Result:             result,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					BillingRequestID:   streamReservationID,
+					BillingEventKind:   service.UsageChargeEventKindFinalize,
+					InboundEndpoint:    inboundEndpoint,
+					UpstreamEndpoint:   upstreamEndpoint,
+					UserAgent:          userAgent,
+					IPAddress:          clientIP,
+					RequestPayloadHash: requestPayloadHash,
+					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+				})
+			})
+			if err != nil {
+				reqLog.Error("gateway.cc.record_stream_finalize_failed",
+					zap.Int64("account_id", account.ID),
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+				if terminalCapture != nil {
+					terminalCapture.DiscardTerminal(c)
+				}
+				return
+			}
+			streamReservationFinalized = true
+			if terminalCapture != nil {
+				if commitErr := terminalCapture.CommitTerminal(c); commitErr != nil {
+					reqLog.Error("gateway.cc.commit_terminal_stream_failed", zap.Error(commitErr))
+				}
+			}
+			return
+		}
+
+		if queueFirstBilling {
+			err = h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
+					Result:             result,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					InboundEndpoint:    inboundEndpoint,
+					UpstreamEndpoint:   upstreamEndpoint,
+					UserAgent:          userAgent,
+					IPAddress:          clientIP,
+					RequestPayloadHash: requestPayloadHash,
+					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+				})
+			})
+			if err != nil {
+				reqLog.Error("gateway.cc.record_usage_failed",
+					zap.Int64("account_id", account.ID),
+					zap.Error(err),
+				)
+				if responseCapture != nil {
+					responseCapture.Discard(c)
+				}
+				h.chatCompletionsErrorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+				return
+			}
+			if responseCapture != nil {
+				if commitErr := responseCapture.Commit(c); commitErr != nil {
+					reqLog.Error("gateway.cc.commit_buffered_response_failed", zap.Error(commitErr))
+				}
+			}
+			return
+		}
+		if reqStream {
+			recordLegacyStreamingBilling("/v1/chat/completions")
+			reqLog.Debug("gateway.cc.legacy_streaming_billing")
+		}
+		if responseCapture != nil {
+			responseCapture.Discard(c)
+		}
 
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsage(ctx, &service.RecordUsageInput{
