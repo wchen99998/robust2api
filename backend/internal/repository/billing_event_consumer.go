@@ -430,7 +430,7 @@ func (c *redisBillingEventConsumer) deadLetterMessage(ctx context.Context, msg r
 	if err := c.rdb.XAdd(ctx, &redis.XAddArgs{
 		Stream: c.dlqKey,
 		MaxLen: c.dlqMaxLen,
-		Approx: false,
+		Approx: true,
 		Values: map[string]interface{}{
 			"data":              data,
 			"source_stream":     c.key,

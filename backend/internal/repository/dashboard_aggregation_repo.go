@@ -498,6 +498,7 @@ func (r *dashboardAggregationRepository) dropUsageLogsPartitions(ctx context.Con
 		}
 		month = month.UTC()
 		if month.Before(cutoffMonth) {
+			tombstoneRequestIDExpr := usageLogTombstoneRequestIDExpr("request_id", "id")
 			tombstoneQuery := fmt.Sprintf(`
 				INSERT INTO usage_log_tombstones (
 					request_id,
@@ -509,7 +510,7 @@ func (r *dashboardAggregationRepository) dropUsageLogsPartitions(ctx context.Con
 					delete_reason
 				)
 				SELECT
-					request_id,
+					%s,
 					api_key_id,
 					id,
 					user_id,
@@ -518,7 +519,7 @@ func (r *dashboardAggregationRepository) dropUsageLogsPartitions(ctx context.Con
 					$1
 				FROM %s
 				ON CONFLICT (request_id, api_key_id) DO NOTHING
-			`, pq.QuoteIdentifier(name))
+			`, tombstoneRequestIDExpr, pq.QuoteIdentifier(name))
 			if _, err := r.sql.ExecContext(ctx, tombstoneQuery, usageLogDeleteReasonRetention); err != nil {
 				return err
 			}

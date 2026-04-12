@@ -10,7 +10,17 @@ const (
 	usageLogDeleteReasonCleanupTask = "cleanup_task"
 	usageLogDeleteReasonRetention   = "retention_cleanup"
 	usageLogDeleteReasonManual      = "manual_delete"
+	// Legacy rows can have NULL/empty request_id, but tombstones still need a stable PK.
+	usageLogTombstoneSyntheticRequestIDPrefix = "usage-log-id:"
 )
+
+func usageLogTombstoneSyntheticRequestID(id int64) string {
+	return fmt.Sprintf("%s%d", usageLogTombstoneSyntheticRequestIDPrefix, id)
+}
+
+func usageLogTombstoneRequestIDExpr(requestIDExpr, idExpr string) string {
+	return fmt.Sprintf("COALESCE(NULLIF(%s, ''), '%s' || %s::text)", requestIDExpr, usageLogTombstoneSyntheticRequestIDPrefix, idExpr)
+}
 
 func deleteUsageLogsWithTombstones(ctx context.Context, q sqlQueryer, whereClause string, args []any, limit int, deleteReason string, sourceTaskID *int64) (int64, error) {
 	whereClause = strings.TrimSpace(whereClause)
@@ -25,10 +35,17 @@ func deleteUsageLogsWithTombstones(ctx context.Context, q sqlQueryer, whereClaus
 	argReasonPos := len(args) + 2
 	argSourceTaskPos := len(args) + 3
 	deleteArgs := append(append(append([]any{}, args...), limit), deleteReason, sourceTaskID)
+	tombstoneRequestIDExpr := usageLogTombstoneRequestIDExpr("request_id", "id")
 
 	query := fmt.Sprintf(`
 		WITH target AS (
-			SELECT id, request_id, api_key_id, user_id, account_id, created_at
+			SELECT
+				id,
+				%s AS tombstone_request_id,
+				api_key_id,
+				user_id,
+				account_id,
+				created_at
 			FROM usage_logs
 			WHERE %s
 			ORDER BY created_at ASC, id ASC
@@ -45,7 +62,7 @@ func deleteUsageLogsWithTombstones(ctx context.Context, q sqlQueryer, whereClaus
 				source_task_id
 			)
 			SELECT
-				request_id,
+				tombstone_request_id,
 				api_key_id,
 				id,
 				user_id,
@@ -61,7 +78,7 @@ func deleteUsageLogsWithTombstones(ctx context.Context, q sqlQueryer, whereClaus
 			RETURNING id
 		)
 		SELECT COUNT(*) FROM deleted
-	`, whereClause, argLimitPos, argReasonPos, argSourceTaskPos)
+	`, tombstoneRequestIDExpr, whereClause, argLimitPos, argReasonPos, argSourceTaskPos)
 
 	var deleted int64
 	if err := scanSingleRow(ctx, q, query, deleteArgs, &deleted); err != nil {

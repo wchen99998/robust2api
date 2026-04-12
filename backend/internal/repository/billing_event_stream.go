@@ -16,10 +16,11 @@ import (
 
 // redisBillingEventPublisher publishes usage charge events to a Redis Stream.
 type redisBillingEventPublisher struct {
-	rdb     *redis.Client
-	key     string
-	maxLen  int64
-	retries int
+	rdb            *redis.Client
+	key            string
+	maxLen         int64
+	retries        int
+	publishTimeout time.Duration
 }
 
 // NewRedisBillingEventPublisher creates a publisher that writes billing events to a Redis Stream.
@@ -34,11 +35,16 @@ func NewRedisBillingEventPublisher(rdb *redis.Client, cfg *config.Config) servic
 	if retries <= 0 {
 		retries = 3
 	}
+	publishTimeout := time.Duration(streamCfg.PublishTimeoutSeconds) * time.Second
+	if publishTimeout <= 0 {
+		publishTimeout = 10 * time.Second
+	}
 	return &redisBillingEventPublisher{
-		rdb:     rdb,
-		key:     key,
-		maxLen:  maxLen,
-		retries: retries,
+		rdb:            rdb,
+		key:            key,
+		maxLen:         maxLen,
+		retries:        retries,
+		publishTimeout: publishTimeout,
 	}
 }
 
@@ -75,10 +81,20 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 			args.MaxLen = p.maxLen
 			args.Approx = false
 		}
-		lastErr = p.rdb.XAdd(ctx, args).Err()
+		attemptCtx := ctx
+		cancel := func() {}
+		if p.publishTimeout > 0 {
+			attemptCtx, cancel = context.WithTimeout(ctx, p.publishTimeout)
+		}
+		lastErr = p.rdb.XAdd(attemptCtx, args).Err()
+		cancel()
 		if lastErr == nil {
 			appelotel.M().RecordBillingPublish(ctx, "success", time.Since(startedAt).Seconds())
 			return nil
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			appelotel.M().RecordBillingPublish(ctx, "canceled", time.Since(startedAt).Seconds())
+			return ctxErr
 		}
 		logger.L().Warn("billing event publish retry",
 			zap.String("component", "repository.billing_event_stream"),
