@@ -10,6 +10,7 @@ import (
 
 	dbent "github.com/Wei-Shaw/sub2api/ent"
 	infraerrors "github.com/Wei-Shaw/sub2api/internal/pkg/errors"
+	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -155,10 +156,8 @@ func (s *ControlAuthService) Register(ctx context.Context, input *ControlRegistr
 	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
 		return nil, nil, err
 	}
-	if s.authService != nil {
-		if err := s.authService.VerifyTurnstile(ctx, input.TurnstileToken, input.RemoteIP); err != nil {
-			return nil, nil, err
-		}
+	if err := s.verifyTurnstileForRegistration(ctx, input.TurnstileToken, input.RemoteIP, input.VerificationCode); err != nil {
+		return nil, nil, err
 	}
 
 	exists, err := s.userRepo.ExistsByEmail(ctx, email)
@@ -714,6 +713,14 @@ func (s *ControlAuthService) assignDefaultSubscriptionsTx(ctx context.Context, u
 		}
 	}
 	return nil
+}
+
+func (s *ControlAuthService) verifyTurnstileForRegistration(ctx context.Context, token, remoteIP, verificationCode string) error {
+	if s.emailVerificationEnabled(ctx) && strings.TrimSpace(verificationCode) != "" {
+		logger.LegacyPrintf("service.control_auth", "%s", "[ControlAuth] Email verification flow detected, skip duplicate Turnstile check on register")
+		return nil
+	}
+	return s.verifyTurnstile(ctx, token, remoteIP)
 }
 
 func (s *ControlAuthService) ensureBackendModeAdmin(ctx context.Context, user *User) error {

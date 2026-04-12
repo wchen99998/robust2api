@@ -129,13 +129,6 @@ function syncCSRFHeader(config: InternalAxiosRequestConfig): void {
   config.headers = headers
 }
 
-function clearLegacyAuthStorage(): void {
-  localStorage.removeItem('auth_token')
-  localStorage.removeItem('refresh_token')
-  localStorage.removeItem('auth_user')
-  localStorage.removeItem('token_expires_at')
-}
-
 // ==================== Request Interceptor ====================
 
 // Get user's timezone
@@ -260,7 +253,6 @@ apiClient.interceptors.response.use(
             onTokenRefreshed(false)
             isRefreshing = false
 
-            clearLegacyAuthStorage()
             sessionStorage.setItem('auth_expired', '1')
 
             if (!window.location.pathname.includes('/login')) {
@@ -274,22 +266,10 @@ apiClient.interceptors.response.use(
             })
           }
         }
-
-        const hasToken = !!localStorage.getItem('auth_token')
-        const headers = error.config?.headers as Record<string, unknown> | undefined
-        const authHeader = headers?.Authorization ?? headers?.authorization
-        const sentAuth =
-          typeof authHeader === 'string'
-            ? authHeader.trim() !== ''
-            : Array.isArray(authHeader)
-              ? authHeader.length > 0
-              : !!authHeader
-
-        clearLegacyAuthStorage()
-        if ((hasToken || sentAuth) && !isAuthEndpoint) {
-          sessionStorage.setItem('auth_expired', '1')
-        }
         if (!window.location.pathname.includes('/login')) {
+          if (!isAuthEndpoint) {
+            sessionStorage.setItem('auth_expired', '1')
+          }
           window.location.href = '/login'
         }
       }

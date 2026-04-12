@@ -171,9 +171,8 @@ async function handleLogout() {
 
 ## Persistence
 
-- **Auth Store**: Token and user data are automatically persisted to `localStorage`
-  - Keys: `auth_token`, `auth_user`
-  - Restored on `checkAuth()` call
+- **Auth Store**: Session state comes from the bootstrap API and HttpOnly cookies
+  - Revalidated on `checkAuth()` / `initialize()` calls
 - **App Store**: No persistence (UI state resets on page reload)
 
 ## TypeScript Support

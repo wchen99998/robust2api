@@ -29,7 +29,7 @@ func (s *turnstileVerifierSpy) VerifyToken(_ context.Context, _ string, token, _
 	return &TurnstileVerifyResponse{Success: true}, nil
 }
 
-func newAuthServiceForRegisterTurnstileTest(settings map[string]string, verifier TurnstileVerifier) *AuthService {
+func newControlAuthServiceForTurnstileTest(settings map[string]string, verifier TurnstileVerifier) *ControlAuthService {
 	cfg := &config.Config{
 		Server: config.ServerConfig{
 			Mode: "release",
@@ -42,56 +42,48 @@ func newAuthServiceForRegisterTurnstileTest(settings map[string]string, verifier
 	settingService := NewSettingService(&settingRepoStub{values: settings}, cfg)
 	turnstileService := NewTurnstileService(settingService, verifier)
 
-	return NewAuthService(
-		nil, // entClient
-		&userRepoStub{},
-		nil, // redeemRepo
-		nil, // refreshTokenCache
-		cfg,
-		settingService,
-		nil, // emailService
-		turnstileService,
-		nil, // emailQueueService
-		nil, // promoService
-		nil, // defaultSubAssigner
-	)
+	return &ControlAuthService{
+		cfg:              cfg,
+		settingService:   settingService,
+		turnstileService: turnstileService,
+	}
 }
 
-func TestAuthService_VerifyTurnstileForRegister_SkipWhenEmailVerifyCodeProvided(t *testing.T) {
+func TestControlAuthService_VerifyTurnstileForRegistration_SkipsDuplicateCheckWhenEmailCodeProvided(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
-	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
+	service := newControlAuthServiceForTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled:  "true",
 		SettingKeyTurnstileEnabled:    "true",
 		SettingKeyTurnstileSecretKey:  "secret",
 		SettingKeyRegistrationEnabled: "true",
 	}, verifier)
 
-	err := service.VerifyTurnstileForRegister(context.Background(), "", "127.0.0.1", "123456")
+	err := service.verifyTurnstileForRegistration(context.Background(), "", "127.0.0.1", "123456")
 	require.NoError(t, err)
 	require.Equal(t, 0, verifier.called)
 }
 
-func TestAuthService_VerifyTurnstileForRegister_RequireWhenVerifyCodeMissing(t *testing.T) {
+func TestControlAuthService_VerifyTurnstileForRegistration_RequiresTokenWhenVerifyCodeMissing(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
-	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
+	service := newControlAuthServiceForTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled: "true",
 		SettingKeyTurnstileEnabled:   "true",
 		SettingKeyTurnstileSecretKey: "secret",
 	}, verifier)
 
-	err := service.VerifyTurnstileForRegister(context.Background(), "", "127.0.0.1", "")
+	err := service.verifyTurnstileForRegistration(context.Background(), "", "127.0.0.1", "")
 	require.ErrorIs(t, err, ErrTurnstileVerificationFailed)
 }
 
-func TestAuthService_VerifyTurnstileForRegister_NoSkipWhenEmailVerifyDisabled(t *testing.T) {
+func TestControlAuthService_VerifyTurnstileForRegistration_UsesTurnstileWhenEmailVerifyDisabled(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
-	service := newAuthServiceForRegisterTurnstileTest(map[string]string{
+	service := newControlAuthServiceForTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled: "false",
 		SettingKeyTurnstileEnabled:   "true",
 		SettingKeyTurnstileSecretKey: "secret",
 	}, verifier)
 
-	err := service.VerifyTurnstileForRegister(context.Background(), "turnstile-token", "127.0.0.1", "123456")
+	err := service.verifyTurnstileForRegistration(context.Background(), "turnstile-token", "127.0.0.1", "123456")
 	require.NoError(t, err)
 	require.Equal(t, 1, verifier.called)
 	require.Equal(t, "turnstile-token", verifier.lastToken)

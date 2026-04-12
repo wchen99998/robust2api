@@ -142,7 +142,7 @@ type ControlAuthService struct {
 	authRepo           ControlAuthRepository
 	sessionCache       SessionSnapshotCache
 	settingService     *SettingService
-	authService        *AuthService
+	turnstileService   *TurnstileService
 	totpService        *TotpService
 	emailService       *EmailService
 	promoRepo          PromoCodeRepository
@@ -162,7 +162,7 @@ func NewControlAuthService(
 	authRepo ControlAuthRepository,
 	sessionCache SessionSnapshotCache,
 	settingService *SettingService,
-	authService *AuthService,
+	turnstileService *TurnstileService,
 	totpService *TotpService,
 	emailService *EmailService,
 	promoRepo PromoCodeRepository,
@@ -186,7 +186,7 @@ func NewControlAuthService(
 		authRepo:           authRepo,
 		sessionCache:       sessionCache,
 		settingService:     settingService,
-		authService:        authService,
+		turnstileService:   turnstileService,
 		totpService:        totpService,
 		emailService:       emailService,
 		promoRepo:          promoRepo,
@@ -547,10 +547,8 @@ func (s *ControlAuthService) Login(ctx context.Context, email, password, turnsti
 	if !s.passwordLoginEnabled(ctx) {
 		return nil, ErrPasswordLoginDisabled
 	}
-	if s.authService != nil {
-		if err := s.authService.VerifyTurnstile(ctx, turnstileToken, remoteIP); err != nil {
-			return nil, err
-		}
+	if err := s.verifyTurnstile(ctx, turnstileToken, remoteIP); err != nil {
+		return nil, err
 	}
 
 	user, err := s.userRepo.GetByEmail(ctx, strings.TrimSpace(email))
@@ -595,6 +593,37 @@ func (s *ControlAuthService) Login(ctx context.Context, email, password, turnsti
 		return nil, err
 	}
 	return &ControlLoginResult{Identity: identity, Tokens: tokens}, nil
+}
+
+func (s *ControlAuthService) verifyTurnstile(ctx context.Context, token, remoteIP string) error {
+	required := s.cfg != nil && s.cfg.Server.Mode == "release" && s.cfg.Turnstile.Required
+
+	if required {
+		if s.settingService == nil {
+			logger.LegacyPrintf("service.control_auth", "%s", "[ControlAuth] Turnstile required but settings service is not configured")
+			return ErrTurnstileNotConfigured
+		}
+		enabled := s.settingService.IsTurnstileEnabled(ctx)
+		secretConfigured := s.settingService.GetTurnstileSecretKey(ctx) != ""
+		if !enabled || !secretConfigured {
+			logger.LegacyPrintf("service.control_auth", "[ControlAuth] Turnstile required but not configured (enabled=%v, secret_configured=%v)", enabled, secretConfigured)
+			return ErrTurnstileNotConfigured
+		}
+	}
+
+	if s.turnstileService == nil {
+		if required {
+			logger.LegacyPrintf("service.control_auth", "%s", "[ControlAuth] Turnstile required but service not configured")
+			return ErrTurnstileNotConfigured
+		}
+		return nil
+	}
+
+	if !required && s.settingService != nil && s.settingService.IsTurnstileEnabled(ctx) && s.settingService.GetTurnstileSecretKey(ctx) == "" {
+		logger.LegacyPrintf("service.control_auth", "%s", "[ControlAuth] Turnstile enabled but secret key not configured")
+	}
+
+	return s.turnstileService.VerifyToken(ctx, token, remoteIP)
 }
 
 func (s *ControlAuthService) CompleteLoginTOTP(ctx context.Context, challengeID, totpCode string) (*ControlLoginResult, error) {
