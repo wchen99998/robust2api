@@ -597,13 +597,14 @@ func (s *ControlAuthService) Login(ctx context.Context, email, password, turnsti
 
 func (s *ControlAuthService) verifyTurnstile(ctx context.Context, token, remoteIP string) error {
 	required := s.cfg != nil && s.cfg.Server.Mode == "release" && s.cfg.Turnstile.Required
+	enabled := s.settingService != nil && s.settingService.IsTurnstileEnabled(ctx)
+	enforced := required || enabled
 
 	if required {
 		if s.settingService == nil {
 			logger.LegacyPrintf("service.control_auth", "%s", "[ControlAuth] Turnstile required but settings service is not configured")
 			return ErrTurnstileNotConfigured
 		}
-		enabled := s.settingService.IsTurnstileEnabled(ctx)
 		secretConfigured := s.settingService.GetTurnstileSecretKey(ctx) != ""
 		if !enabled || !secretConfigured {
 			logger.LegacyPrintf("service.control_auth", "[ControlAuth] Turnstile required but not configured (enabled=%v, secret_configured=%v)", enabled, secretConfigured)
@@ -612,14 +613,14 @@ func (s *ControlAuthService) verifyTurnstile(ctx context.Context, token, remoteI
 	}
 
 	if s.turnstileService == nil {
-		if required {
-			logger.LegacyPrintf("service.control_auth", "%s", "[ControlAuth] Turnstile required but service not configured")
+		if enforced {
+			logger.LegacyPrintf("service.control_auth", "[ControlAuth] Turnstile enforced but service not configured (required=%v, enabled=%v)", required, enabled)
 			return ErrTurnstileNotConfigured
 		}
 		return nil
 	}
 
-	if !required && s.settingService != nil && s.settingService.IsTurnstileEnabled(ctx) && s.settingService.GetTurnstileSecretKey(ctx) == "" {
+	if !required && enabled && s.settingService.GetTurnstileSecretKey(ctx) == "" {
 		logger.LegacyPrintf("service.control_auth", "%s", "[ControlAuth] Turnstile enabled but secret key not configured")
 	}
 

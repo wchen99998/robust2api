@@ -49,7 +49,7 @@ func newControlAuthServiceForTurnstileTest(settings map[string]string, verifier 
 	}
 }
 
-func TestControlAuthService_VerifyTurnstileForRegistration_SkipsDuplicateCheckWhenEmailCodeProvided(t *testing.T) {
+func TestControlAuthService_VerifyTurnstile_EnforcesTokenEvenWhenEmailVerificationCodeProvided(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
 	service := newControlAuthServiceForTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled:  "true",
@@ -58,12 +58,12 @@ func TestControlAuthService_VerifyTurnstileForRegistration_SkipsDuplicateCheckWh
 		SettingKeyRegistrationEnabled: "true",
 	}, verifier)
 
-	err := service.verifyTurnstileForRegistration(context.Background(), "", "127.0.0.1", "123456")
-	require.NoError(t, err)
+	err := service.verifyTurnstile(context.Background(), "", "127.0.0.1")
+	require.ErrorIs(t, err, ErrTurnstileVerificationFailed)
 	require.Equal(t, 0, verifier.called)
 }
 
-func TestControlAuthService_VerifyTurnstileForRegistration_RequiresTokenWhenVerifyCodeMissing(t *testing.T) {
+func TestControlAuthService_VerifyTurnstile_RequiresTokenWhenEnabled(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
 	service := newControlAuthServiceForTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled: "true",
@@ -71,11 +71,11 @@ func TestControlAuthService_VerifyTurnstileForRegistration_RequiresTokenWhenVeri
 		SettingKeyTurnstileSecretKey: "secret",
 	}, verifier)
 
-	err := service.verifyTurnstileForRegistration(context.Background(), "", "127.0.0.1", "")
+	err := service.verifyTurnstile(context.Background(), "", "127.0.0.1")
 	require.ErrorIs(t, err, ErrTurnstileVerificationFailed)
 }
 
-func TestControlAuthService_VerifyTurnstileForRegistration_UsesTurnstileWhenEmailVerifyDisabled(t *testing.T) {
+func TestControlAuthService_VerifyTurnstile_UsesTurnstileWhenEnabled(t *testing.T) {
 	verifier := &turnstileVerifierSpy{}
 	service := newControlAuthServiceForTurnstileTest(map[string]string{
 		SettingKeyEmailVerifyEnabled: "false",
@@ -83,8 +83,28 @@ func TestControlAuthService_VerifyTurnstileForRegistration_UsesTurnstileWhenEmai
 		SettingKeyTurnstileSecretKey: "secret",
 	}, verifier)
 
-	err := service.verifyTurnstileForRegistration(context.Background(), "turnstile-token", "127.0.0.1", "123456")
+	err := service.verifyTurnstile(context.Background(), "turnstile-token", "127.0.0.1")
 	require.NoError(t, err)
 	require.Equal(t, 1, verifier.called)
 	require.Equal(t, "turnstile-token", verifier.lastToken)
+}
+
+func TestControlAuthService_VerifyTurnstile_ReturnsNotConfiguredWhenEnabledWithoutService(t *testing.T) {
+	cfg := &config.Config{
+		Server: config.ServerConfig{Mode: "debug"},
+		Turnstile: config.TurnstileConfig{
+			Required: false,
+		},
+	}
+
+	service := &ControlAuthService{
+		cfg: cfg,
+		settingService: NewSettingService(&settingRepoStub{values: map[string]string{
+			SettingKeyTurnstileEnabled:   "true",
+			SettingKeyTurnstileSecretKey: "secret",
+		}}, cfg),
+	}
+
+	err := service.verifyTurnstile(context.Background(), "turnstile-token", "127.0.0.1")
+	require.ErrorIs(t, err, ErrTurnstileNotConfigured)
 }
