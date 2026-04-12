@@ -424,7 +424,6 @@ func ProvideAPIUsageCleanupService(repo UsageCleanupRepository, timingWheel *Tim
 // SharedProviderSet contains pure constructors with no background goroutines (no Start() calls).
 var SharedProviderSet = wire.NewSet(
 	// Core services
-	NewAuthService,
 	NewUserService,
 	NewAPIKeyService,
 	NewGroupService,

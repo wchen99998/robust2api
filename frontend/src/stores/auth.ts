@@ -31,13 +31,6 @@ export const useAuthStore = defineStore('auth', () => {
   const isAdmin = computed(() => user.value?.role === 'admin')
   const isSimpleMode = computed(() => runMode.value === 'simple')
 
-  function clearLegacyAuthStorage(): void {
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('auth_user')
-    localStorage.removeItem('refresh_token')
-    localStorage.removeItem('token_expires_at')
-  }
-
   function clearAuth(): void {
     token.value = null
     user.value = null
@@ -46,7 +39,6 @@ export const useAuthStore = defineStore('auth', () => {
     pendingRegistration.value = null
     authCapabilities.value = null
     authProviders.value = []
-    clearLegacyAuthStorage()
   }
 
   function applyBootstrap(response: BootstrapResponse): void {
@@ -68,12 +60,10 @@ export const useAuthStore = defineStore('auth', () => {
     authProviders.value = response.auth_providers ?? []
     if (!currentUser) {
       token.value = null
-      clearLegacyAuthStorage()
       return
     }
 
     token.value = null
-    localStorage.setItem('auth_user', JSON.stringify(currentUser))
   }
 
   function hydrate(response: BootstrapResponse): void {

@@ -155,10 +155,8 @@ func (s *ControlAuthService) Register(ctx context.Context, input *ControlRegistr
 	if err := s.validateRegistrationEmailPolicy(ctx, email); err != nil {
 		return nil, nil, err
 	}
-	if s.authService != nil {
-		if err := s.authService.VerifyTurnstile(ctx, input.TurnstileToken, input.RemoteIP); err != nil {
-			return nil, nil, err
-		}
+	if err := s.verifyTurnstile(ctx, input.TurnstileToken, input.RemoteIP); err != nil {
+		return nil, nil, err
 	}
 
 	exists, err := s.userRepo.ExistsByEmail(ctx, email)

@@ -549,10 +549,6 @@ export async function getCurrentUser(): Promise<{ data: CurrentUserResponse }> {
   return { data: boot.me.user as CurrentUserResponse }
 }
 
-export function isAuthenticated(): boolean {
-  return !!localStorage.getItem('auth_user')
-}
-
 export const authAPI = {
   bootstrap,
   login,
@@ -561,7 +557,6 @@ export const authAPI = {
   register,
   getCurrentUser,
   logout,
-  isAuthenticated,
   getPublicSettings,
   sendVerifyCode,
   validatePromoCode,
