@@ -158,6 +158,8 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	enqueuedTurns := atomic.Int32{}
 	queuedTurnsMu := sync.Mutex{}
 	queuedTurns := make([]OpenAIWSIngressTurn, 0, 4)
+	failedTurnMu := sync.Mutex{}
+	var failedTurn *OpenAIWSIngressTurn
 	enqueueTurn := func(msgType coderws.MessageType, payload []byte) error {
 		if msgType != coderws.MessageText && msgType != coderws.MessageBinary {
 			return nil
@@ -190,6 +192,27 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		queuedTurns = queuedTurns[1:]
 		return turnInfo
 	}
+	storeFailedTurn := func(turnInfo OpenAIWSIngressTurn) {
+		failedTurnMu.Lock()
+		defer failedTurnMu.Unlock()
+		copied := turnInfo
+		failedTurn = &copied
+	}
+	clearFailedTurn := func() {
+		failedTurnMu.Lock()
+		defer failedTurnMu.Unlock()
+		failedTurn = nil
+	}
+	takeFailedTurn := func() (OpenAIWSIngressTurn, bool) {
+		failedTurnMu.Lock()
+		defer failedTurnMu.Unlock()
+		if failedTurn == nil {
+			return OpenAIWSIngressTurn{}, false
+		}
+		turnInfo := *failedTurn
+		failedTurn = nil
+		return turnInfo, true
+	}
 	relayResult, relayExit := openaiwsv2.RunEntry(openaiwsv2.EntryInput{
 		Ctx:                ctx,
 		ClientConn:         &openAIWSClientFrameConn{conn: clientConn},
@@ -215,6 +238,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					turnInfo.Turn = turnNo
 				}
 				completedTurns.Store(int32(turnNo))
+				storeFailedTurn(turnInfo)
 				turnResult := &OpenAIForwardResult{
 					RequestID: turn.RequestID,
 					Usage: OpenAIUsage{
@@ -251,6 +275,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				if hooks != nil && hooks.AfterTurn != nil {
 					hooks.AfterTurn(turnInfo, turnResult, nil)
 				}
+				clearFailedTurn()
 				return nil
 			},
 			OnTrace: func(event openaiwsv2.RelayTraceEvent) {
@@ -336,7 +361,11 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		relayExit.WroteDownstream,
 	)
 	if hooks != nil && hooks.AfterTurn != nil {
-		hooks.AfterTurn(popNextTurn(), nil, turnErr)
+		if turnInfo, ok := takeFailedTurn(); ok {
+			hooks.AfterTurn(turnInfo, nil, turnErr)
+		} else {
+			hooks.AfterTurn(popNextTurn(), nil, turnErr)
+		}
 	}
 	return turnErr
 }
