@@ -36,8 +36,6 @@ type redisBillingEventConsumer struct {
 	wg     sync.WaitGroup
 }
 
-const billingStatusPendingScanBatchSize int64 = 1000
-
 // NewRedisBillingEventConsumer creates a consumer that reads billing events from a Redis Stream.
 func NewRedisBillingEventConsumer(rdb *redis.Client, cfg *config.Config) service.BillingEventConsumer {
 	streamCfg := cfg.Billing.Stream
@@ -155,19 +153,20 @@ func (c *redisBillingEventConsumer) Status(ctx context.Context) (*service.Billin
 	}
 	status.PendingCount = pending.Count
 	if pending.Count > 0 {
-		oldestPendingAge, err := scanOldestPendingAge(pending.Count, billingStatusPendingScanBatchSize, func(start string, count int64) ([]redis.XPendingExt, error) {
-			return c.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
-				Stream: c.key,
-				Group:  c.group,
-				Start:  start,
-				End:    "+",
-				Count:  count,
-			}).Result()
-		})
+		// Fetch just the single oldest pending entry (lowest stream ID = longest idle).
+		entries, err := c.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
+			Stream: c.key,
+			Group:  c.group,
+			Start:  "-",
+			End:    "+",
+			Count:  1,
+		}).Result()
 		if err != nil {
 			return nil, err
 		}
-		status.OldestPendingAge = oldestPendingAge
+		if len(entries) > 0 {
+			status.OldestPendingAge = entries[0].Idle
+		}
 	}
 	if c.dlqKey != "" {
 		dlqDepth, err := c.rdb.XLen(ctx, c.dlqKey).Result()
@@ -177,49 +176,6 @@ func (c *redisBillingEventConsumer) Status(ctx context.Context) (*service.Billin
 		status.DLQDepth = dlqDepth
 	}
 	return status, nil
-}
-
-func scanOldestPendingAge(pendingCount int64, pageSize int64, fetch func(start string, count int64) ([]redis.XPendingExt, error)) (time.Duration, error) {
-	if pendingCount <= 0 || fetch == nil {
-		return 0, nil
-	}
-	if pageSize <= 0 {
-		pageSize = billingStatusPendingScanBatchSize
-	}
-
-	start := "-"
-	scanned := int64(0)
-	var oldest time.Duration
-
-	for scanned < pendingCount {
-		count := pageSize
-		if remaining := pendingCount - scanned; remaining < count {
-			count = remaining
-		}
-		entries, err := fetch(start, count)
-		if err != nil {
-			return 0, err
-		}
-		if len(entries) == 0 {
-			break
-		}
-		for _, entry := range entries {
-			if entry.Idle > oldest {
-				oldest = entry.Idle
-			}
-		}
-		scanned += int64(len(entries))
-		if scanned >= pendingCount {
-			break
-		}
-		nextStart := nextPendingScanStart(entries[len(entries)-1].ID)
-		if nextStart == "" || nextStart == start {
-			break
-		}
-		start = nextStart
-	}
-
-	return oldest, nil
 }
 
 func nextPendingScanStart(id string) string {

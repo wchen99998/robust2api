@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -178,7 +179,18 @@ func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *s
 	return true, nil
 }
 
+// usageBillingDedupTables is a compile-time allow-list of tables that may be
+// queried by matchExistingUsageBillingFingerprint.  Restricting interpolated
+// table names to this set prevents SQL-injection via the `table` parameter.
+var usageBillingDedupTables = map[string]struct{}{
+	"usage_billing_dedup":         {},
+	"usage_billing_dedup_archive": {},
+}
+
 func (r *usageBillingRepository) matchExistingUsageBillingFingerprint(ctx context.Context, tx *sql.Tx, table string, cmd *service.UsageBillingCommand) (bool, error) {
+	if _, ok := usageBillingDedupTables[table]; !ok {
+		return false, fmt.Errorf("usage billing fingerprint check: disallowed table %q", table)
+	}
 	var existingFingerprint string
 	err := scanSingleRow(ctx, tx, `
 		SELECT request_fingerprint

@@ -188,6 +188,11 @@ func (s *BillingConsumerService) recordApplyFailure(now time.Time) {
 	appelotel.M().SetBillingLastApplyFailureTimestamp(context.Background(), unix)
 }
 
+// billingStatusPollingInterval controls how often the consumer polls Redis for
+// pending-message metrics.  Extracted as a named constant so tests and future
+// config plumbing can override it easily.
+const billingStatusPollingInterval = 15 * time.Second
+
 func (s *BillingConsumerService) startStatusPolling() {
 	if s.consumer == nil {
 		return
@@ -197,7 +202,7 @@ func (s *BillingConsumerService) startStatusPolling() {
 	s.statusWG.Add(1)
 	go func() {
 		defer s.statusWG.Done()
-		ticker := time.NewTicker(15 * time.Second)
+		ticker := time.NewTicker(billingStatusPollingInterval)
 		defer ticker.Stop()
 		s.refreshStatusMetrics(ctx)
 		for {
