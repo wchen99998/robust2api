@@ -9,6 +9,7 @@ import (
 	"runtime/debug"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
@@ -1753,6 +1754,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 	currentTurnBillingRequestID := ""
 	currentTurnReserved := false
 	currentTurnFinalized := false
+	billingMu := sync.Mutex{}
 
 	userReleaseFunc, userAcquired, err := h.concurrencyHelper.TryAcquireUserSlot(ctx, subject.UserID, subject.Concurrency)
 	if err != nil {
@@ -1887,10 +1889,12 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 				currentUserRelease = wrapReleaseOnDone(ctx, userReleaseFunc)
 				currentAccountRelease = wrapReleaseOnDone(ctx, accountReleaseFunc)
 			}
+			billingMu.Lock()
 			currentTurnBillingRequestID = fmt.Sprintf("%s:turn:%d", wsBillingBaseRequestID, turn.Turn)
 			currentTurnReserved = false
 			currentTurnFinalized = false
 			if !streamingBillingV2 {
+				billingMu.Unlock()
 				return nil
 			}
 			if err := h.executeUsageRecordTask(func(taskCtx context.Context) error {
@@ -1904,15 +1908,19 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					RequestPayloadHash: turn.RequestPayloadHash,
 				})
 			}); err != nil {
+				billingMu.Unlock()
 				return service.NewOpenAIWSClientCloseError(coderws.StatusTryAgainLater, "billing temporarily unavailable", err)
 			}
 			currentTurnReserved = true
+			billingMu.Unlock()
 			return nil
 		},
 		BeforeTurnComplete: func(turn service.OpenAIWSIngressTurn, result *service.OpenAIForwardResult) error {
 			if !streamingBillingV2 || result == nil {
 				return nil
 			}
+			billingMu.Lock()
+			defer billingMu.Unlock()
 			if currentTurnBillingRequestID == "" {
 				currentTurnBillingRequestID = fmt.Sprintf("%s:turn:%d", wsBillingBaseRequestID, turn.Turn)
 			}
@@ -1947,10 +1955,15 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		},
 		AfterTurn: func(turn service.OpenAIWSIngressTurn, result *service.OpenAIForwardResult, turnErr error) {
 			releaseTurnSlots()
-			if streamingBillingV2 && currentTurnReserved && !currentTurnFinalized {
+			billingMu.Lock()
+			snapReserved := currentTurnReserved
+			snapFinalized := currentTurnFinalized
+			snapBillingRequestID := currentTurnBillingRequestID
+			billingMu.Unlock()
+			if streamingBillingV2 && snapReserved && !snapFinalized {
 				if err := h.executeUsageRecordTask(func(taskCtx context.Context) error {
 					return h.gatewayService.PublishStreamingRelease(taskCtx, &service.StreamingBillingLifecycleInput{
-						RequestID:          currentTurnBillingRequestID,
+						RequestID:          snapBillingRequestID,
 						APIKey:             apiKey,
 						User:               apiKey.User,
 						Account:            account,
@@ -1962,7 +1975,7 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 					reqLog.Error("openai.websocket_streaming_release_failed",
 						zap.Int64("account_id", account.ID),
 						zap.Int("turn", turn.Turn),
-						zap.String("request_id", currentTurnBillingRequestID),
+						zap.String("request_id", snapBillingRequestID),
 						zap.Error(err),
 					)
 				}

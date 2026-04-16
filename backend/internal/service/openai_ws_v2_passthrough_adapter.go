@@ -159,10 +159,15 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	queuedTurnsMu := sync.Mutex{}
 	queuedTurns := make([]OpenAIWSIngressTurn, 0, 4)
 	enqueueTurn := func(msgType coderws.MessageType, payload []byte) error {
-		if msgType != coderws.MessageText && msgType != coderws.MessageBinary {
+		// Only text frames carrying a model field initiate billing turns;
+		// binary frames (audio data) and control events are skipped.
+		if msgType != coderws.MessageText {
 			return nil
 		}
-		turnNo := int(enqueuedTurns.Add(1))
+		if !gjson.GetBytes(payload, "model").Exists() {
+			return nil
+		}
+		turnNo := int(enqueuedTurns.Load()) + 1
 		turnInfo := OpenAIWSIngressTurn{
 			Turn:               turnNo,
 			RequestPayloadHash: HashUsageRequestPayload(payload),
@@ -175,6 +180,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				return err
 			}
 		}
+		enqueuedTurns.Store(int32(turnNo))
 		queuedTurnsMu.Lock()
 		defer queuedTurnsMu.Unlock()
 		queuedTurns = append(queuedTurns, turnInfo)
