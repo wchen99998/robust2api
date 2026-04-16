@@ -2,6 +2,7 @@ CREATE TABLE IF NOT EXISTS billing_usage_ledger (
     id BIGSERIAL PRIMARY KEY,
     request_id VARCHAR(255) NOT NULL,
     api_key_id BIGINT NOT NULL,
+    kind VARCHAR(32) NOT NULL,
     request_fingerprint VARCHAR(64) NOT NULL,
     source_event_id UUID NOT NULL,
     user_id BIGINT NOT NULL,
@@ -19,8 +20,8 @@ CREATE TABLE IF NOT EXISTS billing_usage_ledger (
     raw_event JSONB NOT NULL
 );
 
-CREATE UNIQUE INDEX IF NOT EXISTS billing_usage_ledger_request_api_key_uidx
-    ON billing_usage_ledger (request_id, api_key_id);
+CREATE UNIQUE INDEX IF NOT EXISTS billing_usage_ledger_request_api_key_kind_uidx
+    ON billing_usage_ledger (request_id, api_key_id, kind);
 
 CREATE INDEX IF NOT EXISTS billing_usage_ledger_user_occurred_idx
     ON billing_usage_ledger (user_id, occurred_at);

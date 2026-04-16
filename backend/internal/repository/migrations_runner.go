@@ -60,6 +60,12 @@ type migrationChecksumCompatibilityRule struct {
 // migrationChecksumCompatibilityRules 仅用于兼容历史上误修改过的迁移文件 checksum。
 // 规则必须同时匹配「迁移名 + 当前文件 checksum + 历史库 checksum」才会放行，避免放宽全局校验。
 var migrationChecksumCompatibilityRules = map[string]migrationChecksumCompatibilityRule{
+	"094_add_billing_usage_ledger_and_usage_log_tombstones.sql": {
+		fileChecksum: "e42fbf9b2a7374cb95007a531502dfd16f73232ad9d0fc69db1f57fc4d8270e2",
+		acceptedDBChecksum: map[string]struct{}{
+			"54af781c204b116ec81c334452a5c67107af698104589ef6f86cc76a95b3aec2": {},
+		},
+	},
 	"054_drop_legacy_cache_columns.sql": {
 		fileChecksum: "82de761156e03876653e7a6a4eee883cd927847036f779b0b9f34c42a8af7a7d",
 		acceptedDBChecksum: map[string]struct{}{
