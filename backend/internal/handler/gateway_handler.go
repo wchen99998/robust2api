@@ -603,7 +603,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Error(err),
 					)
 					if terminalCapture != nil {
-						terminalCapture.DiscardTerminal(c)
+						_ = terminalCapture.CommitTerminal(c)
 					}
 					return
 				}
@@ -1127,7 +1127,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						zap.Error(err),
 					)
 					if terminalCapture != nil {
-						terminalCapture.DiscardTerminal(c)
+						_ = terminalCapture.CommitTerminal(c)
 					}
 					return
 				}

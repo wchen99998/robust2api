@@ -38,6 +38,8 @@ func streamingBillingRequestID(ctx context.Context) string {
 	return "generated:" + uuid.NewString()
 }
 
+const terminalCaptureMaxPendingBytes = 4 << 20 // 4 MiB
+
 type streamingTerminalMode string
 
 const (
@@ -112,10 +114,33 @@ func (w *terminalBufferedResponseWriter) Write(data []byte) (int, error) {
 		return w.terminal.Write(data)
 	}
 	w.pending = append(w.pending, data...)
+	if len(w.pending) > terminalCaptureMaxPendingBytes {
+		if err := w.flushAllToOriginal(); err != nil {
+			return 0, err
+		}
+		return len(data), nil
+	}
 	if err := w.processPending(false); err != nil {
 		return 0, err
 	}
 	return len(data), nil
+}
+
+func (w *terminalBufferedResponseWriter) flushAllToOriginal() error {
+	if len(w.pending) > 0 {
+		if _, err := w.original.Write(w.pending); err != nil {
+			return err
+		}
+		w.pending = nil
+	}
+	if w.terminal.Len() > 0 {
+		if _, err := w.original.Write(w.terminal.Bytes()); err != nil {
+			return err
+		}
+		w.terminal.Reset()
+	}
+	w.terminalStarted = false
+	return nil
 }
 
 func (w *terminalBufferedResponseWriter) WriteString(s string) (int, error) {
@@ -151,7 +176,9 @@ func (w *terminalBufferedResponseWriter) CloseNotify() <-chan bool {
 	if notifier, ok := any(w.original).(http.CloseNotifier); ok {
 		return notifier.CloseNotify()
 	}
-	return make(chan bool)
+	ch := make(chan bool, 1)
+	ch <- true
+	return ch
 }
 
 func (w *terminalBufferedResponseWriter) Pusher() http.Pusher {
@@ -206,12 +233,22 @@ func nextSSEFrame(data []byte, final bool) ([]byte, []byte, bool) {
 		return nil, nil, false
 	}
 	for i := 0; i < len(data)-1; i++ {
-		if data[i] == '\n' && data[i+1] == '\n' {
-			end := i + 2
-			return append([]byte(nil), data[:end]...), append([]byte(nil), data[end:]...), true
-		}
+		// \r\n\r\n (4 bytes)
 		if i+3 < len(data) && data[i] == '\r' && data[i+1] == '\n' && data[i+2] == '\r' && data[i+3] == '\n' {
 			end := i + 4
+			return append([]byte(nil), data[:end]...), append([]byte(nil), data[end:]...), true
+		}
+		// \r\n\n or \n\r\n (3 bytes)
+		if i+2 < len(data) {
+			if (data[i] == '\r' && data[i+1] == '\n' && data[i+2] == '\n') ||
+				(data[i] == '\n' && data[i+1] == '\r' && data[i+2] == '\n') {
+				end := i + 3
+				return append([]byte(nil), data[:end]...), append([]byte(nil), data[end:]...), true
+			}
+		}
+		// \n\n (2 bytes)
+		if data[i] == '\n' && data[i+1] == '\n' {
+			end := i + 2
 			return append([]byte(nil), data[:end]...), append([]byte(nil), data[end:]...), true
 		}
 	}

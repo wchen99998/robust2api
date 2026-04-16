@@ -574,7 +574,7 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 					zap.Error(err),
 				)
 				if terminalCapture != nil {
-					terminalCapture.DiscardTerminal(c)
+					_ = terminalCapture.CommitTerminal(c)
 				}
 				return
 			}
@@ -1232,7 +1232,7 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 					zap.Error(err),
 				)
 				if terminalCapture != nil {
-					terminalCapture.DiscardTerminal(c)
+					_ = terminalCapture.CommitTerminal(c)
 				}
 				return
 			}

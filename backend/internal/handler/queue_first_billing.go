@@ -167,7 +167,9 @@ func (w *bufferedResponseWriter) CloseNotify() <-chan bool {
 	if notifier, ok := any(w.original).(http.CloseNotifier); ok {
 		return notifier.CloseNotify()
 	}
-	return make(chan bool)
+	ch := make(chan bool, 1)
+	ch <- true
+	return ch
 }
 
 func (w *bufferedResponseWriter) Pusher() http.Pusher {

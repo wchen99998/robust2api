@@ -353,7 +353,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					zap.Error(err),
 				)
 				if terminalCapture != nil {
-					terminalCapture.DiscardTerminal(c)
+					_ = terminalCapture.CommitTerminal(c)
 				}
 				return
 			}
