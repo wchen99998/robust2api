@@ -193,12 +193,14 @@ func (w *terminalBufferedResponseWriter) CommitTerminal() error {
 		return err
 	}
 	if w.terminal.Len() == 0 {
+		w.terminalStarted = false
 		return nil
 	}
 	if _, err := w.original.Write(w.terminal.Bytes()); err != nil {
 		return err
 	}
 	w.terminal.Reset()
+	w.terminalStarted = false
 	w.original.Flush()
 	return nil
 }
@@ -206,6 +208,9 @@ func (w *terminalBufferedResponseWriter) CommitTerminal() error {
 func (w *terminalBufferedResponseWriter) DiscardTerminal() {
 	w.pending = nil
 	w.terminal.Reset()
+	// Reset terminalStarted so any stray Write after discard is forwarded
+	// to the original writer instead of silently buffering into terminal.
+	w.terminalStarted = false
 }
 
 func (w *terminalBufferedResponseWriter) processPending(final bool) error {

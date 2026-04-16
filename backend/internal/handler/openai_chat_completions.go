@@ -144,32 +144,38 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	streamReservationFinalized := false
 	var streamReservationAccount *service.Account
 	var terminalCapture *streamingTerminalCapture
+	releaseStreamReservation := func(reason string) {
+		if !streamingBillingV2 || !streamReservationPublished || streamReservationFinalized {
+			return
+		}
+		if terminalCapture != nil {
+			terminalCapture.DiscardTerminal(c)
+			terminalCapture = nil
+		}
+		acct := streamReservationAccount
+		if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+			return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+				RequestID:          streamReservationID,
+				APIKey:             apiKey,
+				User:               apiKey.User,
+				Account:            acct,
+				Subscription:       subscription,
+				Model:              reqModel,
+				RequestPayloadHash: requestPayloadHash,
+			})
+		}); err != nil {
+			reqLog.Error("openai_chat_completions.streaming_release_failed",
+				zap.String("request_id", streamReservationID),
+				zap.String("reason", reason),
+				zap.Error(err),
+			)
+		}
+		streamReservationPublished = false
+		streamReservationAccount = nil
+	}
 	if streamingBillingV2 {
 		streamReservationID = streamingBillingRequestID(c.Request.Context())
-		defer func() {
-			if !streamReservationPublished || streamReservationFinalized {
-				return
-			}
-			if terminalCapture != nil {
-				terminalCapture.DiscardTerminal(c)
-			}
-			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
-				return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
-					RequestID:          streamReservationID,
-					APIKey:             apiKey,
-					User:               apiKey.User,
-					Account:            streamReservationAccount,
-					Subscription:       subscription,
-					Model:              reqModel,
-					RequestPayloadHash: requestPayloadHash,
-				})
-			}); err != nil {
-				reqLog.Error("openai_chat_completions.streaming_release_failed",
-					zap.String("request_id", streamReservationID),
-					zap.Error(err),
-				)
-			}
-		}()
+		defer func() { releaseStreamReservation("deferred_cleanup") }()
 	}
 
 	for {
@@ -369,6 +375,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				if responseCapture != nil {
 					responseCapture.Discard(c)
 				}
+				// Release the reservation tied to the failing account so
+				// the next iteration re-reserves on the replacement.
+				releaseStreamReservation("account_switch")
 				continue
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)

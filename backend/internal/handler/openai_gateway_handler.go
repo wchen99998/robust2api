@@ -276,33 +276,39 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	streamReservationFinalized := false
 	var streamReservationAccount *service.Account
 	var terminalCapture *streamingTerminalCapture
+	releaseStreamReservation := func(reason string) {
+		if !streamingBillingV2 || !streamReservationPublished || streamReservationFinalized {
+			return
+		}
+		if terminalCapture != nil {
+			terminalCapture.DiscardTerminal(c)
+			terminalCapture = nil
+		}
+		acct := streamReservationAccount
+		if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+			return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+				RequestID:          streamReservationID,
+				APIKey:             apiKey,
+				User:               apiKey.User,
+				Account:            acct,
+				Subscription:       subscription,
+				Model:              reqModel,
+				RequestPayloadHash: requestPayloadHash,
+				ReasoningEffort:    service.ExtractResponsesReasoningEffortFromBody(body),
+			})
+		}); err != nil {
+			reqLog.Error("openai.streaming_release_failed",
+				zap.String("request_id", streamReservationID),
+				zap.String("reason", reason),
+				zap.Error(err),
+			)
+		}
+		streamReservationPublished = false
+		streamReservationAccount = nil
+	}
 	if streamingBillingV2 {
 		streamReservationID = streamingBillingRequestID(c.Request.Context())
-		defer func() {
-			if !streamReservationPublished || streamReservationFinalized {
-				return
-			}
-			if terminalCapture != nil {
-				terminalCapture.DiscardTerminal(c)
-			}
-			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
-				return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
-					RequestID:          streamReservationID,
-					APIKey:             apiKey,
-					User:               apiKey.User,
-					Account:            streamReservationAccount,
-					Subscription:       subscription,
-					Model:              reqModel,
-					RequestPayloadHash: requestPayloadHash,
-					ReasoningEffort:    service.ExtractResponsesReasoningEffortFromBody(body),
-				})
-			}); err != nil {
-				reqLog.Error("openai.streaming_release_failed",
-					zap.String("request_id", streamReservationID),
-					zap.Error(err),
-				)
-			}
-		}()
+		defer func() { releaseStreamReservation("deferred_cleanup") }()
 	}
 
 	for {
@@ -489,6 +495,10 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 				if responseCapture != nil {
 					responseCapture.Discard(c)
 				}
+				// Release the reservation tied to the failing account so
+				// the next iteration re-reserves on the replacement account
+				// and reserve/finalize stay correlated.
+				releaseStreamReservation("account_switch")
 				continue
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
@@ -913,32 +923,38 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 	streamReservationFinalized := false
 	var streamReservationAccount *service.Account
 	var terminalCapture *streamingTerminalCapture
+	releaseStreamReservation := func(reason string) {
+		if !streamingBillingV2 || !streamReservationPublished || streamReservationFinalized {
+			return
+		}
+		if terminalCapture != nil {
+			terminalCapture.DiscardTerminal(c)
+			terminalCapture = nil
+		}
+		acct := streamReservationAccount
+		if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+			return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+				RequestID:          streamReservationID,
+				APIKey:             apiKey,
+				User:               apiKey.User,
+				Account:            acct,
+				Subscription:       subscription,
+				Model:              reqModel,
+				RequestPayloadHash: requestPayloadHash,
+			})
+		}); err != nil {
+			reqLog.Error("openai_messages.streaming_release_failed",
+				zap.String("request_id", streamReservationID),
+				zap.String("reason", reason),
+				zap.Error(err),
+			)
+		}
+		streamReservationPublished = false
+		streamReservationAccount = nil
+	}
 	if streamingBillingV2 {
 		streamReservationID = streamingBillingRequestID(c.Request.Context())
-		defer func() {
-			if !streamReservationPublished || streamReservationFinalized {
-				return
-			}
-			if terminalCapture != nil {
-				terminalCapture.DiscardTerminal(c)
-			}
-			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
-				return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
-					RequestID:          streamReservationID,
-					APIKey:             apiKey,
-					User:               apiKey.User,
-					Account:            streamReservationAccount,
-					Subscription:       subscription,
-					Model:              reqModel,
-					RequestPayloadHash: requestPayloadHash,
-				})
-			}); err != nil {
-				reqLog.Error("openai_messages.streaming_release_failed",
-					zap.String("request_id", streamReservationID),
-					zap.Error(err),
-				)
-			}
-		}()
+		defer func() { releaseStreamReservation("deferred_cleanup") }()
 	}
 	effectiveMappedModel := preferredMappedModel
 
@@ -1163,6 +1179,9 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				if responseCapture != nil {
 					responseCapture.Discard(c)
 				}
+				// Release the reservation tied to the failing account so the
+				// next iteration re-reserves on the replacement account.
+				releaseStreamReservation("account_switch")
 				continue
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
@@ -2051,8 +2070,11 @@ func (h *OpenAIGatewayHandler) executeUsageRecordTask(task usageRecordErrTask) (
 	defer cancel()
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			// Helper is invoked from multiple endpoints (Responses, Messages,
+			// ChatCompletions); log at the handler level without claiming a
+			// specific sub-component to avoid misattribution during triage.
 			logger.L().With(
-				zap.String("component", "handler.openai_gateway.responses"),
+				zap.String("component", "handler.openai_gateway"),
 				zap.Any("panic", recovered),
 			).Error("openai.usage_record_task_panic_recovered")
 			err = fmt.Errorf("usage record task panic: %v", recovered)

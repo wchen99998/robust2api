@@ -67,7 +67,11 @@ func NewUsageChargeEventWithKind(kind UsageChargeEventKind, cmd *UsageBillingCom
 		requestID = cmd.RequestID
 	}
 	if usageLog != nil {
-		if usageLog.RequestID != "" {
+		// Prefer the caller-supplied command RequestID so streaming lifecycle
+		// events (reserve/finalize/release) stay correlated across phases.
+		// Fall back to usageLog.RequestID only when the command did not
+		// supply one.
+		if requestID == "" && usageLog.RequestID != "" {
 			requestID = usageLog.RequestID
 		}
 		if !usageLog.CreatedAt.IsZero() {

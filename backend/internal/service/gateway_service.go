@@ -7715,9 +7715,14 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// Build the billing command and publish to the billing stream.
+	// When a caller-supplied BillingRequestID is present (streaming v2
+	// finalize), use it for both the event and the persisted usage log so
+	// reserve/finalize remain correlated and the ledger/usage_log rows agree.
 	requestID := strings.TrimSpace(input.BillingRequestID)
 	if requestID == "" {
 		requestID = usageLog.RequestID
+	} else {
+		usageLog.RequestID = requestID
 	}
 	p := &postUsageBillingParams{
 		Cost:                  cost,

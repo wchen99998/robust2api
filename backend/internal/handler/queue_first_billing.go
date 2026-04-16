@@ -44,7 +44,15 @@ type bufferedResponseCapture struct {
 	buffered *bufferedResponseWriter
 }
 
-const queueFirstBufferedResponseMemoryLimit = 1 << 20
+const (
+	queueFirstBufferedResponseMemoryLimit = 1 << 20  // 1 MiB — spill threshold
+	queueFirstBufferedResponseMaxTotal    = 64 << 20 // 64 MiB — total (memory+disk) cap
+)
+
+// ErrBufferedResponseTooLarge is returned by writes that would exceed
+// queueFirstBufferedResponseMaxTotal. Handlers should treat this as a fatal
+// error for the current request and return a 503 to the client.
+var ErrBufferedResponseTooLarge = errors.New("buffered response exceeds queue-first max total size")
 
 func beginBufferedResponseCapture(c *gin.Context, enabled bool) *bufferedResponseCapture {
 	if !enabled || c == nil || c.Writer == nil {
@@ -77,13 +85,14 @@ func (c *bufferedResponseCapture) Commit(ctx *gin.Context) error {
 }
 
 type bufferedResponseWriter struct {
-	original  gin.ResponseWriter
-	header    http.Header
-	body      bytes.Buffer
-	spill     *os.File
-	spillPath string
-	status    int
-	size      int
+	original      gin.ResponseWriter
+	header        http.Header
+	body          bytes.Buffer
+	spill         *os.File
+	spillPath     string
+	status        int
+	size          int
+	headerWritten bool
 }
 
 func newBufferedResponseWriter(original gin.ResponseWriter) *bufferedResponseWriter {
@@ -109,6 +118,7 @@ func (w *bufferedResponseWriter) WriteHeader(code int) {
 	if code > 0 {
 		w.status = code
 	}
+	w.headerWritten = true
 }
 
 func (w *bufferedResponseWriter) WriteHeaderNow() {
@@ -191,11 +201,17 @@ func (w *bufferedResponseWriter) CommitTo(target gin.ResponseWriter) error {
 	for key, values := range w.header {
 		dstHeader[key] = append([]string(nil), values...)
 	}
-	if !w.Written() {
+	// Replay captured status for both body-bearing responses and
+	// header-only responses (204/304, explicit WriteHeader without body).
+	if !w.Written() && !w.headerWritten {
 		return nil
 	}
 	target.WriteHeader(w.status)
 	if w.spill == nil && w.body.Len() == 0 {
+		// Force Gin to emit the deferred status line even when the body is
+		// empty (e.g. 204/304, or errors with no body). Without this, Gin's
+		// responseWriter only flushes headers on first Write/WriteHeaderNow.
+		target.WriteHeaderNow()
 		return nil
 	}
 	if w.spill != nil {
@@ -212,6 +228,18 @@ func (w *bufferedResponseWriter) CommitTo(target gin.ResponseWriter) error {
 func (w *bufferedResponseWriter) appendBody(data []byte) (int, error) {
 	if len(data) == 0 {
 		return 0, nil
+	}
+	// Enforce the total (memory+disk) cap to protect against unbounded
+	// spill file growth for very large non-stream responses. Caller must
+	// treat this as fatal for the request.
+	buffered := int64(w.body.Len())
+	if w.spill != nil {
+		if off, err := w.spill.Seek(0, io.SeekCurrent); err == nil {
+			buffered = off
+		}
+	}
+	if buffered+int64(len(data)) > queueFirstBufferedResponseMaxTotal {
+		return 0, ErrBufferedResponseTooLarge
 	}
 	if err := w.ensureSpill(len(data)); err != nil {
 		return 0, err

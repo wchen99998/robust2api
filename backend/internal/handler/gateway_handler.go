@@ -317,32 +317,38 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		streamReservationFinalized := false
 		var streamReservationAccount *service.Account
 		var terminalCapture *streamingTerminalCapture
+		releaseStreamReservation := func(reason string) {
+			if !streamingBillingV2 || !streamReservationPublished || streamReservationFinalized {
+				return
+			}
+			if terminalCapture != nil {
+				terminalCapture.DiscardTerminal(c)
+				terminalCapture = nil
+			}
+			acct := streamReservationAccount
+			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+					RequestID:          streamReservationID,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            acct,
+					Subscription:       subscription,
+					Model:              reqModel,
+					RequestPayloadHash: requestPayloadHash,
+				})
+			}); err != nil {
+				reqLog.Error("gateway.streaming_release_failed",
+					zap.String("request_id", streamReservationID),
+					zap.String("reason", reason),
+					zap.Error(err),
+				)
+			}
+			streamReservationPublished = false
+			streamReservationAccount = nil
+		}
 		if streamingBillingV2 {
 			streamReservationID = streamingBillingRequestID(c.Request.Context())
-			defer func() {
-				if !streamReservationPublished || streamReservationFinalized {
-					return
-				}
-				if terminalCapture != nil {
-					terminalCapture.DiscardTerminal(c)
-				}
-				if err := h.executeUsageRecordTask(func(ctx context.Context) error {
-					return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
-						RequestID:          streamReservationID,
-						APIKey:             apiKey,
-						User:               apiKey.User,
-						Account:            streamReservationAccount,
-						Subscription:       subscription,
-						Model:              reqModel,
-						RequestPayloadHash: requestPayloadHash,
-					})
-				}); err != nil {
-					reqLog.Error("gateway.streaming_release_failed",
-						zap.String("request_id", streamReservationID),
-						zap.Error(err),
-					)
-				}
-			}()
+			defer func() { releaseStreamReservation("deferred_cleanup") }()
 		}
 
 		// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
@@ -511,6 +517,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						if responseCapture != nil {
 							responseCapture.Discard(c)
 						}
+						// Release any reservation tied to the failing account
+						// so the next iteration re-reserves on the replacement.
+						releaseStreamReservation("account_switch")
 						continue
 					case FailoverExhausted:
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, service.PlatformGemini, streamStarted)
@@ -706,32 +715,38 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	streamReservationFinalized := false
 	var streamReservationAccount *service.Account
 	var terminalCapture *streamingTerminalCapture
+	releaseStreamReservation := func(reason string) {
+		if !streamingBillingV2 || !streamReservationPublished || streamReservationFinalized {
+			return
+		}
+		if terminalCapture != nil {
+			terminalCapture.DiscardTerminal(c)
+			terminalCapture = nil
+		}
+		acct := streamReservationAccount
+		if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+			return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+				RequestID:          streamReservationID,
+				APIKey:             currentAPIKey,
+				User:               currentAPIKey.User,
+				Account:            acct,
+				Subscription:       currentSubscription,
+				Model:              reqModel,
+				RequestPayloadHash: requestPayloadHash,
+			})
+		}); err != nil {
+			reqLog.Error("gateway.streaming_release_failed",
+				zap.String("request_id", streamReservationID),
+				zap.String("reason", reason),
+				zap.Error(err),
+			)
+		}
+		streamReservationPublished = false
+		streamReservationAccount = nil
+	}
 	if streamingBillingV2 {
 		streamReservationID = streamingBillingRequestID(c.Request.Context())
-		defer func() {
-			if !streamReservationPublished || streamReservationFinalized {
-				return
-			}
-			if terminalCapture != nil {
-				terminalCapture.DiscardTerminal(c)
-			}
-			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
-				return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
-					RequestID:          streamReservationID,
-					APIKey:             currentAPIKey,
-					User:               currentAPIKey.User,
-					Account:            streamReservationAccount,
-					Subscription:       currentSubscription,
-					Model:              reqModel,
-					RequestPayloadHash: requestPayloadHash,
-				})
-			}); err != nil {
-				reqLog.Error("gateway.streaming_release_failed",
-					zap.String("request_id", streamReservationID),
-					zap.Error(err),
-				)
-			}
-		}()
+		defer func() { releaseStreamReservation("deferred_cleanup") }()
 	}
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
@@ -1022,6 +1037,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						// 兜底重试按"直接请求兜底分组"处理：清除强制平台，允许按分组平台调度
 						ctx := context.WithValue(c.Request.Context(), ctxkey.ForcePlatform, "")
 						c.Request = c.Request.WithContext(ctx)
+						// Release any active reservation tied to the prior
+						// apiKey/account before switching to the fallback group.
+						releaseStreamReservation("fallback_group_switch")
 						currentAPIKey = fallbackAPIKey
 						currentSubscription = nil
 						fallbackUsed = true
@@ -1045,6 +1063,9 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					switch action {
 					case FailoverContinue:
 						discardBufferedResponse()
+						// Release any reservation tied to the failing account
+						// so the next iteration re-reserves on the replacement.
+						releaseStreamReservation("account_switch")
 						continue
 					case FailoverExhausted:
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, account.Platform, streamStarted)
@@ -2105,8 +2126,12 @@ func (h *GatewayHandler) executeUsageRecordTask(task usageRecordErrTask) (err er
 	defer cancel()
 	defer func() {
 		if recovered := recover(); recovered != nil {
+			// Helper is invoked from multiple endpoints (Messages,
+			// Responses, ChatCompletions, Gemini); log at the handler level
+			// without claiming a specific sub-component to avoid
+			// misattribution during triage.
 			logger.L().With(
-				zap.String("component", "handler.gateway.messages"),
+				zap.String("component", "handler.gateway"),
 				zap.Any("panic", recovered),
 			).Error("gateway.usage_record_task_panic_recovered")
 			err = fmt.Errorf("usage record task panic: %v", recovered)
