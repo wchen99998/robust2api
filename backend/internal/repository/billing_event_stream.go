@@ -8,6 +8,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
+	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
@@ -15,10 +16,11 @@ import (
 
 // redisBillingEventPublisher publishes usage charge events to a Redis Stream.
 type redisBillingEventPublisher struct {
-	rdb     *redis.Client
-	key     string
-	maxLen  int64
-	retries int
+	rdb            *redis.Client
+	key            string
+	maxLen         int64
+	retries        int
+	publishTimeout time.Duration
 }
 
 // NewRedisBillingEventPublisher creates a publisher that writes billing events to a Redis Stream.
@@ -33,11 +35,16 @@ func NewRedisBillingEventPublisher(rdb *redis.Client, cfg *config.Config) servic
 	if retries <= 0 {
 		retries = 3
 	}
+	publishTimeout := time.Duration(streamCfg.PublishTimeoutSeconds) * time.Second
+	if publishTimeout <= 0 {
+		publishTimeout = 10 * time.Second
+	}
 	return &redisBillingEventPublisher{
-		rdb:     rdb,
-		key:     key,
-		maxLen:  maxLen,
-		retries: retries,
+		rdb:            rdb,
+		key:            key,
+		maxLen:         maxLen,
+		retries:        retries,
+		publishTimeout: publishTimeout,
 	}
 }
 
@@ -53,11 +60,13 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 	}
 
 	var lastErr error
+	startedAt := time.Now()
 	for attempt := 0; attempt < p.retries; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(1<<uint(attempt-1)) * 100 * time.Millisecond
 			select {
 			case <-ctx.Done():
+				appelotel.M().RecordBillingPublish(ctx, "canceled", time.Since(startedAt).Seconds())
 				return ctx.Err()
 			case <-time.After(backoff):
 			}
@@ -72,9 +81,20 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 			args.MaxLen = p.maxLen
 			args.Approx = false
 		}
-		lastErr = p.rdb.XAdd(ctx, args).Err()
+		attemptCtx := ctx
+		cancel := func() {}
+		if p.publishTimeout > 0 {
+			attemptCtx, cancel = context.WithTimeout(ctx, p.publishTimeout)
+		}
+		lastErr = p.rdb.XAdd(attemptCtx, args).Err()
+		cancel()
 		if lastErr == nil {
+			appelotel.M().RecordBillingPublish(ctx, "success", time.Since(startedAt).Seconds())
 			return nil
+		}
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			appelotel.M().RecordBillingPublish(ctx, "canceled", time.Since(startedAt).Seconds())
+			return ctxErr
 		}
 		logger.L().Warn("billing event publish retry",
 			zap.String("component", "repository.billing_event_stream"),
@@ -82,5 +102,6 @@ func (p *redisBillingEventPublisher) Publish(ctx context.Context, event *service
 			zap.Error(lastErr),
 		)
 	}
+	appelotel.M().RecordBillingPublish(ctx, "failure", time.Since(startedAt).Seconds())
 	return fmt.Errorf("billing event publish failed after %d attempts: %w", p.retries, lastErr)
 }

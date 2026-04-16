@@ -4,7 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,6 +23,7 @@ type redisBillingEventConsumer struct {
 	rdb            *redis.Client
 	key            string
 	dlqKey         string
+	dlqMaxLen      int64
 	group          string
 	consumer       string
 	batchSize      int64
@@ -42,6 +46,10 @@ func NewRedisBillingEventConsumer(rdb *redis.Client, cfg *config.Config) service
 	dlqKey := streamCfg.DLQKey
 	if dlqKey == "" {
 		dlqKey = key + ":dlq"
+	}
+	dlqMaxLen := streamCfg.DLQMaxLen
+	if dlqMaxLen <= 0 {
+		dlqMaxLen = 100000
 	}
 	group := streamCfg.ConsumerGroup
 	if group == "" {
@@ -76,6 +84,7 @@ func NewRedisBillingEventConsumer(rdb *redis.Client, cfg *config.Config) service
 		rdb:            rdb,
 		key:            key,
 		dlqKey:         dlqKey,
+		dlqMaxLen:      dlqMaxLen,
 		group:          group,
 		consumer:       hostname,
 		batchSize:      int64(batchSize),
@@ -130,6 +139,110 @@ func (c *redisBillingEventConsumer) Stop() {
 	logger.L().Info("billing consumer stopped",
 		zap.String("component", "repository.billing_event_consumer"),
 	)
+}
+
+func (c *redisBillingEventConsumer) Status(ctx context.Context) (*service.BillingConsumerStatus, error) {
+	status := &service.BillingConsumerStatus{
+		StreamKey: c.key,
+		Group:     c.group,
+		DLQKey:    c.dlqKey,
+	}
+	pending, err := c.rdb.XPending(ctx, c.key, c.group).Result()
+	if err != nil {
+		return nil, err
+	}
+	status.PendingCount = pending.Count
+	if pending.Count > 0 {
+		// Fetch just the single oldest pending entry (lowest stream ID = longest idle).
+		entries, err := c.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
+			Stream: c.key,
+			Group:  c.group,
+			Start:  "-",
+			End:    "+",
+			Count:  1,
+		}).Result()
+		if err != nil {
+			return nil, err
+		}
+		if len(entries) > 0 {
+			status.OldestPendingAge = entries[0].Idle
+		}
+	}
+	if c.dlqKey != "" {
+		dlqDepth, err := c.rdb.XLen(ctx, c.dlqKey).Result()
+		if err != nil {
+			return nil, err
+		}
+		status.DLQDepth = dlqDepth
+	}
+	return status, nil
+}
+
+func nextPendingScanStart(id string) string {
+	msStr, seqStr, ok := strings.Cut(strings.TrimSpace(id), "-")
+	if !ok {
+		return ""
+	}
+	ms, err := strconv.ParseUint(msStr, 10, 64)
+	if err != nil {
+		return ""
+	}
+	seq, err := strconv.ParseUint(seqStr, 10, 64)
+	if err != nil {
+		return ""
+	}
+	if seq == math.MaxUint64 {
+		if ms == math.MaxUint64 {
+			return ""
+		}
+		return fmt.Sprintf("%d-0", ms+1)
+	}
+	return fmt.Sprintf("%d-%d", ms, seq+1)
+}
+
+func scanPendingEntries(start string, pageSize int64, fetch func(start string, count int64) ([]redis.XPendingExt, error), handle func([]redis.XPendingExt) error) error {
+	if fetch == nil || handle == nil {
+		return nil
+	}
+	if pageSize <= 0 {
+		pageSize = 1
+	}
+	if strings.TrimSpace(start) == "" {
+		start = "-"
+	}
+	for {
+		entries, err := fetch(start, pageSize)
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			return nil
+		}
+		if err := handle(entries); err != nil {
+			return err
+		}
+		nextStart := nextPendingScanStart(entries[len(entries)-1].ID)
+		if nextStart == "" || nextStart == start {
+			return nil
+		}
+		start = nextStart
+	}
+}
+
+func pendingRetryCountsByID(entries []redis.XPendingExt) map[string]int64 {
+	retryCounts := make(map[string]int64, len(entries))
+	for _, entry := range entries {
+		retryCounts[entry.ID] = entry.RetryCount
+	}
+	return retryCounts
+}
+
+func pendingIDs(entries []redis.XPendingExt) []string {
+	ids := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		ids = append(ids, entry.ID)
+	}
+	return ids
 }
 
 // readLoop reads new messages from the stream using XREADGROUP with ">".
@@ -191,56 +304,38 @@ func (c *redisBillingEventConsumer) pendingRecoveryLoop(ctx context.Context, han
 
 // recoverPending claims messages that have been pending for longer than the recovery interval.
 func (c *redisBillingEventConsumer) recoverPending(ctx context.Context, handler service.BillingEventConsumerHandler) {
-	pending, err := c.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
-		Stream: c.key,
-		Group:  c.group,
-		Start:  "-",
-		End:    "+",
-		Count:  c.batchSize,
-		Idle:   c.pendingRecover,
-	}).Result()
-	if err != nil {
-		if ctx.Err() == nil {
-			logger.L().Warn("billing consumer: pending check failed",
-				zap.String("component", "repository.billing_event_consumer"),
-				zap.Error(err),
-			)
+	consumerName := c.consumer + "-recovery"
+	err := scanPendingEntries("-", c.batchSize, func(start string, count int64) ([]redis.XPendingExt, error) {
+		return c.rdb.XPendingExt(ctx, &redis.XPendingExtArgs{
+			Stream: c.key,
+			Group:  c.group,
+			Start:  start,
+			End:    "+",
+			Count:  count,
+			Idle:   c.pendingRecover,
+		}).Result()
+	}, func(entries []redis.XPendingExt) error {
+		claimed, err := c.rdb.XClaim(ctx, &redis.XClaimArgs{
+			Stream:   c.key,
+			Group:    c.group,
+			Consumer: consumerName,
+			MinIdle:  c.pendingRecover,
+			Messages: pendingIDs(entries),
+		}).Result()
+		if err != nil {
+			return err
 		}
-		return
-	}
-	if len(pending) == 0 {
-		return
-	}
-
-	ids := make([]string, 0, len(pending))
-	for _, p := range pending {
-		ids = append(ids, p.ID)
-	}
-
-	claimed, err := c.rdb.XClaim(ctx, &redis.XClaimArgs{
-		Stream:   c.key,
-		Group:    c.group,
-		Consumer: c.consumer + "-recovery",
-		MinIdle:  c.pendingRecover,
-		Messages: ids,
-	}).Result()
-	if err != nil {
-		if ctx.Err() == nil {
-			logger.L().Warn("billing consumer: claim failed",
-				zap.String("component", "repository.billing_event_consumer"),
-				zap.Error(err),
-			)
+		retryCountByID := pendingRetryCountsByID(entries)
+		for _, msg := range claimed {
+			c.processMessage(ctx, handler, msg, consumerName, retryCountByID[msg.ID])
 		}
-		return
-	}
-
-	retryCountByID := make(map[string]int64, len(pending))
-	for _, p := range pending {
-		retryCountByID[p.ID] = p.RetryCount
-	}
-
-	for _, msg := range claimed {
-		c.processMessage(ctx, handler, msg, c.consumer+"-recovery", retryCountByID[msg.ID])
+		return nil
+	})
+	if err != nil && ctx.Err() == nil {
+		logger.L().Warn("billing consumer: recover pending failed",
+			zap.String("component", "repository.billing_event_consumer"),
+			zap.Error(err),
+		)
 	}
 }
 
@@ -320,6 +415,8 @@ func (c *redisBillingEventConsumer) deadLetterMessage(ctx context.Context, msg r
 
 	if err := c.rdb.XAdd(ctx, &redis.XAddArgs{
 		Stream: c.dlqKey,
+		MaxLen: c.dlqMaxLen,
+		Approx: true,
 		Values: map[string]interface{}{
 			"data":              data,
 			"source_stream":     c.key,

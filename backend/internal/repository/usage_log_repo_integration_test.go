@@ -582,6 +582,54 @@ func (s *UsageLogRepoSuite) TestDelete() {
 
 	_, err = s.repo.GetByID(s.ctx, log.ID)
 	s.Require().Error(err, "expected error after delete")
+
+	var (
+		tombstoneRequestID string
+		tombstoneAPIKeyID  int64
+		tombstoneUsageLog  int64
+		deleteReason       string
+	)
+	err = scanSingleRow(s.ctx, s.tx, `
+		SELECT request_id, api_key_id, usage_log_id, delete_reason
+		FROM usage_log_tombstones
+		WHERE usage_log_id = $1
+	`, []any{log.ID}, &tombstoneRequestID, &tombstoneAPIKeyID, &tombstoneUsageLog, &deleteReason)
+	s.Require().NoError(err)
+	s.Require().Equal(log.RequestID, tombstoneRequestID)
+	s.Require().Equal(apiKey.ID, tombstoneAPIKeyID)
+	s.Require().Equal(log.ID, tombstoneUsageLog)
+	s.Require().Equal(usageLogDeleteReasonManual, deleteReason)
+}
+
+func (s *UsageLogRepoSuite) TestDelete_WithLegacyNullRequestIDStillCreatesTombstone() {
+	user := mustCreateUser(s.T(), s.client, &service.User{Email: "delete-null-request@test.com"})
+	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-delete-null-request", Name: "k"})
+	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-delete-null-request"})
+
+	log := s.createUsageLog(user, apiKey, account, 10, 20, 0.5, time.Now())
+
+	_, err := s.tx.ExecContext(s.ctx, "UPDATE usage_logs SET request_id = NULL WHERE id = $1", log.ID)
+	s.Require().NoError(err)
+
+	err = s.repo.Delete(s.ctx, log.ID)
+	s.Require().NoError(err, "Delete legacy null request_id row")
+
+	var (
+		tombstoneRequestID string
+		tombstoneAPIKeyID  int64
+		tombstoneUsageLog  int64
+		deleteReason       string
+	)
+	err = scanSingleRow(s.ctx, s.tx, `
+		SELECT request_id, api_key_id, usage_log_id, delete_reason
+		FROM usage_log_tombstones
+		WHERE usage_log_id = $1
+	`, []any{log.ID}, &tombstoneRequestID, &tombstoneAPIKeyID, &tombstoneUsageLog, &deleteReason)
+	s.Require().NoError(err)
+	s.Require().Equal(usageLogTombstoneSyntheticRequestID(log.ID), tombstoneRequestID)
+	s.Require().Equal(apiKey.ID, tombstoneAPIKeyID)
+	s.Require().Equal(log.ID, tombstoneUsageLog)
+	s.Require().Equal(usageLogDeleteReasonManual, deleteReason)
 }
 
 // --- ListByUser ---

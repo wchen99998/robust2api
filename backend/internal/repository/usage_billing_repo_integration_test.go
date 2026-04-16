@@ -276,6 +276,10 @@ func TestUsageBillingRepositoryApply_DeduplicatesAgainstArchivedKey(t *testing.T
 	var balance float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
 	require.InDelta(t, 98.75, balance, 0.000001)
+
+	var hotDedupCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_billing_dedup WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&hotDedupCount))
+	require.Equal(t, 0, hotDedupCount)
 }
 
 func TestUsageBillingRepositoryApplyUsageCharge_PersistsUsageLogTransactionally(t *testing.T) {
@@ -333,6 +337,10 @@ func TestUsageBillingRepositoryApplyUsageCharge_PersistsUsageLogTransactionally(
 	var usageLogCount int
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&usageLogCount))
 	require.Equal(t, 1, usageLogCount)
+
+	var ledgerCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM billing_usage_ledger WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&ledgerCount))
+	require.Equal(t, 1, ledgerCount)
 
 	var balance float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
@@ -401,4 +409,84 @@ func TestUsageBillingRepositoryApplyUsageCharge_RepairsMissingUsageLogOnReplay(t
 	var balance float64
 	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
 	require.InDelta(t, 100.0, balance, 0.000001)
+
+	var ledgerCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM billing_usage_ledger WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&ledgerCount))
+	require.Equal(t, 1, ledgerCount)
+}
+
+func TestUsageBillingRepositoryApplyUsageCharge_DoesNotRepairTombstonedUsageLogOnReplay(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(&BillingDB{DB: integrationDB})
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-charge-tombstone-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-charge-tombstone-" + uuid.NewString(),
+		Name:   "usage-charge-tombstone",
+	})
+	account := mustCreateAccount(t, client, &service.Account{
+		Name: "usage-charge-tombstone-account-" + uuid.NewString(),
+		Type: service.AccountTypeAPIKey,
+	})
+
+	requestID := uuid.NewString()
+	cmd := &service.UsageBillingCommand{
+		RequestID:          requestID,
+		APIKeyID:           apiKey.ID,
+		UserID:             user.ID,
+		AccountID:          account.ID,
+		AccountType:        service.AccountTypeAPIKey,
+		BalanceCost:        1.25,
+		RequestFingerprint: strings.Repeat("d", 64),
+	}
+	_, err := integrationDB.ExecContext(ctx, `
+		INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint)
+		VALUES ($1, $2, $3)
+	`, requestID, apiKey.ID, cmd.RequestFingerprint)
+	require.NoError(t, err)
+	_, err = integrationDB.ExecContext(ctx, `
+		INSERT INTO usage_log_tombstones (
+			request_id,
+			api_key_id,
+			usage_log_id,
+			user_id,
+			account_id,
+			original_created_at,
+			delete_reason
+		) VALUES ($1, $2, NULL, $3, $4, $5, $6)
+	`, requestID, apiKey.ID, user.ID, account.ID, time.Now().UTC(), usageLogDeleteReasonManual)
+	require.NoError(t, err)
+
+	event := service.NewUsageChargeEvent(
+		cmd,
+		&service.UsageLog{
+			UserID:    user.ID,
+			APIKeyID:  apiKey.ID,
+			AccountID: account.ID,
+			RequestID: requestID,
+			Model:     "claude-sonnet-4",
+			CreatedAt: time.Now().UTC(),
+		},
+		0,
+		false,
+	)
+
+	result, err := repo.ApplyUsageCharge(ctx, event)
+	require.NoError(t, err)
+	require.False(t, result.Applied)
+	require.False(t, result.UsageLogInserted)
+
+	var usageLogCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM usage_logs WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&usageLogCount))
+	require.Equal(t, 0, usageLogCount)
+
+	var ledgerCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM billing_usage_ledger WHERE request_id = $1 AND api_key_id = $2", requestID, apiKey.ID).Scan(&ledgerCount))
+	require.Equal(t, 1, ledgerCount)
 }

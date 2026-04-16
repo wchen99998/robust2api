@@ -3,11 +3,15 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/service"
+	"github.com/google/uuid"
 )
 
 type usageBillingRepository struct {
@@ -25,20 +29,31 @@ func (r *usageBillingRepository) Apply(ctx context.Context, cmd *service.UsageBi
 	if cmd == nil {
 		return &service.UsageBillingApplyResult{}, nil
 	}
-	return r.ApplyUsageCharge(ctx, &service.UsageChargeEvent{Command: cmd})
+	return r.ApplyUsageCharge(ctx, &service.UsageChargeEvent{Kind: service.UsageChargeEventKindCharge, Command: cmd})
 }
 
 func (r *usageBillingRepository) ApplyUsageCharge(ctx context.Context, event *service.UsageChargeEvent) (_ *service.UsageBillingApplyResult, err error) {
-	if event == nil || event.Command == nil {
+	if event == nil {
 		return &service.UsageBillingApplyResult{}, nil
 	}
 	if r == nil || r.db == nil {
 		return nil, errors.New("usage billing repository db is nil")
 	}
 
+	kind := normalizeUsageChargeEvent(event)
 	cmd := event.Command
-	normalizeUsageChargeEvent(event)
-	if cmd.RequestID == "" {
+	if event.RequestID == "" {
+		return nil, service.ErrUsageBillingRequestIDRequired
+	}
+	if kind != service.UsageChargeEventKindReserve && kind != service.UsageChargeEventKindRelease {
+		if cmd == nil {
+			return &service.UsageBillingApplyResult{}, nil
+		}
+		if cmd.RequestID == "" {
+			return nil, service.ErrUsageBillingRequestIDRequired
+		}
+	}
+	if cmd == nil {
 		return nil, service.ErrUsageBillingRequestIDRequired
 	}
 
@@ -52,23 +67,35 @@ func (r *usageBillingRepository) ApplyUsageCharge(ctx context.Context, event *se
 		}
 	}()
 
-	applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
-	if err != nil {
+	result := &service.UsageBillingApplyResult{}
+	if kind == service.UsageChargeEventKindCharge || kind == service.UsageChargeEventKindFinalize {
+		applied, err := r.claimUsageBillingKey(ctx, tx, cmd)
+		if err != nil {
+			return nil, err
+		}
+		result.Applied = applied
+	}
+	if err := r.persistBillingLedger(ctx, tx, event); err != nil {
 		return nil, err
 	}
 
-	result := &service.UsageBillingApplyResult{Applied: applied}
-	if applied {
+	if result.Applied {
 		if err := r.applyUsageBillingEffects(ctx, tx, cmd, result); err != nil {
 			return nil, err
 		}
 	}
-	if event.UsageLog != nil {
-		inserted, err := r.persistUsageLog(ctx, tx, event.UsageLog)
+	if (kind == service.UsageChargeEventKindCharge || kind == service.UsageChargeEventKindFinalize) && event.UsageLog != nil {
+		tombstoned, err := r.usageLogTombstoned(ctx, tx, event.UsageLog.RequestID, event.UsageLog.APIKeyID)
 		if err != nil {
 			return nil, err
 		}
-		result.UsageLogInserted = inserted
+		if !tombstoned {
+			inserted, err := r.persistUsageLog(ctx, tx, event.UsageLog)
+			if err != nil {
+				return nil, err
+			}
+			result.UsageLogInserted = inserted
+		}
 	}
 	if cmd.APIKeyQuotaCost > 0 {
 		apiKeyKey, shouldInvalidate, err := r.resolveAPIKeyAuthProjection(ctx, tx, cmd.APIKeyID)
@@ -86,13 +113,24 @@ func (r *usageBillingRepository) ApplyUsageCharge(ctx context.Context, event *se
 	return result, nil
 }
 
-func normalizeUsageChargeEvent(event *service.UsageChargeEvent) {
-	if event == nil || event.Command == nil {
-		return
+func normalizeUsageChargeEvent(event *service.UsageChargeEvent) service.UsageChargeEventKind {
+	if event == nil {
+		return service.UsageChargeEventKindCharge
 	}
-	event.Command.Normalize()
+	event.Kind = service.UsageChargeEventKind(strings.TrimSpace(string(event.Kind)))
+	switch event.Kind {
+	case service.UsageChargeEventKindReserve, service.UsageChargeEventKindFinalize, service.UsageChargeEventKindRelease:
+	default:
+		event.Kind = service.UsageChargeEventKindCharge
+	}
+	if event.Version <= 0 {
+		event.Version = 2
+	}
 	requestID := strings.TrimSpace(event.RequestID)
-	if requestID == "" {
+	if event.Command != nil {
+		event.Command.Normalize()
+	}
+	if requestID == "" && event.Command != nil {
 		requestID = event.Command.RequestID
 	}
 	if event.UsageLog != nil {
@@ -104,49 +142,69 @@ func normalizeUsageChargeEvent(event *service.UsageChargeEvent) {
 			requestID = event.UsageLog.RequestID
 		}
 	}
-	event.Command.RequestID = requestID
+	if event.Command != nil {
+		event.Command.RequestID = requestID
+	}
 	event.RequestID = requestID
+	return event.Kind
 }
 
 func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
+	if ok, err := r.matchExistingUsageBillingFingerprint(ctx, tx, "usage_billing_dedup", cmd); err != nil || ok {
+		return false, err
+	}
+	if ok, err := r.matchExistingUsageBillingFingerprint(ctx, tx, "usage_billing_dedup_archive", cmd); err != nil || ok {
+		return false, err
+	}
+
 	var id int64
-	err := tx.QueryRowContext(ctx, `
+	err := scanSingleRow(ctx, tx, `
 		INSERT INTO usage_billing_dedup (request_id, api_key_id, request_fingerprint)
 		VALUES ($1, $2, $3)
 		ON CONFLICT (request_id, api_key_id) DO NOTHING
 		RETURNING id
-	`, cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint).Scan(&id)
+	`, []any{cmd.RequestID, cmd.APIKeyID, cmd.RequestFingerprint}, &id)
 	if errors.Is(err, sql.ErrNoRows) {
-		var existingFingerprint string
-		if err := tx.QueryRowContext(ctx, `
-			SELECT request_fingerprint
-			FROM usage_billing_dedup
-			WHERE request_id = $1 AND api_key_id = $2
-		`, cmd.RequestID, cmd.APIKeyID).Scan(&existingFingerprint); err != nil {
+		if ok, err := r.matchExistingUsageBillingFingerprint(ctx, tx, "usage_billing_dedup", cmd); err != nil || ok {
 			return false, err
 		}
-		if strings.TrimSpace(existingFingerprint) != strings.TrimSpace(cmd.RequestFingerprint) {
-			return false, service.ErrUsageBillingRequestConflict
+		if ok, err := r.matchExistingUsageBillingFingerprint(ctx, tx, "usage_billing_dedup_archive", cmd); err != nil || ok {
+			return false, err
 		}
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-	var archivedFingerprint string
-	err = tx.QueryRowContext(ctx, `
+	return true, nil
+}
+
+// usageBillingDedupTables is a compile-time allow-list of tables that may be
+// queried by matchExistingUsageBillingFingerprint.  Restricting interpolated
+// table names to this set prevents SQL-injection via the `table` parameter.
+var usageBillingDedupTables = map[string]struct{}{
+	"usage_billing_dedup":         {},
+	"usage_billing_dedup_archive": {},
+}
+
+func (r *usageBillingRepository) matchExistingUsageBillingFingerprint(ctx context.Context, tx *sql.Tx, table string, cmd *service.UsageBillingCommand) (bool, error) {
+	if _, ok := usageBillingDedupTables[table]; !ok {
+		return false, fmt.Errorf("usage billing fingerprint check: disallowed table %q", table)
+	}
+	var existingFingerprint string
+	err := scanSingleRow(ctx, tx, `
 		SELECT request_fingerprint
-		FROM usage_billing_dedup_archive
+		FROM `+table+`
 		WHERE request_id = $1 AND api_key_id = $2
-	`, cmd.RequestID, cmd.APIKeyID).Scan(&archivedFingerprint)
-	if err == nil {
-		if strings.TrimSpace(archivedFingerprint) != strings.TrimSpace(cmd.RequestFingerprint) {
-			return false, service.ErrUsageBillingRequestConflict
-		}
+	`, []any{cmd.RequestID, cmd.APIKeyID}, &existingFingerprint)
+	if errors.Is(err, sql.ErrNoRows) {
 		return false, nil
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
+	if err != nil {
 		return false, err
+	}
+	if strings.TrimSpace(existingFingerprint) != strings.TrimSpace(cmd.RequestFingerprint) {
+		return false, service.ErrUsageBillingRequestConflict
 	}
 	return true, nil
 }
@@ -193,6 +251,104 @@ func (r *usageBillingRepository) persistUsageLog(ctx context.Context, tx *sql.Tx
 	}
 	repo := &usageLogRepository{sql: tx}
 	return repo.createSingle(ctx, tx, usageLog)
+}
+
+func (r *usageBillingRepository) persistBillingLedger(ctx context.Context, tx *sql.Tx, event *service.UsageChargeEvent) error {
+	if event == nil || event.Command == nil {
+		return nil
+	}
+	cmd := event.Command
+	rawEvent, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	sourceEventID := strings.TrimSpace(event.EventID)
+	if sourceEventID == "" {
+		sourceEventID = uuid.NewString()
+	}
+	occurredAt := event.OccurredAt.UTC()
+	if occurredAt.IsZero() {
+		if event.UsageLog != nil && !event.UsageLog.CreatedAt.IsZero() {
+			occurredAt = event.UsageLog.CreatedAt.UTC()
+		} else {
+			occurredAt = time.Now().UTC()
+		}
+	}
+
+	_, err = tx.ExecContext(ctx, `
+		INSERT INTO billing_usage_ledger (
+			request_id,
+			api_key_id,
+			kind,
+			request_fingerprint,
+			source_event_id,
+			user_id,
+			account_id,
+			subscription_id,
+			group_id,
+			billing_type,
+			balance_cost,
+			subscription_cost,
+			api_key_quota_cost,
+			api_key_rate_limit_cost,
+			account_quota_cost,
+			occurred_at,
+			raw_event
+		) VALUES (
+			$1, $2, $3, $4, $5::uuid, $6, $7, $8, $9, $10,
+			$11, $12, $13, $14, $15, $16, $17::jsonb
+		)
+		ON CONFLICT (request_id, api_key_id, kind) DO NOTHING
+	`,
+		cmd.RequestID,
+		cmd.APIKeyID,
+		strings.TrimSpace(string(event.Kind)),
+		cmd.RequestFingerprint,
+		sourceEventID,
+		cmd.UserID,
+		cmd.AccountID,
+		nullableInt64Value(cmd.SubscriptionID),
+		nullableGroupID(event.GroupID),
+		cmd.BillingType,
+		cmd.BalanceCost,
+		cmd.SubscriptionCost,
+		cmd.APIKeyQuotaCost,
+		cmd.APIKeyRateLimitCost,
+		cmd.AccountQuotaCost,
+		occurredAt,
+		string(rawEvent),
+	)
+	return err
+}
+
+func (r *usageBillingRepository) usageLogTombstoned(ctx context.Context, tx *sql.Tx, requestID string, apiKeyID int64) (bool, error) {
+	var exists bool
+	err := scanSingleRow(ctx, tx, `
+		SELECT TRUE
+		FROM usage_log_tombstones
+		WHERE request_id = $1 AND api_key_id = $2
+	`, []any{requestID, apiKeyID}, &exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func nullableInt64Value(v *int64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+
+func nullableGroupID(groupID int64) any {
+	if groupID <= 0 {
+		return nil
+	}
+	return groupID
 }
 
 func (r *usageBillingRepository) resolveAPIKeyAuthProjection(ctx context.Context, tx *sql.Tx, apiKeyID int64) (string, bool, error) {
