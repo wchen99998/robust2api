@@ -552,10 +552,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 					continue
 				case FailoverExhausted:
 					h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
-					if responseCapture != nil {
-						if commitErr := responseCapture.Commit(c); commitErr != nil {
-							reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
-						}
+					if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+						googleError(c, http.StatusServiceUnavailable, "Response too large")
+					}); commitErr != nil {
+						reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
 					}
 					return
 				case FailoverCanceled:
@@ -567,10 +567,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			}
 			// ForwardNative already wrote the response
 			reqLog.Error("gemini.forward_failed", zap.Int64("account_id", account.ID), zap.Error(err))
-			if responseCapture != nil {
-				if commitErr := responseCapture.Commit(c); commitErr != nil {
-					reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
-				}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				googleError(c, http.StatusServiceUnavailable, "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
 			}
 			return
 		}
@@ -669,10 +669,10 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				googleError(c, http.StatusServiceUnavailable, "Billing temporarily unavailable")
 				return
 			}
-			if responseCapture != nil {
-				if commitErr := responseCapture.Commit(c); commitErr != nil {
-					reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
-				}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				googleError(c, http.StatusServiceUnavailable, "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
 			}
 			return
 		}

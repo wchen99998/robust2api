@@ -352,10 +352,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				if switchCount >= maxAccountSwitches {
 					appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
 					h.handleFailoverExhausted(c, failoverErr, streamStarted)
-					if responseCapture != nil {
-						if commitErr := responseCapture.Commit(c); commitErr != nil {
-							reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
-						}
+					if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+						h.errorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+					}); commitErr != nil {
+						reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
 					}
 					return
 				}
@@ -391,10 +391,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Bool("fallback_error_response_written", wroteFallback),
 				zap.Error(err),
 			)
-			if responseCapture != nil {
-				if commitErr := responseCapture.Commit(c); commitErr != nil {
-					reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
-				}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				h.errorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
 			}
 			return
 		}
@@ -499,10 +499,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				h.errorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
 				return
 			}
-			if responseCapture != nil {
-				if commitErr := responseCapture.Commit(c); commitErr != nil {
-					reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
-				}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				h.errorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
 			}
 			reqLog.Debug("openai_chat_completions.request_completed",
 				zap.Int64("account_id", account.ID),

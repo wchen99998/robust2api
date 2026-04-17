@@ -84,6 +84,27 @@ func (c *bufferedResponseCapture) Commit(ctx *gin.Context) error {
 	return c.buffered.CommitTo(c.original)
 }
 
+func (c *bufferedResponseCapture) PendingError() error {
+	if c == nil || c.buffered == nil {
+		return nil
+	}
+	return c.buffered.PendingError()
+}
+
+func commitBufferedResponseOrWriteError(c *gin.Context, capture *bufferedResponseCapture, writeError func()) error {
+	if capture == nil {
+		return nil
+	}
+	if err := capture.Commit(c); err != nil {
+		if errors.Is(err, ErrBufferedResponseTooLarge) && writeError != nil {
+			writeError()
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
 type bufferedResponseWriter struct {
 	original      gin.ResponseWriter
 	header        http.Header
@@ -93,6 +114,7 @@ type bufferedResponseWriter struct {
 	status        int
 	size          int
 	headerWritten bool
+	pendingErr    error
 }
 
 func newBufferedResponseWriter(original gin.ResponseWriter) *bufferedResponseWriter {
@@ -165,6 +187,13 @@ func (w *bufferedResponseWriter) Flush() {
 	w.WriteHeaderNow()
 }
 
+func (w *bufferedResponseWriter) PendingError() error {
+	if w == nil {
+		return nil
+	}
+	return w.pendingErr
+}
+
 func (w *bufferedResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	hijacker, ok := any(w.original).(http.Hijacker)
 	if !ok {
@@ -193,6 +222,9 @@ func (w *bufferedResponseWriter) CommitTo(target gin.ResponseWriter) error {
 	defer w.cleanup()
 	if target == nil {
 		return nil
+	}
+	if w.pendingErr != nil {
+		return w.pendingErr
 	}
 	dstHeader := target.Header()
 	for key := range dstHeader {
@@ -239,15 +271,27 @@ func (w *bufferedResponseWriter) appendBody(data []byte) (int, error) {
 		}
 	}
 	if buffered+int64(len(data)) > queueFirstBufferedResponseMaxTotal {
+		w.pendingErr = ErrBufferedResponseTooLarge
 		return 0, ErrBufferedResponseTooLarge
 	}
 	if err := w.ensureSpill(len(data)); err != nil {
+		if w.pendingErr == nil {
+			w.pendingErr = err
+		}
 		return 0, err
 	}
 	if w.spill != nil {
-		return w.spill.Write(data)
+		n, err := w.spill.Write(data)
+		if err != nil && w.pendingErr == nil {
+			w.pendingErr = err
+		}
+		return n, err
 	}
-	return w.body.Write(data)
+	n, err := w.body.Write(data)
+	if err != nil && w.pendingErr == nil {
+		w.pendingErr = err
+	}
+	return n, err
 }
 
 func (w *bufferedResponseWriter) ensureSpill(extra int) error {
@@ -287,4 +331,5 @@ func (w *bufferedResponseWriter) cleanup() {
 		w.spill = nil
 		w.spillPath = ""
 	}
+	w.pendingErr = nil
 }

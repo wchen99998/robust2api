@@ -81,6 +81,24 @@ func TestBufferedResponseCaptureRejectsOversize(t *testing.T) {
 	require.ErrorIs(t, lastErr, ErrBufferedResponseTooLarge)
 }
 
+func TestBufferedResponseCaptureCommitDoesNotReplayPartialBodyAfterOversize(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+
+	capture := beginBufferedResponseCapture(c, true)
+	require.NotNil(t, capture)
+
+	payload := bytes.Repeat([]byte("x"), queueFirstBufferedResponseMaxTotal)
+	_, err := c.Writer.Write(payload)
+	require.NoError(t, err)
+
+	_, err = c.Writer.Write([]byte("overflow"))
+	require.ErrorIs(t, err, ErrBufferedResponseTooLarge)
+	require.ErrorIs(t, capture.Commit(c), ErrBufferedResponseTooLarge)
+	require.Empty(t, recorder.Body.Bytes(), "overflowed queue-first buffer must not replay a partial upstream response")
+}
+
 func TestBufferedResponseCaptureDiscardCleansSpillFile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	recorder := httptest.NewRecorder()

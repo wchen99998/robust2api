@@ -149,6 +149,15 @@ func normalizeUsageChargeEvent(event *service.UsageChargeEvent) service.UsageCha
 	return event.Kind
 }
 
+func billingUsageLedgerConflictClause(kind service.UsageChargeEventKind) string {
+	switch kind {
+	case service.UsageChargeEventKindReserve, service.UsageChargeEventKindRelease:
+		return "ON CONFLICT (request_id, api_key_id, kind, account_id) WHERE kind IN ('reserve', 'release') DO NOTHING"
+	default:
+		return "ON CONFLICT (request_id, api_key_id, kind) WHERE kind IN ('charge', 'finalize') DO NOTHING"
+	}
+}
+
 func (r *usageBillingRepository) claimUsageBillingKey(ctx context.Context, tx *sql.Tx, cmd *service.UsageBillingCommand) (bool, error) {
 	if ok, err := r.matchExistingUsageBillingFingerprint(ctx, tx, "usage_billing_dedup", cmd); err != nil || ok {
 		return false, err
@@ -275,7 +284,7 @@ func (r *usageBillingRepository) persistBillingLedger(ctx context.Context, tx *s
 		}
 	}
 
-	_, err = tx.ExecContext(ctx, `
+	query := fmt.Sprintf(`
 		INSERT INTO billing_usage_ledger (
 			request_id,
 			api_key_id,
@@ -298,8 +307,9 @@ func (r *usageBillingRepository) persistBillingLedger(ctx context.Context, tx *s
 			$1, $2, $3, $4, $5::uuid, $6, $7, $8, $9, $10,
 			$11, $12, $13, $14, $15, $16, $17::jsonb
 		)
-		ON CONFLICT (request_id, api_key_id, kind) DO NOTHING
-	`,
+		%s
+	`, billingUsageLedgerConflictClause(event.Kind))
+	_, err = tx.ExecContext(ctx, query,
 		cmd.RequestID,
 		cmd.APIKeyID,
 		strings.TrimSpace(string(event.Kind)),

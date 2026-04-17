@@ -291,10 +291,10 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 				// Can't failover if streaming content already sent
 				if c.Writer.Size() != writerSizeBeforeForward {
 					h.handleResponsesFailoverExhausted(c, failoverErr, true)
-					if responseCapture != nil {
-						if commitErr := responseCapture.Commit(c); commitErr != nil {
-							reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
-						}
+					if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+						h.responsesErrorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+					}); commitErr != nil {
+						reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
 					}
 					return
 				}
@@ -310,10 +310,10 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 					continue
 				case FailoverExhausted:
 					h.handleResponsesFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
-					if responseCapture != nil {
-						if commitErr := responseCapture.Commit(c); commitErr != nil {
-							reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
-						}
+					if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+						h.responsesErrorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+					}); commitErr != nil {
+						reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
 					}
 					return
 				case FailoverCanceled:
@@ -328,10 +328,10 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 				zap.Int64("account_id", account.ID),
 				zap.Error(err),
 			)
-			if responseCapture != nil {
-				if commitErr := responseCapture.Commit(c); commitErr != nil {
-					reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
-				}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
 			}
 			return
 		}
@@ -409,10 +409,10 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
 				return
 			}
-			if responseCapture != nil {
-				if commitErr := responseCapture.Commit(c); commitErr != nil {
-					reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
-				}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				h.responsesErrorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("gateway.responses.commit_buffered_response_failed", zap.Error(commitErr))
 			}
 			return
 		}
