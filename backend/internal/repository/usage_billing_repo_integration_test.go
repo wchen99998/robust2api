@@ -415,6 +415,123 @@ func TestUsageBillingRepositoryApplyUsageCharge_RepairsMissingUsageLogOnReplay(t
 	require.Equal(t, 1, ledgerCount)
 }
 
+func TestUsageBillingRepositoryApplyUsageCharge_PersistsStreamingLifecycleAcrossAccountSwitch(t *testing.T) {
+	ctx := context.Background()
+	client := testEntClient(t)
+	repo := NewUsageBillingRepository(&BillingDB{DB: integrationDB})
+
+	user := mustCreateUser(t, client, &service.User{
+		Email:        fmt.Sprintf("usage-charge-stream-switch-user-%d@example.com", time.Now().UnixNano()),
+		PasswordHash: "hash",
+		Balance:      100,
+	})
+	apiKey := mustCreateApiKey(t, client, &service.APIKey{
+		UserID: user.ID,
+		Key:    "sk-usage-charge-stream-switch-" + uuid.NewString(),
+		Name:   "usage-charge-stream-switch",
+	})
+	accountA := mustCreateAccount(t, client, &service.Account{
+		Name: "usage-charge-stream-switch-account-a-" + uuid.NewString(),
+		Type: service.AccountTypeAPIKey,
+	})
+	accountB := mustCreateAccount(t, client, &service.Account{
+		Name: "usage-charge-stream-switch-account-b-" + uuid.NewString(),
+		Type: service.AccountTypeAPIKey,
+	})
+
+	requestID := uuid.NewString()
+
+	reserveA := service.NewUsageChargeEventWithKind(
+		service.UsageChargeEventKindReserve,
+		&service.UsageBillingCommand{
+			RequestID:   requestID,
+			APIKeyID:    apiKey.ID,
+			UserID:      user.ID,
+			AccountID:   accountA.ID,
+			AccountType: service.AccountTypeAPIKey,
+		},
+		nil,
+		0,
+		false,
+	)
+	_, err := repo.ApplyUsageCharge(ctx, reserveA)
+	require.NoError(t, err)
+
+	releaseA := service.NewUsageChargeEventWithKind(
+		service.UsageChargeEventKindRelease,
+		&service.UsageBillingCommand{
+			RequestID:   requestID,
+			APIKeyID:    apiKey.ID,
+			UserID:      user.ID,
+			AccountID:   accountA.ID,
+			AccountType: service.AccountTypeAPIKey,
+		},
+		nil,
+		0,
+		false,
+	)
+	_, err = repo.ApplyUsageCharge(ctx, releaseA)
+	require.NoError(t, err)
+
+	reserveB := service.NewUsageChargeEventWithKind(
+		service.UsageChargeEventKindReserve,
+		&service.UsageBillingCommand{
+			RequestID:   requestID,
+			APIKeyID:    apiKey.ID,
+			UserID:      user.ID,
+			AccountID:   accountB.ID,
+			AccountType: service.AccountTypeAPIKey,
+		},
+		nil,
+		0,
+		false,
+	)
+	_, err = repo.ApplyUsageCharge(ctx, reserveB)
+	require.NoError(t, err)
+
+	finalizeB := service.NewUsageChargeEventWithKind(
+		service.UsageChargeEventKindFinalize,
+		&service.UsageBillingCommand{
+			RequestID:   requestID,
+			APIKeyID:    apiKey.ID,
+			UserID:      user.ID,
+			AccountID:   accountB.ID,
+			AccountType: service.AccountTypeAPIKey,
+			BalanceCost: 1.25,
+		},
+		&service.UsageLog{
+			UserID:    user.ID,
+			APIKeyID:  apiKey.ID,
+			AccountID: accountB.ID,
+			RequestID: requestID,
+			Model:     "claude-sonnet-4",
+			CreatedAt: time.Now().UTC(),
+		},
+		0,
+		false,
+	)
+	result, err := repo.ApplyUsageCharge(ctx, finalizeB)
+	require.NoError(t, err)
+	require.True(t, result.Applied)
+	require.True(t, result.UsageLogInserted)
+
+	var reserveCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM billing_usage_ledger WHERE request_id = $1 AND api_key_id = $2 AND kind = 'reserve'", requestID, apiKey.ID).Scan(&reserveCount))
+	require.Equal(t, 2, reserveCount)
+
+	var releaseCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM billing_usage_ledger WHERE request_id = $1 AND api_key_id = $2 AND kind = 'release'", requestID, apiKey.ID).Scan(&releaseCount))
+	require.Equal(t, 1, releaseCount)
+
+	var finalizeCount int
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM billing_usage_ledger WHERE request_id = $1 AND api_key_id = $2 AND kind = 'finalize'", requestID, apiKey.ID).Scan(&finalizeCount))
+	require.Equal(t, 1, finalizeCount)
+
+	var balance float64
+	require.NoError(t, integrationDB.QueryRowContext(ctx, "SELECT balance FROM users WHERE id = $1", user.ID).Scan(&balance))
+	require.InDelta(t, 98.75, balance, 0.000001)
+}
+
 func TestUsageBillingRepositoryApplyUsageCharge_DoesNotRepairTombstonedUsageLogOnReplay(t *testing.T) {
 	ctx := context.Background()
 	client := testEntClient(t)

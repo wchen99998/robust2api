@@ -165,6 +165,8 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	}
 
 	stream := action == "streamGenerateContent"
+	queueFirstBilling := queueFirstNonStreamEnabled(h.cfg, stream)
+	streamingBillingV2 := streamingV2Enabled(h.cfg, stream)
 	reqLog = reqLog.With(zap.String("model", modelName), zap.String("action", action), zap.Bool("stream", stream))
 
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
@@ -180,6 +182,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		googleError(c, http.StatusBadRequest, "Request body is empty")
 		return
 	}
+	requestPayloadHash := service.HashUsageRequestPayload(body)
 
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, modelName)
@@ -348,6 +351,44 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	cleanedForUnknownBinding := false
 
 	fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
+	streamReservationID := ""
+	streamReservationPublished := false
+	streamReservationFinalized := false
+	var streamReservationAccount *service.Account
+	var terminalCapture *streamingTerminalCapture
+	releaseStreamReservation := func(reason string) {
+		if !streamingBillingV2 || !streamReservationPublished || streamReservationFinalized {
+			return
+		}
+		if terminalCapture != nil {
+			terminalCapture.DiscardTerminal(c)
+			terminalCapture = nil
+		}
+		acct := streamReservationAccount
+		if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+			return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+				RequestID:          streamReservationID,
+				APIKey:             apiKey,
+				User:               apiKey.User,
+				Account:            acct,
+				Subscription:       subscription,
+				Model:              reqModel,
+				RequestPayloadHash: requestPayloadHash,
+			})
+		}); err != nil {
+			reqLog.Error("gemini.streaming_release_failed",
+				zap.String("request_id", streamReservationID),
+				zap.String("reason", reason),
+				zap.Error(err),
+			)
+		}
+		streamReservationPublished = false
+		streamReservationAccount = nil
+	}
+	if streamingBillingV2 {
+		streamReservationID = streamingBillingRequestID(c.Request.Context())
+		defer func() { releaseStreamReservation("deferred_cleanup") }()
+	}
 
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
@@ -455,6 +496,34 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		accountReleaseFunc = wrapReleaseOnDone(c.Request.Context(), accountReleaseFunc)
 
 		// 5) forward (根据平台分流)
+		responseCapture := beginBufferedResponseCapture(c, queueFirstBilling)
+		if streamingBillingV2 && !streamReservationPublished {
+			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.PublishStreamingReserve(ctx, &service.StreamingBillingLifecycleInput{
+					RequestID:          streamReservationID,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					Model:              reqModel,
+					RequestPayloadHash: requestPayloadHash,
+				})
+			}); err != nil {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				reqLog.Error("gemini.streaming_reserve_failed",
+					zap.Int64("account_id", account.ID),
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+				googleError(c, http.StatusServiceUnavailable, "Billing temporarily unavailable")
+				return
+			}
+			streamReservationPublished = true
+			streamReservationAccount = account
+			terminalCapture = beginStreamingTerminalCapture(c, true, streamingTerminalModeGeminiRaw)
+		}
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
@@ -474,16 +543,35 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				failoverAction := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 				switch failoverAction {
 				case FailoverContinue:
+					if responseCapture != nil {
+						responseCapture.Discard(c)
+					}
+					// Release any reservation tied to the failing account so
+					// the next iteration re-reserves on the replacement.
+					releaseStreamReservation("account_switch")
 					continue
 				case FailoverExhausted:
 					h.handleGeminiFailoverExhausted(c, fs.LastFailoverErr)
+					if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+						googleError(c, http.StatusServiceUnavailable, "Response too large")
+					}); commitErr != nil {
+						reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
+					}
 					return
 				case FailoverCanceled:
+					if responseCapture != nil {
+						responseCapture.Discard(c)
+					}
 					return
 				}
 			}
 			// ForwardNative already wrote the response
 			reqLog.Error("gemini.forward_failed", zap.Int64("account_id", account.ID), zap.Error(err))
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				googleError(c, http.StatusServiceUnavailable, "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
+			}
 			return
 		}
 
@@ -507,9 +595,94 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		}
 
 		// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
-		requestPayloadHash := service.HashUsageRequestPayload(body)
 		inboundEndpoint := GetInboundEndpoint(c)
 		upstreamEndpoint := GetUpstreamEndpoint(c, account.Platform)
+		if streamingBillingV2 {
+			err = h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.RecordUsageWithLongContext(ctx, &service.RecordUsageLongContextInput{
+					Result:                result,
+					APIKey:                apiKey,
+					User:                  apiKey.User,
+					Account:               account,
+					Subscription:          subscription,
+					BillingRequestID:      streamReservationID,
+					BillingEventKind:      service.UsageChargeEventKindFinalize,
+					InboundEndpoint:       inboundEndpoint,
+					UpstreamEndpoint:      upstreamEndpoint,
+					UserAgent:             userAgent,
+					IPAddress:             clientIP,
+					RequestPayloadHash:    requestPayloadHash,
+					LongContextThreshold:  200000,
+					LongContextMultiplier: 2.0,
+					ForceCacheBilling:     fs.ForceCacheBilling,
+					APIKeyService:         h.apiKeyService,
+					ChannelUsageFields:    channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+				})
+			})
+			if err != nil {
+				reqLog.Error("gemini.record_stream_finalize_failed",
+					zap.Int64("account_id", account.ID),
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+				if terminalCapture != nil {
+					_ = terminalCapture.CommitTerminal(c)
+				}
+				return
+			}
+			streamReservationFinalized = true
+			if terminalCapture != nil {
+				if commitErr := terminalCapture.CommitTerminal(c); commitErr != nil {
+					reqLog.Error("gemini.commit_terminal_stream_failed", zap.Error(commitErr))
+				}
+			}
+			return
+		}
+		if queueFirstBilling {
+			err = h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.RecordUsageWithLongContext(ctx, &service.RecordUsageLongContextInput{
+					Result:                result,
+					APIKey:                apiKey,
+					User:                  apiKey.User,
+					Account:               account,
+					Subscription:          subscription,
+					InboundEndpoint:       inboundEndpoint,
+					UpstreamEndpoint:      upstreamEndpoint,
+					UserAgent:             userAgent,
+					IPAddress:             clientIP,
+					RequestPayloadHash:    requestPayloadHash,
+					LongContextThreshold:  200000,
+					LongContextMultiplier: 2.0,
+					ForceCacheBilling:     fs.ForceCacheBilling,
+					APIKeyService:         h.apiKeyService,
+					ChannelUsageFields:    channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+				})
+			})
+			if err != nil {
+				reqLog.Error("gemini.record_usage_failed",
+					zap.Int64("account_id", account.ID),
+					zap.Error(err),
+				)
+				if responseCapture != nil {
+					responseCapture.Discard(c)
+				}
+				googleError(c, http.StatusServiceUnavailable, "Billing temporarily unavailable")
+				return
+			}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				googleError(c, http.StatusServiceUnavailable, "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
+			}
+			return
+		}
+		if stream {
+			recordLegacyStreamingBilling("/v1beta/models")
+			reqLog.Debug("gemini.legacy_streaming_billing")
+		}
+		if responseCapture != nil {
+			responseCapture.Discard(c)
+		}
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			if err := h.gatewayService.RecordUsageWithLongContext(ctx, &service.RecordUsageLongContextInput{
 				Result:                result,

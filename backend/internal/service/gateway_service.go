@@ -7338,7 +7338,9 @@ type RecordUsageInput struct {
 	APIKey             *APIKey
 	User               *User
 	Account            *Account
-	Subscription       *UserSubscription  // 可选：订阅信息
+	Subscription       *UserSubscription // 可选：订阅信息
+	BillingRequestID   string            // 流式 phase-2 使用：预留 request_id，确保 reserve/finalize 使用同一 ID
+	BillingEventKind   UsageChargeEventKind
 	InboundEndpoint    string             // 入站端点（客户端请求路径）
 	UpstreamEndpoint   string             // 上游端点（标准化后的上游路径）
 	UserAgent          string             // 请求的 User-Agent
@@ -7537,6 +7539,8 @@ func (s *GatewayService) RecordUsage(ctx context.Context, input *RecordUsageInpu
 		User:               input.User,
 		Account:            input.Account,
 		Subscription:       input.Subscription,
+		BillingRequestID:   input.BillingRequestID,
+		BillingEventKind:   input.BillingEventKind,
 		InboundEndpoint:    input.InboundEndpoint,
 		UpstreamEndpoint:   input.UpstreamEndpoint,
 		UserAgent:          input.UserAgent,
@@ -7556,7 +7560,9 @@ type RecordUsageLongContextInput struct {
 	APIKey                *APIKey
 	User                  *User
 	Account               *Account
-	Subscription          *UserSubscription  // 可选：订阅信息
+	Subscription          *UserSubscription // 可选：订阅信息
+	BillingRequestID      string            // 流式 phase-2 使用：预留 request_id，确保 reserve/finalize 使用同一 ID
+	BillingEventKind      UsageChargeEventKind
 	InboundEndpoint       string             // 入站端点（客户端请求路径）
 	UpstreamEndpoint      string             // 上游端点（标准化后的上游路径）
 	UserAgent             string             // 请求的 User-Agent
@@ -7578,6 +7584,8 @@ func (s *GatewayService) RecordUsageWithLongContext(ctx context.Context, input *
 		User:               input.User,
 		Account:            input.Account,
 		Subscription:       input.Subscription,
+		BillingRequestID:   input.BillingRequestID,
+		BillingEventKind:   input.BillingEventKind,
 		InboundEndpoint:    input.InboundEndpoint,
 		UpstreamEndpoint:   input.UpstreamEndpoint,
 		UserAgent:          input.UserAgent,
@@ -7599,6 +7607,8 @@ type recordUsageCoreInput struct {
 	User               *User
 	Account            *Account
 	Subscription       *UserSubscription
+	BillingRequestID   string
+	BillingEventKind   UsageChargeEventKind
 	InboundEndpoint    string
 	UpstreamEndpoint   string
 	UserAgent          string
@@ -7705,7 +7715,15 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	}
 
 	// Build the billing command and publish to the billing stream.
-	requestID := usageLog.RequestID
+	// When a caller-supplied BillingRequestID is present (streaming v2
+	// finalize), use it for both the event and the persisted usage log so
+	// reserve/finalize remain correlated and the ledger/usage_log rows agree.
+	requestID := strings.TrimSpace(input.BillingRequestID)
+	if requestID == "" {
+		requestID = usageLog.RequestID
+	} else {
+		usageLog.RequestID = requestID
+	}
 	p := &postUsageBillingParams{
 		Cost:                  cost,
 		User:                  user,
@@ -7727,7 +7745,11 @@ func (s *GatewayService) recordUsageCore(ctx context.Context, input *recordUsage
 	if apiKey.GroupID != nil {
 		groupID = *apiKey.GroupID
 	}
-	event := NewBillingEvent(cmd, usageLog, groupID, apiKey.HasRateLimits())
+	eventKind := input.BillingEventKind
+	if strings.TrimSpace(string(eventKind)) == "" {
+		eventKind = UsageChargeEventKindCharge
+	}
+	event := NewUsageChargeEventWithKind(eventKind, cmd, usageLog, groupID, apiKey.HasRateLimits())
 	if s.billingPublisher == nil {
 		slog.Error("billing event publisher unavailable",
 			"component", "service.gateway",

@@ -89,6 +89,9 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 	reqModel := modelResult.String()
 	reqStream := gjson.GetBytes(body, "stream").Bool()
+	queueFirstBilling := queueFirstNonStreamEnabled(h.cfg, reqStream)
+	streamingBillingV2 := streamingV2Enabled(h.cfg, reqStream)
+	requestPayloadHash := service.HashUsageRequestPayload(body)
 
 	reqLog = reqLog.With(zap.String("model", reqModel), zap.Bool("stream", reqStream))
 	setOpenAIRequestSpanIdentity(span, apiKey, subject.UserID, reqModel, reqStream)
@@ -136,6 +139,44 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	failedAccountIDs := make(map[int64]struct{})
 	sameAccountRetryCount := make(map[int64]int)
 	var lastFailoverErr *service.UpstreamFailoverError
+	streamReservationID := ""
+	streamReservationPublished := false
+	streamReservationFinalized := false
+	var streamReservationAccount *service.Account
+	var terminalCapture *streamingTerminalCapture
+	releaseStreamReservation := func(reason string) {
+		if !streamingBillingV2 || !streamReservationPublished || streamReservationFinalized {
+			return
+		}
+		if terminalCapture != nil {
+			terminalCapture.DiscardTerminal(c)
+			terminalCapture = nil
+		}
+		acct := streamReservationAccount
+		if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+			return h.gatewayService.PublishStreamingRelease(ctx, &service.StreamingBillingLifecycleInput{
+				RequestID:          streamReservationID,
+				APIKey:             apiKey,
+				User:               apiKey.User,
+				Account:            acct,
+				Subscription:       subscription,
+				Model:              reqModel,
+				RequestPayloadHash: requestPayloadHash,
+			})
+		}); err != nil {
+			reqLog.Error("openai_chat_completions.streaming_release_failed",
+				zap.String("request_id", streamReservationID),
+				zap.String("reason", reason),
+				zap.Error(err),
+			)
+		}
+		streamReservationPublished = false
+		streamReservationAccount = nil
+	}
+	if streamingBillingV2 {
+		streamReservationID = streamingBillingRequestID(c.Request.Context())
+		defer func() { releaseStreamReservation("deferred_cleanup") }()
+	}
 
 	for {
 		c.Set("openai_chat_completions_fallback_model", "")
@@ -213,6 +254,35 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			return
 		}
 
+		if streamingBillingV2 && !streamReservationPublished {
+			if err := h.executeUsageRecordTask(func(ctx context.Context) error {
+				return h.gatewayService.PublishStreamingReserve(ctx, &service.StreamingBillingLifecycleInput{
+					RequestID:          streamReservationID,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					Model:              reqModel,
+					RequestPayloadHash: requestPayloadHash,
+				})
+			}); err != nil {
+				if accountReleaseFunc != nil {
+					accountReleaseFunc()
+				}
+				reqLog.Error("openai_chat_completions.streaming_reserve_failed",
+					zap.Int64("account_id", account.ID),
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+				h.errorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+				return
+			}
+			streamReservationPublished = true
+			streamReservationAccount = account
+			terminalCapture = beginStreamingTerminalCapture(c, true, streamingTerminalModeChatCompletions)
+		}
+
+		responseCapture := beginBufferedResponseCapture(c, queueFirstBilling)
 		service.SetOpsLatencyMs(c, service.OpsRoutingLatencyMsKey, time.Since(routingStart).Milliseconds())
 		forwardStart := time.Now()
 
@@ -264,8 +334,14 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 						)
 						select {
 						case <-c.Request.Context().Done():
+							if responseCapture != nil {
+								responseCapture.Discard(c)
+							}
 							return
 						case <-time.After(sameAccountRetryDelay):
+						}
+						if responseCapture != nil {
+							responseCapture.Discard(c)
 						}
 						continue
 					}
@@ -276,6 +352,11 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				if switchCount >= maxAccountSwitches {
 					appelotel.SetSpanAttributes(span, appelotel.AttrFailoverSwitchCount(switchCount))
 					h.handleFailoverExhausted(c, failoverErr, streamStarted)
+					if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+						h.errorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+					}); commitErr != nil {
+						reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
+					}
 					return
 				}
 				switchCount++
@@ -291,6 +372,12 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 					zap.Int("switch_count", switchCount),
 					zap.Int("max_switches", maxAccountSwitches),
 				)
+				if responseCapture != nil {
+					responseCapture.Discard(c)
+				}
+				// Release the reservation tied to the failing account so
+				// the next iteration re-reserves on the replacement.
+				releaseStreamReservation("account_switch")
 				continue
 			}
 			h.gatewayService.ReportOpenAIAccountScheduleResult(account.ID, false, nil)
@@ -304,6 +391,11 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Bool("fallback_error_response_written", wroteFallback),
 				zap.Error(err),
 			)
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				h.errorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
+			}
 			return
 		}
 		if result != nil {
@@ -321,6 +413,110 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 		clientIP := ip.GetClientIP(c)
 
 		requestSpanCtx := trace.SpanContextFromContext(c.Request.Context())
+		if streamingBillingV2 {
+			err = h.executeUsageRecordTask(func(ctx context.Context) error {
+				usageCtx := ctx
+				if requestSpanCtx.IsValid() {
+					usageCtx = trace.ContextWithSpanContext(ctx, requestSpanCtx)
+				}
+				usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")
+				setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, reqModel, reqStream)
+				setOpenAIAccountSpanIdentity(usageSpan, account, result.UpstreamModel)
+				defer usageSpan.End()
+				return h.gatewayService.RecordUsage(usageCtx, &service.OpenAIRecordUsageInput{
+					Result:             result,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					BillingRequestID:   streamReservationID,
+					BillingEventKind:   service.UsageChargeEventKindFinalize,
+					InboundEndpoint:    GetInboundEndpoint(c),
+					UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
+					UserAgent:          userAgent,
+					IPAddress:          clientIP,
+					RequestPayloadHash: requestPayloadHash,
+					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+				})
+			})
+			if err != nil {
+				reqLog.Error("openai_chat_completions.record_stream_finalize_failed",
+					zap.Int64("account_id", account.ID),
+					zap.String("request_id", streamReservationID),
+					zap.Error(err),
+				)
+				if terminalCapture != nil {
+					_ = terminalCapture.CommitTerminal(c)
+				}
+				return
+			}
+			streamReservationFinalized = true
+			if terminalCapture != nil {
+				if commitErr := terminalCapture.CommitTerminal(c); commitErr != nil {
+					reqLog.Error("openai_chat_completions.commit_terminal_stream_failed", zap.Error(commitErr))
+				}
+			}
+			reqLog.Debug("openai_chat_completions.streaming_request_completed",
+				zap.Int64("account_id", account.ID),
+				zap.Int("switch_count", switchCount),
+			)
+			return
+		}
+		if queueFirstBilling {
+			err = h.executeUsageRecordTask(func(ctx context.Context) error {
+				usageCtx := ctx
+				if requestSpanCtx.IsValid() {
+					usageCtx = trace.ContextWithSpanContext(ctx, requestSpanCtx)
+				}
+				usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")
+				setOpenAIRequestSpanIdentity(usageSpan, apiKey, subject.UserID, reqModel, reqStream)
+				setOpenAIAccountSpanIdentity(usageSpan, account, result.UpstreamModel)
+				defer usageSpan.End()
+				return h.gatewayService.RecordUsage(usageCtx, &service.OpenAIRecordUsageInput{
+					Result:             result,
+					APIKey:             apiKey,
+					User:               apiKey.User,
+					Account:            account,
+					Subscription:       subscription,
+					InboundEndpoint:    GetInboundEndpoint(c),
+					UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
+					UserAgent:          userAgent,
+					IPAddress:          clientIP,
+					RequestPayloadHash: requestPayloadHash,
+					APIKeyService:      h.apiKeyService,
+					ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
+				})
+			})
+			if err != nil {
+				reqLog.Error("openai_chat_completions.record_usage_failed",
+					zap.Int64("account_id", account.ID),
+					zap.Error(err),
+				)
+				if responseCapture != nil {
+					responseCapture.Discard(c)
+				}
+				h.errorResponse(c, http.StatusServiceUnavailable, "billing_unavailable", "Billing temporarily unavailable")
+				return
+			}
+			if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
+				h.errorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
+			}); commitErr != nil {
+				reqLog.Error("openai_chat_completions.commit_buffered_response_failed", zap.Error(commitErr))
+			}
+			reqLog.Debug("openai_chat_completions.request_completed",
+				zap.Int64("account_id", account.ID),
+				zap.Int("switch_count", switchCount),
+			)
+			return
+		}
+		if reqStream {
+			recordLegacyStreamingBilling("/v1/chat/completions")
+			reqLog.Debug("openai_chat_completions.legacy_streaming_billing")
+		}
+		if responseCapture != nil {
+			responseCapture.Discard(c)
+		}
 		h.submitUsageRecordTask(func(ctx context.Context) {
 			usageCtx := ctx
 			if requestSpanCtx.IsValid() {
@@ -340,6 +536,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				UpstreamEndpoint:   GetUpstreamEndpoint(c, account.Platform),
 				UserAgent:          userAgent,
 				IPAddress:          clientIP,
+				RequestPayloadHash: requestPayloadHash,
 				APIKeyService:      h.apiKeyService,
 				ChannelUsageFields: channelMapping.ToUsageFields(reqModel, result.UpstreamModel),
 			}); err != nil {
