@@ -2100,6 +2100,175 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_BeforeTurnComple
 	require.ErrorIs(t, recordedAfterTurnErr, hookErr)
 }
 
+func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughFailureDoesNotStartQueuedTurn(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{}
+	cfg.Security.URLAllowlist.Enabled = false
+	cfg.Security.URLAllowlist.AllowInsecureHTTP = true
+	cfg.Gateway.OpenAIWS.Enabled = true
+	cfg.Gateway.OpenAIWS.OAuthEnabled = true
+	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
+	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
+	cfg.Gateway.OpenAIWS.ModeRouterV2Enabled = true
+	cfg.Gateway.OpenAIWS.IngressModeDefault = OpenAIWSIngressModeCtxPool
+	cfg.Gateway.OpenAIWS.DialTimeoutSeconds = 3
+	cfg.Gateway.OpenAIWS.ReadTimeoutSeconds = 3
+	cfg.Gateway.OpenAIWS.WriteTimeoutSeconds = 3
+
+	captureConn := &openAIWSCaptureConn{
+		readDelays: []time.Duration{200 * time.Millisecond},
+		events: [][]byte{
+			[]byte(`{"type":"response.completed","response":{"id":"resp_turn_fail_stop_queue","model":"gpt-5.1","usage":{"input_tokens":1,"output_tokens":1}}}`),
+		},
+	}
+	dialer := &openAIWSCaptureDialer{conn: captureConn}
+
+	svc := &OpenAIGatewayService{
+		cfg:                       cfg,
+		httpUpstream:              &httpUpstreamRecorder{},
+		cache:                     &stubGatewayCache{},
+		openaiWSResolver:          NewOpenAIWSProtocolResolver(cfg),
+		toolCorrector:             NewCodexToolCorrector(),
+		openaiWSPassthroughDialer: dialer,
+	}
+
+	account := &Account{
+		ID:          119,
+		Name:        "openai-ingress-turn-failure-stops-queue",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "sk-test",
+		},
+		Extra: map[string]any{
+			"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModePassthrough,
+		},
+	}
+
+	hookErr := errors.New("before turn complete failed")
+	var hooksMu sync.Mutex
+	beforeTurns := make([]int, 0, 2)
+	afterTurns := make([]int, 0, 2)
+	var afterErrs []error
+	hooks := &OpenAIWSIngressHooks{
+		BeforeTurn: func(turn OpenAIWSIngressTurn) error {
+			hooksMu.Lock()
+			beforeTurns = append(beforeTurns, turn.Turn)
+			hooksMu.Unlock()
+			return nil
+		},
+		BeforeTurnComplete: func(turn OpenAIWSIngressTurn, _ *OpenAIForwardResult) error {
+			if turn.Turn == 1 {
+				return hookErr
+			}
+			return nil
+		},
+		AfterTurn: func(turn OpenAIWSIngressTurn, _ *OpenAIForwardResult, turnErr error) {
+			hooksMu.Lock()
+			afterTurns = append(afterTurns, turn.Turn)
+			afterErrs = append(afterErrs, turnErr)
+			hooksMu.Unlock()
+		},
+	}
+
+	serverErrCh := make(chan error, 1)
+	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := coderws.Accept(w, r, &coderws.AcceptOptions{
+			CompressionMode: coderws.CompressionContextTakeover,
+		})
+		if err != nil {
+			serverErrCh <- err
+			return
+		}
+		defer func() {
+			_ = conn.CloseNow()
+		}()
+
+		rec := httptest.NewRecorder()
+		ginCtx, _ := gin.CreateTestContext(rec)
+		req := r.Clone(r.Context())
+		req.Header = req.Header.Clone()
+		req.Header.Set("User-Agent", "unit-test-agent/1.0")
+		ginCtx.Request = req
+
+		readCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		msgType, firstMessage, readErr := conn.Read(readCtx)
+		cancel()
+		if readErr != nil {
+			serverErrCh <- readErr
+			return
+		}
+		if msgType != coderws.MessageText && msgType != coderws.MessageBinary {
+			serverErrCh <- errors.New("unsupported websocket client message type")
+			return
+		}
+
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, hooks)
+	}))
+	defer wsServer.Close()
+
+	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
+	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
+	cancelDial()
+	require.NoError(t, err)
+	defer func() {
+		_ = clientConn.CloseNow()
+	}()
+
+	writeMessage := func(payload string) error {
+		writeCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		return clientConn.Write(writeCtx, coderws.MessageText, []byte(payload))
+	}
+
+	require.NoError(t, writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false}`))
+
+	require.Eventually(t, func() bool {
+		hooksMu.Lock()
+		defer hooksMu.Unlock()
+		return len(beforeTurns) == 1 && beforeTurns[0] == 1
+	}, time.Second, 10*time.Millisecond, "首轮 turn 应先启动")
+
+	secondWriteErrCh := make(chan error, 1)
+	go func() {
+		secondWriteErrCh <- writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false,"previous_response_id":"resp_turn_fail_stop_queue"}`)
+	}()
+
+	select {
+	case serverErr := <-serverErrCh:
+		require.Error(t, serverErr)
+		require.ErrorIs(t, serverErr, hookErr)
+		var turnErr *openAIWSIngressTurnError
+		require.ErrorAs(t, serverErr, &turnErr)
+		require.Equal(t, "turn_terminal_hook", turnErr.stage)
+	case <-time.After(5 * time.Second):
+		t.Fatal("等待 passthrough turn 失败退出超时")
+	}
+
+	_ = clientConn.CloseNow()
+	select {
+	case <-secondWriteErrCh:
+	case <-time.After(2 * time.Second):
+		t.Fatal("等待第二轮客户端写入退出超时")
+	}
+
+	hooksMu.Lock()
+	recordedBeforeTurns := append([]int(nil), beforeTurns...)
+	recordedAfterTurns := append([]int(nil), afterTurns...)
+	recordedAfterErrs := append([]error(nil), afterErrs...)
+	hooksMu.Unlock()
+
+	require.Equal(t, []int{1}, recordedBeforeTurns, "失败时不应启动排队中的下一轮 turn")
+	require.Equal(t, []int{1}, recordedAfterTurns, "失败清理只应作用于已启动的首轮 turn")
+	require.Len(t, recordedAfterErrs, 1)
+	require.ErrorIs(t, recordedAfterErrs[0], hookErr)
+	require.Len(t, captureConn.writes, 1, "排队中的第二轮 turn 不应在首轮失败后写到上游")
+}
+
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PreviousResponseNotFoundRecoversByDroppingPrevID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
