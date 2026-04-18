@@ -237,6 +237,32 @@ describe('API Client', () => {
       expect(window.location.href).toBe('/login')
     })
 
+    it('does not mark auth as expired when refresh returns 401', async () => {
+      const adapter = vi.fn().mockRejectedValue({
+        response: {
+          status: 401,
+          data: {
+            code: 'TOKEN_EXPIRED',
+            message: 'expired'
+          }
+        },
+        config: {
+          url: '/session/refresh',
+          method: 'post',
+          headers: {}
+        }
+      })
+      apiClient.defaults.adapter = adapter
+
+      await expect(apiClient.post('/session/refresh', {})).rejects.toMatchObject({
+        status: 401,
+        code: 'TOKEN_EXPIRED'
+      })
+
+      expect(window.sessionStorage.getItem('auth_expired')).toBeNull()
+      expect(window.location.href).toBe('/login')
+    })
+
     it('marks auth as expired when refresh fails for a protected endpoint', async () => {
       const hrefSetter = vi.fn((nextHref: string) => {
         expect(window.sessionStorage.getItem('auth_expired')).toBe('1')
@@ -268,6 +294,36 @@ describe('API Client', () => {
       expect(hrefSetter).toHaveBeenCalledOnce()
       expect(window.sessionStorage.getItem('auth_expired')).toBe('1')
       expect(window.location.href).toBe('/login')
+    })
+
+    it('avoids redirect loops when a protected endpoint fails on the login page', async () => {
+      installLocationStub()
+      window.location.pathname = '/login'
+
+      const adapter = vi.fn().mockRejectedValue({
+        response: {
+          status: 401,
+          data: {
+            code: 'TOKEN_EXPIRED',
+            message: 'expired'
+          }
+        },
+        config: {
+          url: '/me/password/change',
+          method: 'post',
+          headers: {}
+        }
+      })
+      apiClient.defaults.adapter = adapter
+      vi.spyOn(axios, 'post').mockRejectedValue(new Error('refresh failed'))
+
+      await expect(apiClient.post('/me/password/change', { password: 'new-password' })).rejects.toMatchObject({
+        status: 401,
+        code: 'TOKEN_REFRESH_FAILED'
+      })
+
+      expect(window.sessionStorage.getItem('auth_expired')).toBe('1')
+      expect(window.location.href).toBe('/dashboard')
     })
   })
 })
