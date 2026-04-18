@@ -676,10 +676,6 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			}
 			return
 		}
-		if stream {
-			recordLegacyStreamingBilling("/v1beta/models")
-			reqLog.Debug("gemini.legacy_streaming_billing")
-		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)
 		}

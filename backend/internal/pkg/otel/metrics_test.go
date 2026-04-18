@@ -30,7 +30,6 @@ func TestMetricsPrometheusScrapeIncludesObservabilityContracts(t *testing.T) {
 	m.RecordBillingPublish(ctx, "success", 0.05)
 	m.RecordBillingApply(ctx, "failure")
 	m.SetBillingPendingMessages(ctx, 7)
-	m.RecordLegacyStreamingBilling(ctx, "/v1/responses")
 
 	require.NoError(t, meterProvider.ForceFlush(ctx))
 
@@ -45,7 +44,6 @@ func TestMetricsPrometheusScrapeIncludesObservabilityContracts(t *testing.T) {
 	require.Contains(t, body, `sub2api_billing_publish_total{outcome="success"} 1`)
 	require.Contains(t, body, `sub2api_billing_apply_failures_total{outcome="failure"} 1`)
 	require.Contains(t, body, "sub2api_billing_pending_messages 7")
-	require.Contains(t, body, `sub2api_billing_legacy_streaming_requests_total{endpoint="/v1/responses"} 1`)
 }
 
 func newTestMetrics(t *testing.T) (*Metrics, *sdkmetric.MeterProvider, *prometheus.Registry) {

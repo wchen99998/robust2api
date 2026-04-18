@@ -240,10 +240,10 @@ func TestTerminalBufferedResponseWriter_PendingCapFlushes(t *testing.T) {
 
 func TestStreamingV2Enabled(t *testing.T) {
 	t.Parallel()
-	require.False(t, streamingV2Enabled(nil, true))
-	cfg := &config.Config{Billing: config.BillingConfig{StreamingV2Enabled: true}}
+	require.True(t, streamingV2Enabled(nil, true))
+	cfg := &config.Config{}
 	require.False(t, streamingV2Enabled(cfg, false))
 	require.True(t, streamingV2Enabled(cfg, true))
-	simpleCfg := &config.Config{RunMode: config.RunModeSimple, Billing: config.BillingConfig{StreamingV2Enabled: true}}
+	simpleCfg := &config.Config{RunMode: config.RunModeSimple}
 	require.False(t, streamingV2Enabled(simpleCfg, true))
 }

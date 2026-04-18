@@ -510,10 +510,6 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 			)
 			return
 		}
-		if reqStream {
-			recordLegacyStreamingBilling("/v1/chat/completions")
-			reqLog.Debug("openai_chat_completions.legacy_streaming_billing")
-		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)
 		}

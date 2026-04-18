@@ -648,10 +648,6 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			)
 			return
 		}
-		if reqStream {
-			recordLegacyStreamingBilling("/openai/v1/responses")
-			reqLog.Debug("openai.legacy_streaming_billing")
-		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)
 		}
@@ -1314,10 +1310,6 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 				zap.Int("switch_count", switchCount),
 			)
 			return
-		}
-		if reqStream {
-			recordLegacyStreamingBilling("/v1/messages")
-			reqLog.Debug("openai_messages.legacy_streaming_billing")
 		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)
@@ -1997,8 +1989,6 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 			if streamingBillingV2 {
 				return
 			}
-			recordLegacyStreamingBilling("/openai/v1/realtime")
-			reqLog.Debug("openai.websocket.legacy_streaming_billing")
 			h.submitUsageRecordTask(func(taskCtx context.Context) {
 				usageCtx := openAIRequestSpanContext(c.Request.Context(), taskCtx)
 				usageCtx, usageSpan := appelotel.GatewayTracer().Start(usageCtx, "gateway.record_usage")

@@ -664,11 +664,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				return
 			}
-			if reqStream {
-				recordLegacyStreamingBilling("/v1/messages")
-				reqLog.Debug("gateway.legacy_streaming_billing")
-			}
-
 			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				usageTracer := otel.Tracer("sub2api.gateway")
@@ -1193,10 +1188,6 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				commitBufferedResponse()
 				return
-			}
-			if reqStream {
-				recordLegacyStreamingBilling("/v1/messages")
-				reqLog.Debug("gateway.legacy_streaming_billing")
 			}
 			discardBufferedResponse()
 			h.submitUsageRecordTask(func(ctx context.Context) {

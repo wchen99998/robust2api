@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/gin-gonic/gin"
 )
 
@@ -26,17 +25,13 @@ func usageRecordTaskTimeout(cfg *config.Config) time.Duration {
 }
 
 func queueFirstNonStreamEnabled(cfg *config.Config, reqStream bool) bool {
-	if reqStream || cfg == nil {
+	if reqStream {
 		return false
 	}
-	if cfg.RunMode == config.RunModeSimple {
-		return false
+	if cfg == nil {
+		return true
 	}
-	return cfg.Billing.QueueFirstNonStreamEnabled
-}
-
-func recordLegacyStreamingBilling(endpoint string) {
-	appelotel.M().RecordLegacyStreamingBilling(context.Background(), endpoint)
+	return cfg.RunMode != config.RunModeSimple
 }
 
 type bufferedResponseCapture struct {
