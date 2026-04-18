@@ -4132,11 +4132,7 @@ func scanUsageLog(scanner interface{ Scan(...any) error }) (*service.UsageLog, e
 		CacheTTLOverridden:    cacheTTLOverridden,
 		CreatedAt:             createdAt,
 	}
-	// 先回填 legacy 字段，再基于 legacy + request_type 计算最终请求类型，保证历史数据兼容。
-	log.Stream = stream
-	log.OpenAIWSMode = openaiWSMode
-	log.RequestType = log.EffectiveRequestType()
-	log.Stream, log.OpenAIWSMode = service.ApplyLegacyRequestFields(log.RequestType, stream, openaiWSMode)
+	log.Stream, log.OpenAIWSMode = service.LegacyRequestFlagsForType(log.RequestType)
 
 	if requestID.Valid {
 		log.RequestID = requestID.String
@@ -4283,20 +4279,11 @@ func appendRequestTypeOrStreamQueryFilter(query string, args []any, requestType 
 	return query, args
 }
 
-// buildRequestTypeFilterCondition 在 request_type 过滤时兼容 legacy 字段，避免历史数据漏查。
+// buildRequestTypeFilterCondition filters by the canonical request_type enum.
 func buildRequestTypeFilterCondition(startArgIndex int, requestType int16) (string, []any) {
 	normalized := service.RequestTypeFromInt16(requestType)
 	requestTypeArg := int16(normalized)
-	switch normalized {
-	case service.RequestTypeSync:
-		return fmt.Sprintf("(request_type = $%d OR (request_type = %d AND stream = FALSE AND openai_ws_mode = FALSE))", startArgIndex, int16(service.RequestTypeUnknown)), []any{requestTypeArg}
-	case service.RequestTypeStream:
-		return fmt.Sprintf("(request_type = $%d OR (request_type = %d AND stream = TRUE AND openai_ws_mode = FALSE))", startArgIndex, int16(service.RequestTypeUnknown)), []any{requestTypeArg}
-	case service.RequestTypeWSV2:
-		return fmt.Sprintf("(request_type = $%d OR (request_type = %d AND openai_ws_mode = TRUE))", startArgIndex, int16(service.RequestTypeUnknown)), []any{requestTypeArg}
-	default:
-		return fmt.Sprintf("request_type = $%d", startArgIndex), []any{requestTypeArg}
-	}
+	return fmt.Sprintf("request_type = $%d", startArgIndex), []any{requestTypeArg}
 }
 
 func nullInt64(v *int64) sql.NullInt64 {

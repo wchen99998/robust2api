@@ -71,7 +71,7 @@ func (s *BillingConsumerService) Stop() {
 }
 
 // handleEvent processes a single billing event from the stream.
-func (s *BillingConsumerService) handleEvent(ctx context.Context, event *BillingEvent) error {
+func (s *BillingConsumerService) handleEvent(ctx context.Context, event *UsageChargeEvent) error {
 	if event == nil || event.Command == nil {
 		return nil
 	}
@@ -118,7 +118,7 @@ func (s *BillingConsumerService) handleEvent(ctx context.Context, event *Billing
 }
 
 // updateBillingCache queues cache updates so that eligibility checks reflect this charge.
-func (s *BillingConsumerService) updateBillingCache(event *BillingEvent, cmd *UsageBillingCommand) {
+func (s *BillingConsumerService) updateBillingCache(event *UsageChargeEvent, cmd *UsageBillingCommand) {
 	if s.billingCache == nil {
 		return
 	}
@@ -136,7 +136,7 @@ func (s *BillingConsumerService) updateBillingCache(event *BillingEvent, cmd *Us
 	}
 }
 
-func (s *BillingConsumerService) repairBillingCache(ctx context.Context, event *BillingEvent, cmd *UsageBillingCommand) {
+func (s *BillingConsumerService) repairBillingCache(ctx context.Context, event *UsageChargeEvent, cmd *UsageBillingCommand) {
 	if s.billingCache == nil {
 		return
 	}

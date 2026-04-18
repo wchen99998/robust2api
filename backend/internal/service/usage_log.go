@@ -68,17 +68,7 @@ func ParseUsageRequestType(value string) (RequestType, error) {
 	}
 }
 
-func RequestTypeFromLegacy(stream bool, openAIWSMode bool) RequestType {
-	if openAIWSMode {
-		return RequestTypeWSV2
-	}
-	if stream {
-		return RequestTypeStream
-	}
-	return RequestTypeSync
-}
-
-func ApplyLegacyRequestFields(requestType RequestType, fallbackStream bool, fallbackOpenAIWSMode bool) (stream bool, openAIWSMode bool) {
+func LegacyRequestFlagsForType(requestType RequestType) (stream bool, openAIWSMode bool) {
 	switch requestType.Normalize() {
 	case RequestTypeSync:
 		return false, false
@@ -87,7 +77,7 @@ func ApplyLegacyRequestFields(requestType RequestType, fallbackStream bool, fall
 	case RequestTypeWSV2:
 		return true, true
 	default:
-		return fallbackStream, fallbackOpenAIWSMode
+		return false, false
 	}
 }
 
@@ -181,10 +171,7 @@ func (u *UsageLog) EffectiveRequestType() RequestType {
 	if u == nil {
 		return RequestTypeUnknown
 	}
-	if normalized := u.RequestType.Normalize(); normalized != RequestTypeUnknown {
-		return normalized
-	}
-	return RequestTypeFromLegacy(u.Stream, u.OpenAIWSMode)
+	return u.RequestType.Normalize()
 }
 
 func (u *UsageLog) SyncRequestTypeAndLegacyFields() {
@@ -192,6 +179,9 @@ func (u *UsageLog) SyncRequestTypeAndLegacyFields() {
 		return
 	}
 	requestType := u.EffectiveRequestType()
+	if requestType == RequestTypeUnknown {
+		requestType = RequestTypeSync
+	}
 	u.RequestType = requestType
-	u.Stream, u.OpenAIWSMode = ApplyLegacyRequestFields(requestType, u.Stream, u.OpenAIWSMode)
+	u.Stream, u.OpenAIWSMode = LegacyRequestFlagsForType(requestType)
 }

@@ -12,14 +12,14 @@ func TestUsageLogFromService_IncludesOpenAIWSMode(t *testing.T) {
 	t.Parallel()
 
 	wsLog := &service.UsageLog{
-		RequestID:    "req_1",
-		Model:        "gpt-5.3-codex",
-		OpenAIWSMode: true,
+		RequestID:   "req_1",
+		Model:       "gpt-5.3-codex",
+		RequestType: service.RequestTypeWSV2,
 	}
 	httpLog := &service.UsageLog{
-		RequestID:    "resp_1",
-		Model:        "gpt-5.3-codex",
-		OpenAIWSMode: false,
+		RequestID:   "resp_1",
+		Model:       "gpt-5.3-codex",
+		RequestType: service.RequestTypeSync,
 	}
 
 	require.True(t, UsageLogFromService(wsLog).OpenAIWSMode)
