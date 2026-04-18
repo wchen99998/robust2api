@@ -82,7 +82,7 @@ const ModelWhitelistSelectorStub = defineComponent({
   `
 })
 
-function buildAccount() {
+function buildAccount(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     name: 'OpenAI Key',
@@ -104,7 +104,8 @@ function buildAccount() {
     status: 'active',
     group_ids: [],
     expires_at: null,
-    auto_pause_on_expired: false
+    auto_pause_on_expired: false,
+    ...overrides
   } as any
 }
 
@@ -130,6 +131,13 @@ function mountModal(account = buildAccount()) {
 }
 
 describe('EditAccountModal', () => {
+  it('does not render OpenAI passthrough or WS mode controls anymore', () => {
+    const wrapper = mountModal(buildAccount({ type: 'oauth' }))
+
+    expect(wrapper.text()).not.toContain('admin.accounts.openai.oauthPassthrough')
+    expect(wrapper.text()).not.toContain('admin.accounts.openai.wsMode')
+  })
+
   it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {
     const account = buildAccount()
     updateAccountMock.mockReset()
@@ -154,6 +162,33 @@ describe('EditAccountModal', () => {
     expect(updateAccountMock).toHaveBeenCalledTimes(1)
     expect(updateAccountMock.mock.calls[0]?.[1]?.credentials?.model_mapping).toEqual({
       'gpt-5.2': 'gpt-5.2'
+    })
+  })
+
+  it('removes legacy OpenAI passthrough and WS keys from extra on save', async () => {
+    const account = buildAccount({
+      extra: {
+        keep_me: 'yes',
+        openai_passthrough: true,
+        openai_oauth_passthrough: true,
+        openai_apikey_responses_websockets_v2_mode: 'off',
+        openai_apikey_responses_websockets_v2_enabled: false,
+        responses_websockets_v2_enabled: false,
+        openai_ws_enabled: false
+      }
+    })
+
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).toEqual({
+      keep_me: 'yes'
     })
   })
 })

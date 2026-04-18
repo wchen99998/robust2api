@@ -233,7 +233,6 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_CreatesAttemptSp
 	cfg.Gateway.OpenAIWS.Enabled = true
 	cfg.Gateway.OpenAIWS.OAuthEnabled = true
 	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
-	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
 	cfg.Gateway.OpenAIWS.MaxConnsPerAccount = 1
 	cfg.Gateway.OpenAIWS.MinIdlePerAccount = 0
 	cfg.Gateway.OpenAIWS.MaxIdlePerAccount = 1
@@ -253,12 +252,13 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_CreatesAttemptSp
 	defer pool.Close()
 
 	svc := &OpenAIGatewayService{
-		cfg:              cfg,
-		httpUpstream:     &httpUpstreamRecorder{},
-		cache:            &stubGatewayCache{},
-		openaiWSResolver: NewOpenAIWSProtocolResolver(cfg),
-		toolCorrector:    NewCodexToolCorrector(),
-		openaiWSPool:     pool,
+		cfg:                       cfg,
+		httpUpstream:              &httpUpstreamRecorder{},
+		cache:                     &stubGatewayCache{},
+		openaiWSResolver:          NewOpenAIWSProtocolResolver(cfg),
+		toolCorrector:             NewCodexToolCorrector(),
+		openaiWSPool:              pool,
+		openaiWSPassthroughDialer: captureDialer,
 	}
 
 	account := &Account{
@@ -335,7 +335,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_CreatesAttemptSp
 	require.NoError(t, err)
 	require.Equal(t, coderws.MessageText, msgType)
 	require.Contains(t, string(message), "resp_ws_trace")
-	require.NoError(t, clientConn.Close(coderws.StatusNormalClosure, "done"))
+	_ = clientConn.Close(coderws.StatusNormalClosure, "done")
 
 	select {
 	case serverErr := <-serverErrCh:

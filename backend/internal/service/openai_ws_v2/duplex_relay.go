@@ -4,8 +4,8 @@ import (
 	"context"
 )
 
-// runCaddyStyleRelay 采用 Caddy reverseproxy 的双向隧道思想：
-// 连接建立后并发复制两个方向，任一方向退出触发收敛关闭。
+// runDuplexRelay 执行双向 WS 帧转发。
+// 实现参考了 Caddy reverseproxy 的隧道收敛方式，但这里并不依赖 Caddy 组件或服务。
 //
 // Reference:
 // - Project: caddyserver/caddy (Apache-2.0)
@@ -13,7 +13,7 @@ import (
 // - Files:
 //   - modules/caddyhttp/reverseproxy/streaming.go
 //   - modules/caddyhttp/reverseproxy/reverseproxy.go
-func runCaddyStyleRelay(
+func runDuplexRelay(
 	ctx context.Context,
 	clientConn FrameConn,
 	upstreamConn FrameConn,

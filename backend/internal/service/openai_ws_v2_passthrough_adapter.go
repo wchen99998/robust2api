@@ -17,14 +17,17 @@ import (
 	coderws "github.com/coder/websocket"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
+	"github.com/tidwall/sjson"
 	"go.opentelemetry.io/otel/trace"
 )
 
 type openAIWSClientFrameConn struct {
-	conn *coderws.Conn
+	conn             *coderws.Conn
+	normalizePayload func(msgType coderws.MessageType, payload []byte) ([]byte, error)
 }
 
 const openaiWSV2PassthroughModeFields = "ws_mode=passthrough ws_router=v2"
+const openAIWSOriginalModelMetadataKey = "sub2api_original_model"
 
 var _ openaiwsv2.FrameConn = (*openAIWSClientFrameConn)(nil)
 
@@ -45,7 +48,18 @@ func (c *openAIWSClientFrameConn) ReadFrame(ctx context.Context) (coderws.Messag
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	return c.conn.Read(ctx)
+	msgType, payload, err := c.conn.Read(ctx)
+	if err != nil {
+		return msgType, nil, err
+	}
+	if c.normalizePayload != nil {
+		normalized, normalizeErr := c.normalizePayload(msgType, payload)
+		if normalizeErr != nil {
+			return msgType, nil, normalizeErr
+		}
+		payload = normalized
+	}
+	return msgType, payload, nil
 }
 
 func (c *openAIWSClientFrameConn) WriteFrame(ctx context.Context, msgType coderws.MessageType, payload []byte) error {
@@ -89,7 +103,94 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	if strings.TrimSpace(token) == "" {
 		return errors.New("token is empty")
 	}
-	requestModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())
+	normalizeClientPayload := func(msgType coderws.MessageType, payload []byte) ([]byte, error) {
+		if msgType != coderws.MessageText {
+			return payload, nil
+		}
+		trimmed := strings.TrimSpace(string(payload))
+		if trimmed == "" {
+			return payload, nil
+		}
+		raw := []byte(trimmed)
+		if !gjson.ValidBytes(raw) {
+			return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", errors.New("invalid json"))
+		}
+		eventType := strings.TrimSpace(gjson.GetBytes(raw, "type").String())
+		switch eventType {
+		case "":
+			next, err := sjson.SetBytes(raw, "type", "response.create")
+			if err != nil {
+				return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
+			}
+			raw = next
+		case "response.create":
+		case "response.append":
+			return nil, NewOpenAIWSClientCloseError(
+				coderws.StatusPolicyViolation,
+				"response.append is not supported in ws v2; use response.create with previous_response_id",
+				nil,
+			)
+		default:
+			return nil, NewOpenAIWSClientCloseError(
+				coderws.StatusPolicyViolation,
+				fmt.Sprintf("unsupported websocket request type: %s", eventType),
+				nil,
+			)
+		}
+
+		originalModel := strings.TrimSpace(gjson.GetBytes(raw, "model").String())
+		if originalModel == "" {
+			return nil, NewOpenAIWSClientCloseError(
+				coderws.StatusPolicyViolation,
+				"model is required in response.create payload",
+				nil,
+			)
+		}
+		previousResponseID := strings.TrimSpace(gjson.GetBytes(raw, "previous_response_id").String())
+		if previousResponseID != "" && ClassifyOpenAIPreviousResponseIDKind(previousResponseID) == OpenAIPreviousResponseIDKindMessageID {
+			return nil, NewOpenAIWSClientCloseError(
+				coderws.StatusPolicyViolation,
+				"previous_response_id must be a response.id (resp_*), not a message id",
+				nil,
+			)
+		}
+		upstreamModel := normalizeOpenAIModelForUpstream(account, account.GetMappedModel(originalModel))
+		if upstreamModel != originalModel {
+			next, err := sjson.SetBytes(raw, "model", upstreamModel)
+			if err != nil {
+				return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
+			}
+			raw = next
+		}
+		next, err := sjson.SetBytes(raw, "store", true)
+		if err != nil {
+			return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
+		}
+		raw = next
+		if c != nil {
+			if turnMetadata := strings.TrimSpace(c.GetHeader(openAIWSTurnMetadataHeader)); turnMetadata != "" {
+				next, err = sjson.SetBytes(raw, "client_metadata."+openAIWSTurnMetadataHeader, turnMetadata)
+				if err != nil {
+					return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
+				}
+				raw = next
+			}
+		}
+		next, err = sjson.SetBytes(raw, "client_metadata."+openAIWSOriginalModelMetadataKey, originalModel)
+		if err != nil {
+			return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
+		}
+		return next, nil
+	}
+	normalizedFirstClientMessage, err := normalizeClientPayload(coderws.MessageText, firstClientMessage)
+	if err != nil {
+		return err
+	}
+	firstClientMessage = normalizedFirstClientMessage
+	requestModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "client_metadata."+openAIWSOriginalModelMetadataKey).String())
+	if requestModel == "" {
+		requestModel = strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())
+	}
 	requestServiceTier := extractOpenAIServiceTierFromBody(firstClientMessage)
 	requestPreviousResponseID := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "previous_response_id").String())
 	logOpenAIWSV2Passthrough(
@@ -192,10 +293,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			return turnCtx.Err()
 		case <-waitCh:
 		}
+		originalModel := strings.TrimSpace(gjson.GetBytes(payload, "client_metadata."+openAIWSOriginalModelMetadataKey).String())
+		if originalModel == "" {
+			originalModel = strings.TrimSpace(gjson.GetBytes(payload, "model").String())
+		}
 		turnInfo := OpenAIWSIngressTurn{
 			Turn:               turnNo,
 			RequestPayloadHash: HashUsageRequestPayload(payload),
-			OriginalModel:      strings.TrimSpace(gjson.GetBytes(payload, "model").String()),
+			OriginalModel:      originalModel,
 			PreviousResponseID: strings.TrimSpace(gjson.GetBytes(payload, "previous_response_id").String()),
 			PromptCacheKey:     strings.TrimSpace(gjson.GetBytes(payload, "prompt_cache_key").String()),
 		}
@@ -254,7 +359,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	}
 	relayResult, relayExit := openaiwsv2.RunEntry(openaiwsv2.EntryInput{
 		Ctx:                ctx,
-		ClientConn:         &openAIWSClientFrameConn{conn: clientConn},
+		ClientConn:         &openAIWSClientFrameConn{conn: clientConn, normalizePayload: normalizeClientPayload},
 		UpstreamConn:       upstreamFrameConn,
 		FirstClientMessage: firstClientMessage,
 		Options: openaiwsv2.RelayOptions{
@@ -262,6 +367,20 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			IdleTimeout:      s.openAIWSPassthroughIdleTimeout(),
 			FirstMessageType: coderws.MessageText,
 			OnClientFrame:    enqueueTurn,
+			OnUpstreamFrame: func(ctx context.Context, msgType coderws.MessageType, payload []byte) error {
+				if msgType != coderws.MessageText || len(payload) == 0 {
+					return nil
+				}
+				eventType := strings.TrimSpace(gjson.GetBytes(payload, "type").String())
+				if eventType != "error" {
+					return nil
+				}
+				errCodeRaw := strings.TrimSpace(gjson.GetBytes(payload, "error.code").String())
+				errTypeRaw := strings.TrimSpace(gjson.GetBytes(payload, "error.type").String())
+				errMsgRaw := strings.TrimSpace(gjson.GetBytes(payload, "error.message").String())
+				s.persistOpenAIWSRateLimitSignal(ctx, account, handshakeHeaders, payload, errCodeRaw, errTypeRaw, errMsgRaw)
+				return nil
+			},
 			OnUsageParseFailure: func(eventType string, usageRaw string) {
 				logOpenAIWSV2Passthrough(
 					"usage_parse_failed event_type=%s usage_raw=%s",
@@ -274,6 +393,17 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				turnInfo := OpenAIWSIngressTurn{Turn: int(completedTurns.Load()) + 1}
 				if turnState != nil {
 					turnInfo = turnState.info
+				}
+				if requestID := strings.TrimSpace(turn.RequestID); requestID != "" {
+					if stateStore := s.getOpenAIWSStateStore(); stateStore != nil {
+						groupID := getOpenAIGroupIDFromContext(c)
+						logOpenAIWSBindResponseAccountWarn(
+							groupID,
+							account.ID,
+							requestID,
+							stateStore.BindResponseAccount(ctx, groupID, requestID, account.ID, s.openAIWSResponseStickyTTL()),
+						)
+					}
 				}
 				turnResult := &OpenAIForwardResult{
 					RequestID: turn.RequestID,

@@ -158,7 +158,6 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_PreviousResponseSticky(
 	cfg.Gateway.OpenAIWS.Enabled = true
 	cfg.Gateway.OpenAIWS.OAuthEnabled = true
 	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
-	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
 	cfg.Gateway.OpenAIWS.StickySessionTTLSeconds = 1800
 	cfg.Gateway.OpenAIWS.StickyResponseIDTTLSeconds = 3600
 
@@ -271,7 +270,6 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyBusyKeepsS
 	cfg.Gateway.OpenAIWS.Enabled = true
 	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
 	cfg.Gateway.OpenAIWS.OAuthEnabled = true
-	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
 
 	concurrencyCache := stubConcurrencyCache{
 		acquireResults: map[int64]bool{
@@ -373,6 +371,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 			Schedulable: true,
 			Concurrency: 1,
 			Priority:    0,
+			Extra: map[string]any{
+				"openai_ws_force_http": true,
+			},
 		},
 		{
 			ID:          2202,
@@ -441,6 +442,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_NoAvailabl
 			Status:      StatusActive,
 			Schedulable: true,
 			Concurrency: 1,
+			Extra: map[string]any{
+				"openai_ws_force_http": true,
+			},
 		},
 	}
 

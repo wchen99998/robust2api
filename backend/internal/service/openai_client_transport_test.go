@@ -103,5 +103,6 @@ func TestResolveOpenAIWSDecisionByClientTransport(t *testing.T) {
 	require.Equal(t, base, wsDecision)
 
 	unknownDecision := resolveOpenAIWSDecisionByClientTransport(base, OpenAIClientTransportUnknown)
-	require.Equal(t, base, unknownDecision)
+	require.Equal(t, OpenAIUpstreamTransportHTTPSSE, unknownDecision.Transport)
+	require.Equal(t, "client_protocol_http", unknownDecision.Reason)
 }

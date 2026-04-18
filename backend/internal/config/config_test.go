@@ -105,12 +105,6 @@ func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
 	if !cfg.Gateway.OpenAIWS.Enabled {
 		t.Fatalf("Gateway.OpenAIWS.Enabled = false, want true")
 	}
-	if !cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 {
-		t.Fatalf("Gateway.OpenAIWS.ResponsesWebsocketsV2 = false, want true")
-	}
-	if cfg.Gateway.OpenAIWS.ResponsesWebsockets {
-		t.Fatalf("Gateway.OpenAIWS.ResponsesWebsockets = true, want false")
-	}
 	if !cfg.Gateway.OpenAIWS.DynamicMaxConnsByAccountConcurrencyEnabled {
 		t.Fatalf("Gateway.OpenAIWS.DynamicMaxConnsByAccountConcurrencyEnabled = false, want true")
 	}
@@ -161,18 +155,6 @@ func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
 	}
 	if cfg.Gateway.OpenAIWS.PayloadLogSampleRate != 0.2 {
 		t.Fatalf("Gateway.OpenAIWS.PayloadLogSampleRate = %v, want 0.2", cfg.Gateway.OpenAIWS.PayloadLogSampleRate)
-	}
-	if !cfg.Gateway.OpenAIWS.StoreDisabledForceNewConn {
-		t.Fatalf("Gateway.OpenAIWS.StoreDisabledForceNewConn = false, want true")
-	}
-	if cfg.Gateway.OpenAIWS.StoreDisabledConnMode != "strict" {
-		t.Fatalf("Gateway.OpenAIWS.StoreDisabledConnMode = %q, want %q", cfg.Gateway.OpenAIWS.StoreDisabledConnMode, "strict")
-	}
-	if cfg.Gateway.OpenAIWS.ModeRouterV2Enabled {
-		t.Fatalf("Gateway.OpenAIWS.ModeRouterV2Enabled = true, want false")
-	}
-	if cfg.Gateway.OpenAIWS.IngressModeDefault != "ctx_pool" {
-		t.Fatalf("Gateway.OpenAIWS.IngressModeDefault = %q, want %q", cfg.Gateway.OpenAIWS.IngressModeDefault, "ctx_pool")
 	}
 }
 
@@ -1533,16 +1515,6 @@ func TestValidateConfig_OpenAIWSRules(t *testing.T) {
 			name:    "fallback_cooldown_seconds 不能为负数",
 			mutate:  func(c *Config) { c.Gateway.OpenAIWS.FallbackCooldownSeconds = -1 },
 			wantErr: "gateway.openai_ws.fallback_cooldown_seconds",
-		},
-		{
-			name:    "store_disabled_conn_mode 必须为 strict|adaptive|off",
-			mutate:  func(c *Config) { c.Gateway.OpenAIWS.StoreDisabledConnMode = "invalid" },
-			wantErr: "gateway.openai_ws.store_disabled_conn_mode",
-		},
-		{
-			name:    "ingress_mode_default 必须为 off|ctx_pool|passthrough",
-			mutate:  func(c *Config) { c.Gateway.OpenAIWS.IngressModeDefault = "invalid" },
-			wantErr: "gateway.openai_ws.ingress_mode_default",
 		},
 		{
 			name:    "payload_log_sample_rate 必须在 [0,1] 范围内",

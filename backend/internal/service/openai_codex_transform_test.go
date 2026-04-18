@@ -7,7 +7,7 @@ import (
 )
 
 func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
-	// 续链场景：保留 item_reference 与 id，但不再强制 store=true。
+	// 续链场景：保留 item_reference 与 id，并统一强制 store=true。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.2",
@@ -20,10 +20,10 @@ func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 
 	applyCodexOAuthTransform(reqBody, false, false)
 
-	// 未显式设置 store=true，默认为 false。
+	// 未显式设置 store 时，统一改写为 true。
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
-	require.False(t, store)
+	require.True(t, store)
 
 	input, ok := reqBody["input"].([]any)
 	require.True(t, ok)
@@ -92,8 +92,8 @@ func TestApplyCodexOAuthTransform_ToolContinuationNormalizesToolReferenceIDsOnly
 	require.Equal(t, "fc1", second["call_id"])
 }
 
-func TestApplyCodexOAuthTransform_ExplicitStoreFalsePreserved(t *testing.T) {
-	// 续链场景：显式 store=false 不再强制为 true，保持 false。
+func TestApplyCodexOAuthTransform_ExplicitStoreFalseForcedTrue(t *testing.T) {
+	// 续链场景也统一强制 store=true。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -108,11 +108,11 @@ func TestApplyCodexOAuthTransform_ExplicitStoreFalsePreserved(t *testing.T) {
 
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
-	require.False(t, store)
+	require.True(t, store)
 }
 
-func TestApplyCodexOAuthTransform_ExplicitStoreTrueForcedFalse(t *testing.T) {
-	// 显式 store=true 也会强制为 false。
+func TestApplyCodexOAuthTransform_ExplicitStoreTrueRemainsTrue(t *testing.T) {
+	// 显式 store=true 保持为 true。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -127,7 +127,7 @@ func TestApplyCodexOAuthTransform_ExplicitStoreTrueForcedFalse(t *testing.T) {
 
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
-	require.False(t, store)
+	require.True(t, store)
 }
 
 func TestApplyCodexOAuthTransform_CompactForcesNonStreaming(t *testing.T) {
@@ -146,8 +146,8 @@ func TestApplyCodexOAuthTransform_CompactForcesNonStreaming(t *testing.T) {
 	require.True(t, result.Modified)
 }
 
-func TestApplyCodexOAuthTransform_NonContinuationDefaultsStoreFalseAndStripsIDs(t *testing.T) {
-	// 非续链场景：未设置 store 时默认 false，并移除 input 中的 id。
+func TestApplyCodexOAuthTransform_NonContinuationDefaultsStoreTrueAndStripsIDs(t *testing.T) {
+	// 非续链场景：未设置 store 时默认 true，并移除 input 中的 id。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -160,7 +160,7 @@ func TestApplyCodexOAuthTransform_NonContinuationDefaultsStoreFalseAndStripsIDs(
 
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
-	require.False(t, store)
+	require.True(t, store)
 
 	input, ok := reqBody["input"].([]any)
 	require.True(t, ok)
@@ -269,7 +269,7 @@ func TestApplyCodexOAuthTransform_PreservesBareSparkModel(t *testing.T) {
 	require.Equal(t, "gpt-5.3-codex-spark", result.NormalizedModel)
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
-	require.False(t, store)
+	require.True(t, store)
 }
 
 func TestApplyCodexOAuthTransform_TrimmedModelWithoutPolicyRewrite(t *testing.T) {
