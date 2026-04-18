@@ -1149,7 +1149,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSCreatePayload(reqBody map[string]any
 		payload["stream"] = true
 	}
 	payload["type"] = "response.create"
-	payload["store"] = true
+	payload["store"] = false
 	return payload
 }
 

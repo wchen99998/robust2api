@@ -162,7 +162,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			}
 			raw = next
 		}
-		next, err := sjson.SetBytes(raw, "store", true)
+		next, err := sjson.SetBytes(raw, "store", false)
 		if err != nil {
 			return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
 		}
