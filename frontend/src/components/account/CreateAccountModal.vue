@@ -3618,14 +3618,6 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   }
 
   const extra: Record<string, unknown> = { ...(base || {}) }
-  delete extra.openai_passthrough
-  delete extra.openai_oauth_passthrough
-  delete extra.openai_oauth_responses_websockets_v2_mode
-  delete extra.openai_oauth_responses_websockets_v2_enabled
-  delete extra.openai_apikey_responses_websockets_v2_mode
-  delete extra.openai_apikey_responses_websockets_v2_enabled
-  delete extra.responses_websockets_v2_enabled
-  delete extra.openai_ws_enabled
 
   if (accountCategory.value === 'oauth-based' && codexCLIOnlyEnabled.value) {
     extra.codex_cli_only = true

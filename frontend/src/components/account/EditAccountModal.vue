@@ -1738,17 +1738,6 @@ interface TempUnschedRuleForm {
   description: string
 }
 
-const OPENAI_ACCOUNT_EXTRA_KEYS_TO_REMOVE = [
-  'openai_passthrough',
-  'openai_oauth_passthrough',
-  'openai_oauth_responses_websockets_v2_mode',
-  'openai_oauth_responses_websockets_v2_enabled',
-  'openai_apikey_responses_websockets_v2_mode',
-  'openai_apikey_responses_websockets_v2_enabled',
-  'responses_websockets_v2_enabled',
-  'openai_ws_enabled'
-] as const
-
 // State
 const submitting = ref(false)
 const editBaseUrl = ref('https://api.anthropic.com')
@@ -2918,14 +2907,11 @@ const handleSubmit = async () => {
       updatePayload.extra = newExtra
     }
 
-    // For OpenAI OAuth/API Key accounts, remove legacy passthrough / WS mode keys from extra.
+    // For OpenAI OAuth/API Key accounts, only persist current extra flags.
     if (props.account.platform === 'openai' && (props.account.type === 'oauth' || props.account.type === 'apikey')) {
       const currentExtra = (props.account.extra as Record<string, unknown>) || {}
       const newExtra: Record<string, unknown> = { ...currentExtra }
       const hadCodexCLIOnlyEnabled = currentExtra.codex_cli_only === true
-      for (const key of OPENAI_ACCOUNT_EXTRA_KEYS_TO_REMOVE) {
-        delete newExtra[key]
-      }
 
       if (props.account.type === 'oauth') {
         if (codexCLIOnlyEnabled.value) {

@@ -117,15 +117,6 @@ func TestLoadDefaultOpenAIWSConfig(t *testing.T) {
 	if cfg.Gateway.OpenAIWS.StickySessionTTLSeconds != 3600 {
 		t.Fatalf("Gateway.OpenAIWS.StickySessionTTLSeconds = %d, want 3600", cfg.Gateway.OpenAIWS.StickySessionTTLSeconds)
 	}
-	if !cfg.Gateway.OpenAIWS.SessionHashReadOldFallback {
-		t.Fatalf("Gateway.OpenAIWS.SessionHashReadOldFallback = false, want true")
-	}
-	if !cfg.Gateway.OpenAIWS.SessionHashDualWriteOld {
-		t.Fatalf("Gateway.OpenAIWS.SessionHashDualWriteOld = false, want true")
-	}
-	if !cfg.Gateway.OpenAIWS.MetadataBridgeEnabled {
-		t.Fatalf("Gateway.OpenAIWS.MetadataBridgeEnabled = false, want true")
-	}
 	if cfg.Gateway.OpenAIWS.StickyResponseIDTTLSeconds != 3600 {
 		t.Fatalf("Gateway.OpenAIWS.StickyResponseIDTTLSeconds = %d, want 3600", cfg.Gateway.OpenAIWS.StickyResponseIDTTLSeconds)
 	}

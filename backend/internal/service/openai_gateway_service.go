@@ -229,21 +229,6 @@ type OpenAIWSRetryMetricsSnapshot struct {
 	NonRetryableFastFallbackTotal int64 `json:"non_retryable_fast_fallback_total"`
 }
 
-type OpenAICompatibilityFallbackMetricsSnapshot struct {
-	SessionHashLegacyReadFallbackTotal int64   `json:"session_hash_legacy_read_fallback_total"`
-	SessionHashLegacyReadFallbackHit   int64   `json:"session_hash_legacy_read_fallback_hit"`
-	SessionHashLegacyDualWriteTotal    int64   `json:"session_hash_legacy_dual_write_total"`
-	SessionHashLegacyReadHitRate       float64 `json:"session_hash_legacy_read_hit_rate"`
-
-	MetadataLegacyFallbackIsMaxTokensOneHaikuTotal int64 `json:"metadata_legacy_fallback_is_max_tokens_one_haiku_total"`
-	MetadataLegacyFallbackThinkingEnabledTotal     int64 `json:"metadata_legacy_fallback_thinking_enabled_total"`
-	MetadataLegacyFallbackPrefetchedStickyAccount  int64 `json:"metadata_legacy_fallback_prefetched_sticky_account"`
-	MetadataLegacyFallbackPrefetchedStickyGroup    int64 `json:"metadata_legacy_fallback_prefetched_sticky_group"`
-	MetadataLegacyFallbackSingleAccountRetryTotal  int64 `json:"metadata_legacy_fallback_single_account_retry_total"`
-	MetadataLegacyFallbackAccountSwitchCountTotal  int64 `json:"metadata_legacy_fallback_account_switch_count_total"`
-	MetadataLegacyFallbackTotal                    int64 `json:"metadata_legacy_fallback_total"`
-}
-
 type openAIWSRetryMetrics struct {
 	retryAttempts            atomic.Int64
 	retryBackoffMs           atomic.Int64
@@ -786,32 +771,6 @@ func (s *OpenAIGatewayService) SnapshotOpenAIWSRetryMetrics() OpenAIWSRetryMetri
 		RetryBackoffMsTotal:           s.openaiWSRetryMetrics.retryBackoffMs.Load(),
 		RetryExhaustedTotal:           s.openaiWSRetryMetrics.retryExhausted.Load(),
 		NonRetryableFastFallbackTotal: s.openaiWSRetryMetrics.nonRetryableFastFallback.Load(),
-	}
-}
-
-func SnapshotOpenAICompatibilityFallbackMetrics() OpenAICompatibilityFallbackMetricsSnapshot {
-	legacyReadFallbackTotal, legacyReadFallbackHit, legacyDualWriteTotal := openAIStickyCompatStats()
-	isMaxTokensOneHaiku, thinkingEnabled, prefetchedStickyAccount, prefetchedStickyGroup, singleAccountRetry, accountSwitchCount := RequestMetadataFallbackStats()
-
-	readHitRate := float64(0)
-	if legacyReadFallbackTotal > 0 {
-		readHitRate = float64(legacyReadFallbackHit) / float64(legacyReadFallbackTotal)
-	}
-	metadataFallbackTotal := isMaxTokensOneHaiku + thinkingEnabled + prefetchedStickyAccount + prefetchedStickyGroup + singleAccountRetry + accountSwitchCount
-
-	return OpenAICompatibilityFallbackMetricsSnapshot{
-		SessionHashLegacyReadFallbackTotal: legacyReadFallbackTotal,
-		SessionHashLegacyReadFallbackHit:   legacyReadFallbackHit,
-		SessionHashLegacyDualWriteTotal:    legacyDualWriteTotal,
-		SessionHashLegacyReadHitRate:       readHitRate,
-
-		MetadataLegacyFallbackIsMaxTokensOneHaikuTotal: isMaxTokensOneHaiku,
-		MetadataLegacyFallbackThinkingEnabledTotal:     thinkingEnabled,
-		MetadataLegacyFallbackPrefetchedStickyAccount:  prefetchedStickyAccount,
-		MetadataLegacyFallbackPrefetchedStickyGroup:    prefetchedStickyGroup,
-		MetadataLegacyFallbackSingleAccountRetryTotal:  singleAccountRetry,
-		MetadataLegacyFallbackAccountSwitchCountTotal:  accountSwitchCount,
-		MetadataLegacyFallbackTotal:                    metadataFallbackTotal,
 	}
 }
 

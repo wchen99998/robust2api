@@ -27,7 +27,7 @@ type openAIWSClientFrameConn struct {
 }
 
 const openaiWSV2PassthroughModeFields = "ws_mode=passthrough ws_router=v2"
-const openAIWSOriginalModelMetadataKey = "sub2api_original_model"
+const openAIWSOriginalModelMetadataPath = "client_metadata.sub2api\\.original_model"
 
 var _ openaiwsv2.FrameConn = (*openAIWSClientFrameConn)(nil)
 
@@ -176,7 +176,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				raw = next
 			}
 		}
-		next, err = sjson.SetBytes(raw, "client_metadata."+openAIWSOriginalModelMetadataKey, originalModel)
+		next, err = sjson.SetBytes(raw, openAIWSOriginalModelMetadataPath, originalModel)
 		if err != nil {
 			return nil, NewOpenAIWSClientCloseError(coderws.StatusPolicyViolation, "invalid websocket request payload", err)
 		}
@@ -187,7 +187,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		return err
 	}
 	firstClientMessage = normalizedFirstClientMessage
-	requestModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, "client_metadata."+openAIWSOriginalModelMetadataKey).String())
+	requestModel := strings.TrimSpace(gjson.GetBytes(firstClientMessage, openAIWSOriginalModelMetadataPath).String())
 	if requestModel == "" {
 		requestModel = strings.TrimSpace(gjson.GetBytes(firstClientMessage, "model").String())
 	}
@@ -293,7 +293,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 			return turnCtx.Err()
 		case <-waitCh:
 		}
-		originalModel := strings.TrimSpace(gjson.GetBytes(payload, "client_metadata."+openAIWSOriginalModelMetadataKey).String())
+		originalModel := strings.TrimSpace(gjson.GetBytes(payload, openAIWSOriginalModelMetadataPath).String())
 		if originalModel == "" {
 			originalModel = strings.TrimSpace(gjson.GetBytes(payload, "model").String())
 		}

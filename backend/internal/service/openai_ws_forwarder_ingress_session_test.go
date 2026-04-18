@@ -150,7 +150,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_RelaysWSv2Turn(t
 	require.Equal(t, "response.create", gjson.Get(upstreamRequest, "type").String())
 	require.Equal(t, "gpt-5.1", gjson.Get(upstreamRequest, "model").String())
 	require.True(t, gjson.Get(upstreamRequest, "store").Bool(), "store must be forced to true")
-	require.Equal(t, "custom-original-model", gjson.Get(upstreamRequest, "client_metadata.sub2api_original_model").String())
+	require.Equal(t, "custom-original-model", gjson.Get(upstreamRequest, `client_metadata.sub2api\.original_model`).String())
 
 	mappedAccountID, getErr := svc.getOpenAIWSStateStore().GetResponseAccount(context.Background(), 2452, "resp_passthrough_turn_1")
 	require.NoError(t, getErr)
