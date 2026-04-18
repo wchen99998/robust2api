@@ -332,12 +332,10 @@ type ProxyProbeConfig struct {
 }
 
 type BillingConfig struct {
-	CircuitBreaker             CircuitBreakerConfig `mapstructure:"circuit_breaker"`
-	Stream                     BillingStreamConfig  `mapstructure:"stream"`
-	DBPool                     BillingDBPoolConfig  `mapstructure:"db_pool"`
-	HealthPort                 string               `mapstructure:"health_port"`
-	QueueFirstNonStreamEnabled bool                 `mapstructure:"queue_first_non_stream_enabled"`
-	StreamingV2Enabled         bool                 `mapstructure:"streaming_v2_enabled"`
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+	Stream         BillingStreamConfig  `mapstructure:"stream"`
+	DBPool         BillingDBPoolConfig  `mapstructure:"db_pool"`
+	HealthPort     string               `mapstructure:"health_port"`
 }
 
 // BillingStreamConfig configures the Redis Stream used as a message broker
@@ -524,8 +522,6 @@ func (c *UserMessageQueueConfig) GetEffectiveMode() string {
 // GatewayOpenAIWSConfig OpenAI Responses WebSocket 配置。
 // 注意：默认全局开启；如需回滚可使用 force_http 或关闭 enabled。
 type GatewayOpenAIWSConfig struct {
-	// ModeRouterV2Enabled: 新版 WS mode 路由开关（默认 false；关闭时保持 legacy 行为）
-	ModeRouterV2Enabled bool `mapstructure:"mode_router_v2_enabled"`
 	// IngressModeDefault: ingress 默认模式（off/ctx_pool/passthrough）
 	IngressModeDefault string `mapstructure:"ingress_mode_default"`
 	// Enabled: 全局总开关（默认 true）
@@ -551,8 +547,7 @@ type GatewayOpenAIWSConfig struct {
 	// PrewarmGenerateEnabled: 是否启用 WSv2 generate=false 预热（默认 false）
 	PrewarmGenerateEnabled bool `mapstructure:"prewarm_generate_enabled"`
 
-	// Feature 开关：v2 优先于 v1
-	ResponsesWebsockets   bool `mapstructure:"responses_websockets"`
+	// Feature 开关：当前仅支持 Responses WebSocket v2。
 	ResponsesWebsocketsV2 bool `mapstructure:"responses_websockets_v2"`
 
 	// 连接池参数
@@ -593,12 +588,6 @@ type GatewayOpenAIWSConfig struct {
 	LBTopK int `mapstructure:"lb_top_k"`
 	// StickySessionTTLSeconds: session_hash -> account_id 粘连 TTL
 	StickySessionTTLSeconds int `mapstructure:"sticky_session_ttl_seconds"`
-	// SessionHashReadOldFallback: 会话哈希迁移期是否允许“新 key 未命中时回退读旧 SHA-256 key”
-	SessionHashReadOldFallback bool `mapstructure:"session_hash_read_old_fallback"`
-	// SessionHashDualWriteOld: 会话哈希迁移期是否双写旧 SHA-256 key（短 TTL）
-	SessionHashDualWriteOld bool `mapstructure:"session_hash_dual_write_old"`
-	// MetadataBridgeEnabled: RequestMetadata 迁移期是否保留旧 ctxkey.* 兼容桥接
-	MetadataBridgeEnabled bool `mapstructure:"metadata_bridge_enabled"`
 	// StickyResponseIDTTLSeconds: response_id -> account_id 粘连 TTL
 	StickyResponseIDTTLSeconds int `mapstructure:"sticky_response_id_ttl_seconds"`
 	// StickyPreviousResponseTTLSeconds: 兼容旧键（当新键未设置时回退）
@@ -1210,8 +1199,6 @@ func setDefaults() {
 	viper.SetDefault("billing.stream.publish_retries", 3)
 	viper.SetDefault("billing.stream.publish_timeout_seconds", 10)
 	viper.SetDefault("billing.health_port", "8082")
-	viper.SetDefault("billing.queue_first_non_stream_enabled", false)
-	viper.SetDefault("billing.streaming_v2_enabled", false)
 
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)
@@ -1392,7 +1379,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
-	viper.SetDefault("gateway.openai_ws.mode_router_v2_enabled", false)
 	viper.SetDefault("gateway.openai_ws.ingress_mode_default", "ctx_pool")
 	viper.SetDefault("gateway.openai_ws.oauth_enabled", true)
 	viper.SetDefault("gateway.openai_ws.apikey_enabled", true)
@@ -1402,7 +1388,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_ws.store_disabled_conn_mode", "strict")
 	viper.SetDefault("gateway.openai_ws.store_disabled_force_new_conn", true)
 	viper.SetDefault("gateway.openai_ws.prewarm_generate_enabled", false)
-	viper.SetDefault("gateway.openai_ws.responses_websockets", false)
 	viper.SetDefault("gateway.openai_ws.responses_websockets_v2", true)
 	viper.SetDefault("gateway.openai_ws.max_conns_per_account", 128)
 	viper.SetDefault("gateway.openai_ws.min_idle_per_account", 4)

@@ -389,6 +389,7 @@ func TestAPIContracts(t *testing.T) {
 						ActualCost:            0.5,
 						RateMultiplier:        1,
 						BillingType:           service.BillingTypeBalance,
+						RequestType:           service.RequestTypeStream,
 						Stream:                true,
 						DurationMs:            ptr(100),
 						FirstTokenMs:          ptr(50),

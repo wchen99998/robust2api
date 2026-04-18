@@ -416,10 +416,6 @@ func (h *GatewayHandler) Responses(c *gin.Context) {
 			}
 			return
 		}
-		if reqStream {
-			recordLegacyStreamingBilling("/v1/responses")
-			reqLog.Debug("gateway.responses.legacy_streaming_billing")
-		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)
 		}

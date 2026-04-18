@@ -16,11 +16,11 @@ import (
 
 // testBillingPublisher is a stub publisher for tests.
 type testBillingPublisher struct {
-	events []*BillingEvent
+	events []*UsageChargeEvent
 	err    error
 }
 
-func (p *testBillingPublisher) Publish(_ context.Context, event *BillingEvent) error {
+func (p *testBillingPublisher) Publish(_ context.Context, event *UsageChargeEvent) error {
 	p.events = append(p.events, event)
 	return p.err
 }

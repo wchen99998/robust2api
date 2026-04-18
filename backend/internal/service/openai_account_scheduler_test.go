@@ -373,6 +373,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 			Schedulable: true,
 			Concurrency: 1,
 			Priority:    0,
+			Extra: map[string]any{
+				"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeOff,
+			},
 		},
 		{
 			ID:          2202,
@@ -383,7 +386,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 			Concurrency: 1,
 			Priority:    5,
 			Extra: map[string]any{
-				"openai_apikey_responses_websockets_v2_enabled": true,
+				"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeCtxPool,
 			},
 		},
 	}
@@ -441,6 +444,9 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_NoAvailabl
 			Status:      StatusActive,
 			Schedulable: true,
 			Concurrency: 1,
+			Extra: map[string]any{
+				"openai_oauth_responses_websockets_v2_mode": OpenAIWSIngressModeOff,
+			},
 		},
 	}
 

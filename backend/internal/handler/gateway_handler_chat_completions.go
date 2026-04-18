@@ -410,10 +410,6 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			}
 			return
 		}
-		if reqStream {
-			recordLegacyStreamingBilling("/v1/chat/completions")
-			reqLog.Debug("gateway.cc.legacy_streaming_billing")
-		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)
 		}

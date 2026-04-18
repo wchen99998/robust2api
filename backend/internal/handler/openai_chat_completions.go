@@ -89,6 +89,10 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	}
 	reqModel := modelResult.String()
 	reqStream := gjson.GetBytes(body, "stream").Bool()
+	requestType := service.RequestTypeSync
+	if reqStream {
+		requestType = service.RequestTypeStream
+	}
 	queueFirstBilling := queueFirstNonStreamEnabled(h.cfg, reqStream)
 	streamingBillingV2 := streamingV2Enabled(h.cfg, reqStream)
 	requestPayloadHash := service.HashUsageRequestPayload(body)
@@ -97,7 +101,7 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 	setOpenAIRequestSpanIdentity(span, apiKey, subject.UserID, reqModel, reqStream)
 
 	setOpsRequestContext(c, reqModel, reqStream, body)
-	setOpsEndpointContext(c, "", int16(service.RequestTypeFromLegacy(reqStream, false)))
+	setOpsEndpointContext(c, "", int16(requestType))
 
 	// 解析渠道级模型映射
 	channelMapping, _ := h.gatewayService.ResolveChannelMappingAndRestrict(c.Request.Context(), apiKey.GroupID, reqModel)
@@ -509,10 +513,6 @@ func (h *OpenAIGatewayHandler) ChatCompletions(c *gin.Context) {
 				zap.Int("switch_count", switchCount),
 			)
 			return
-		}
-		if reqStream {
-			recordLegacyStreamingBilling("/v1/chat/completions")
-			reqLog.Debug("openai_chat_completions.legacy_streaming_billing")
 		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)

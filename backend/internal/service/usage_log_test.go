@@ -59,23 +59,23 @@ func TestRequestTypeFromLegacy(t *testing.T) {
 	require.Equal(t, RequestTypeSync, RequestTypeFromLegacy(false, false))
 }
 
-func TestApplyLegacyRequestFields(t *testing.T) {
+func TestLegacyRequestFlagsForType(t *testing.T) {
 	t.Parallel()
 
-	stream, ws := ApplyLegacyRequestFields(RequestTypeSync, true, true)
+	stream, ws := LegacyRequestFlagsForType(RequestTypeSync)
 	require.False(t, stream)
 	require.False(t, ws)
 
-	stream, ws = ApplyLegacyRequestFields(RequestTypeStream, false, true)
+	stream, ws = LegacyRequestFlagsForType(RequestTypeStream)
 	require.True(t, stream)
 	require.False(t, ws)
 
-	stream, ws = ApplyLegacyRequestFields(RequestTypeWSV2, false, false)
+	stream, ws = LegacyRequestFlagsForType(RequestTypeWSV2)
 	require.True(t, stream)
 	require.True(t, ws)
 
-	stream, ws = ApplyLegacyRequestFields(RequestTypeUnknown, true, false)
-	require.True(t, stream)
+	stream, ws = LegacyRequestFlagsForType(RequestTypeUnknown)
+	require.False(t, stream)
 	require.False(t, ws)
 }
 
@@ -90,11 +90,11 @@ func TestUsageLogSyncRequestTypeAndLegacyFields(t *testing.T) {
 	require.True(t, log.OpenAIWSMode)
 }
 
-func TestUsageLogEffectiveRequestTypeFallback(t *testing.T) {
+func TestUsageLogEffectiveRequestTypeUsesRequestTypeOnly(t *testing.T) {
 	t.Parallel()
 
 	log := &UsageLog{RequestType: RequestTypeUnknown, Stream: true, OpenAIWSMode: true}
-	require.Equal(t, RequestTypeWSV2, log.EffectiveRequestType())
+	require.Equal(t, RequestTypeUnknown, log.EffectiveRequestType())
 }
 
 func TestUsageLogEffectiveRequestTypeNilReceiver(t *testing.T) {

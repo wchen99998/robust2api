@@ -136,53 +136,51 @@ func TestAccount_IsCodexCLIOnlyEnabled(t *testing.T) {
 }
 
 func TestAccount_IsOpenAIResponsesWebSocketV2Enabled(t *testing.T) {
-	t.Run("OAuth使用OAuth专用开关", func(t *testing.T) {
+	t.Run("OAuth使用OAuth专用mode", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeOAuth,
 			Extra: map[string]any{
-				"openai_oauth_responses_websockets_v2_enabled": true,
+				"openai_oauth_responses_websockets_v2_mode": OpenAIWSIngressModeCtxPool,
 			},
 		}
 		require.True(t, account.IsOpenAIResponsesWebSocketV2Enabled())
 	})
 
-	t.Run("API Key使用API Key专用开关", func(t *testing.T) {
+	t.Run("API Key使用API Key专用mode", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeAPIKey,
 			Extra: map[string]any{
-				"openai_apikey_responses_websockets_v2_enabled": true,
+				"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModePassthrough,
 			},
 		}
 		require.True(t, account.IsOpenAIResponsesWebSocketV2Enabled())
 	})
 
-	t.Run("OAuth账号不会读取API Key专用开关", func(t *testing.T) {
+	t.Run("OAuth账号不会读取API Key专用mode", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeOAuth,
 			Extra: map[string]any{
-				"openai_apikey_responses_websockets_v2_enabled": true,
+				"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeCtxPool,
 			},
 		}
 		require.False(t, account.IsOpenAIResponsesWebSocketV2Enabled())
 	})
 
-	t.Run("分类型新键优先于兼容键", func(t *testing.T) {
+	t.Run("mode off disables websocket", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeOAuth,
 			Extra: map[string]any{
-				"openai_oauth_responses_websockets_v2_enabled": false,
-				"responses_websockets_v2_enabled":              true,
-				"openai_ws_enabled":                            true,
+				"openai_oauth_responses_websockets_v2_mode": OpenAIWSIngressModeOff,
 			},
 		}
 		require.False(t, account.IsOpenAIResponsesWebSocketV2Enabled())
 	})
 
-	t.Run("分类型键缺失时回退兼容键", func(t *testing.T) {
+	t.Run("legacy bool keys no longer enable websocket", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeAPIKey,
@@ -190,7 +188,7 @@ func TestAccount_IsOpenAIResponsesWebSocketV2Enabled(t *testing.T) {
 				"responses_websockets_v2_enabled": true,
 			},
 		}
-		require.True(t, account.IsOpenAIResponsesWebSocketV2Enabled())
+		require.False(t, account.IsOpenAIResponsesWebSocketV2Enabled())
 	})
 
 	t.Run("非OpenAI账号默认关闭", func(t *testing.T) {
@@ -221,15 +219,13 @@ func TestAccount_ResolveOpenAIResponsesWebSocketV2Mode(t *testing.T) {
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeOAuth,
 			Extra: map[string]any{
-				"openai_oauth_responses_websockets_v2_mode":    OpenAIWSIngressModePassthrough,
-				"openai_oauth_responses_websockets_v2_enabled": false,
-				"responses_websockets_v2_enabled":              false,
+				"openai_oauth_responses_websockets_v2_mode": OpenAIWSIngressModePassthrough,
 			},
 		}
 		require.Equal(t, OpenAIWSIngressModePassthrough, account.ResolveOpenAIResponsesWebSocketV2Mode(OpenAIWSIngressModeCtxPool))
 	})
 
-	t.Run("legacy enabled maps to ctx_pool", func(t *testing.T) {
+	t.Run("legacy enabled no longer maps to ctx_pool", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeAPIKey,
@@ -237,7 +233,7 @@ func TestAccount_ResolveOpenAIResponsesWebSocketV2Mode(t *testing.T) {
 				"responses_websockets_v2_enabled": true,
 			},
 		}
-		require.Equal(t, OpenAIWSIngressModeCtxPool, account.ResolveOpenAIResponsesWebSocketV2Mode(OpenAIWSIngressModeOff))
+		require.Equal(t, OpenAIWSIngressModeOff, account.ResolveOpenAIResponsesWebSocketV2Mode(OpenAIWSIngressModeOff))
 	})
 
 	t.Run("shared/dedicated mode strings are compatible with ctx_pool", func(t *testing.T) {
@@ -261,7 +257,7 @@ func TestAccount_ResolveOpenAIResponsesWebSocketV2Mode(t *testing.T) {
 		require.Equal(t, OpenAIWSIngressModeCtxPool, normalizeOpenAIWSIngressDefaultMode(OpenAIWSIngressModeDedicated))
 	})
 
-	t.Run("legacy disabled maps to off", func(t *testing.T) {
+	t.Run("missing explicit mode falls back to default", func(t *testing.T) {
 		account := &Account{
 			Platform: PlatformOpenAI,
 			Type:     AccountTypeAPIKey,
@@ -270,7 +266,7 @@ func TestAccount_ResolveOpenAIResponsesWebSocketV2Mode(t *testing.T) {
 				"responses_websockets_v2_enabled":               true,
 			},
 		}
-		require.Equal(t, OpenAIWSIngressModeOff, account.ResolveOpenAIResponsesWebSocketV2Mode(OpenAIWSIngressModeCtxPool))
+		require.Equal(t, OpenAIWSIngressModeCtxPool, account.ResolveOpenAIResponsesWebSocketV2Mode(OpenAIWSIngressModeCtxPool))
 	})
 
 	t.Run("non openai always off", func(t *testing.T) {

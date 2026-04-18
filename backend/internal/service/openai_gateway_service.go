@@ -244,21 +244,6 @@ type OpenAIWSRetryMetricsSnapshot struct {
 	NonRetryableFastFallbackTotal int64 `json:"non_retryable_fast_fallback_total"`
 }
 
-type OpenAICompatibilityFallbackMetricsSnapshot struct {
-	SessionHashLegacyReadFallbackTotal int64   `json:"session_hash_legacy_read_fallback_total"`
-	SessionHashLegacyReadFallbackHit   int64   `json:"session_hash_legacy_read_fallback_hit"`
-	SessionHashLegacyDualWriteTotal    int64   `json:"session_hash_legacy_dual_write_total"`
-	SessionHashLegacyReadHitRate       float64 `json:"session_hash_legacy_read_hit_rate"`
-
-	MetadataLegacyFallbackIsMaxTokensOneHaikuTotal int64 `json:"metadata_legacy_fallback_is_max_tokens_one_haiku_total"`
-	MetadataLegacyFallbackThinkingEnabledTotal     int64 `json:"metadata_legacy_fallback_thinking_enabled_total"`
-	MetadataLegacyFallbackPrefetchedStickyAccount  int64 `json:"metadata_legacy_fallback_prefetched_sticky_account_total"`
-	MetadataLegacyFallbackPrefetchedStickyGroup    int64 `json:"metadata_legacy_fallback_prefetched_sticky_group_total"`
-	MetadataLegacyFallbackSingleAccountRetryTotal  int64 `json:"metadata_legacy_fallback_single_account_retry_total"`
-	MetadataLegacyFallbackAccountSwitchCountTotal  int64 `json:"metadata_legacy_fallback_account_switch_count_total"`
-	MetadataLegacyFallbackTotal                    int64 `json:"metadata_legacy_fallback_total"`
-}
-
 type openAIWSRetryMetrics struct {
 	retryAttempts            atomic.Int64
 	retryBackoffMs           atomic.Int64
@@ -482,13 +467,12 @@ func (s *OpenAIGatewayService) logOpenAIWSModeBootstrap() {
 	}
 	wsCfg := s.cfg.Gateway.OpenAIWS
 	logOpenAIWSModeInfo(
-		"bootstrap enabled=%v oauth_enabled=%v apikey_enabled=%v force_http=%v responses_websockets_v2=%v responses_websockets=%v payload_log_sample_rate=%.3f event_flush_batch_size=%d event_flush_interval_ms=%d prewarm_cooldown_ms=%d retry_backoff_initial_ms=%d retry_backoff_max_ms=%d retry_jitter_ratio=%.3f retry_total_budget_ms=%d ws_read_limit_bytes=%d",
+		"bootstrap enabled=%v oauth_enabled=%v apikey_enabled=%v force_http=%v responses_websockets_v2=%v payload_log_sample_rate=%.3f event_flush_batch_size=%d event_flush_interval_ms=%d prewarm_cooldown_ms=%d retry_backoff_initial_ms=%d retry_backoff_max_ms=%d retry_jitter_ratio=%.3f retry_total_budget_ms=%d ws_read_limit_bytes=%d",
 		wsCfg.Enabled,
 		wsCfg.OAuthEnabled,
 		wsCfg.APIKeyEnabled,
 		wsCfg.ForceHTTP,
 		wsCfg.ResponsesWebsocketsV2,
-		wsCfg.ResponsesWebsockets,
 		wsCfg.PayloadLogSampleRate,
 		wsCfg.EventFlushBatchSize,
 		wsCfg.EventFlushIntervalMS,
@@ -806,32 +790,6 @@ func (s *OpenAIGatewayService) SnapshotOpenAIWSRetryMetrics() OpenAIWSRetryMetri
 	}
 }
 
-func SnapshotOpenAICompatibilityFallbackMetrics() OpenAICompatibilityFallbackMetricsSnapshot {
-	legacyReadFallbackTotal, legacyReadFallbackHit, legacyDualWriteTotal := openAIStickyCompatStats()
-	isMaxTokensOneHaiku, thinkingEnabled, prefetchedStickyAccount, prefetchedStickyGroup, singleAccountRetry, accountSwitchCount := RequestMetadataFallbackStats()
-
-	readHitRate := float64(0)
-	if legacyReadFallbackTotal > 0 {
-		readHitRate = float64(legacyReadFallbackHit) / float64(legacyReadFallbackTotal)
-	}
-	metadataFallbackTotal := isMaxTokensOneHaiku + thinkingEnabled + prefetchedStickyAccount + prefetchedStickyGroup + singleAccountRetry + accountSwitchCount
-
-	return OpenAICompatibilityFallbackMetricsSnapshot{
-		SessionHashLegacyReadFallbackTotal: legacyReadFallbackTotal,
-		SessionHashLegacyReadFallbackHit:   legacyReadFallbackHit,
-		SessionHashLegacyDualWriteTotal:    legacyDualWriteTotal,
-		SessionHashLegacyReadHitRate:       readHitRate,
-
-		MetadataLegacyFallbackIsMaxTokensOneHaikuTotal: isMaxTokensOneHaiku,
-		MetadataLegacyFallbackThinkingEnabledTotal:     thinkingEnabled,
-		MetadataLegacyFallbackPrefetchedStickyAccount:  prefetchedStickyAccount,
-		MetadataLegacyFallbackPrefetchedStickyGroup:    prefetchedStickyGroup,
-		MetadataLegacyFallbackSingleAccountRetryTotal:  singleAccountRetry,
-		MetadataLegacyFallbackAccountSwitchCountTotal:  accountSwitchCount,
-		MetadataLegacyFallbackTotal:                    metadataFallbackTotal,
-	}
-}
-
 func (s *OpenAIGatewayService) detectCodexClientRestriction(c *gin.Context, account *Account) CodexClientRestrictionDetectionResult {
 	return s.getCodexClientRestrictionDetector().Detect(c, account)
 }
@@ -1124,9 +1082,7 @@ func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) 
 		return ""
 	}
 
-	currentHash, legacyHash := deriveOpenAISessionHashes(sessionID)
-	attachOpenAILegacySessionHashToGin(c, legacyHash)
-	return currentHash
+	return DeriveSessionHashFromSeed(sessionID)
 }
 
 // GenerateSessionHashWithFallback 先按常规信号生成会话哈希；
@@ -1143,9 +1099,7 @@ func (s *OpenAIGatewayService) GenerateSessionHashWithFallback(c *gin.Context, b
 		return ""
 	}
 
-	currentHash, legacyHash := deriveOpenAISessionHashes(seed)
-	attachOpenAILegacySessionHashToGin(c, legacyHash)
-	return currentHash
+	return DeriveSessionHashFromSeed(seed)
 }
 
 func resolveOpenAIUpstreamOriginator(c *gin.Context, isOfficialClient bool) string {
@@ -1818,18 +1772,6 @@ func (s *OpenAIGatewayService) Forward(ctx context.Context, c *gin.Context, acco
 			reqModel,
 			reqStream,
 		)
-	}
-	// 当前仅支持 WSv2；WSv1 命中时直接返回错误，避免出现“配置可开但行为不确定”。
-	if wsDecision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
-		if c != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": gin.H{
-					"type":    "invalid_request_error",
-					"message": "OpenAI WSv1 is temporarily unsupported. Please enable responses_websockets_v2.",
-				},
-			})
-		}
-		return nil, errors.New("openai ws v1 is temporarily unsupported; use ws v2")
 	}
 	passthroughEnabled := account.IsOpenAIPassthroughEnabled()
 	if passthroughEnabled {
@@ -4705,6 +4647,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.RateMultiplier = multiplier
 	usageLog.AccountRateMultiplier = &accountRateMultiplier
 	usageLog.BillingType = billingType
+	usageLog.RequestType = RequestTypeFromLegacy(result.Stream, result.OpenAIWSMode)
 	usageLog.Stream = result.Stream
 	usageLog.OpenAIWSMode = result.OpenAIWSMode
 	usageLog.DurationMs = &durationMs

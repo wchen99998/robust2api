@@ -8,7 +8,6 @@ type OpenAIUpstreamTransport string
 const (
 	OpenAIUpstreamTransportAny                  OpenAIUpstreamTransport = ""
 	OpenAIUpstreamTransportHTTPSSE              OpenAIUpstreamTransport = "http_sse"
-	OpenAIUpstreamTransportResponsesWebsocket   OpenAIUpstreamTransport = "responses_websockets"
 	OpenAIUpstreamTransportResponsesWebsocketV2 OpenAIUpstreamTransport = "responses_websockets_v2"
 )
 
@@ -64,49 +63,24 @@ func (r *defaultOpenAIWSProtocolResolver) Resolve(account *Account) OpenAIWSProt
 	} else {
 		return openAIWSHTTPDecision("unknown_auth_type")
 	}
-	if wsCfg.ModeRouterV2Enabled {
-		mode := account.ResolveOpenAIResponsesWebSocketV2Mode(wsCfg.IngressModeDefault)
-		switch mode {
-		case OpenAIWSIngressModeOff:
-			return openAIWSHTTPDecision("account_mode_off")
-		case OpenAIWSIngressModeCtxPool, OpenAIWSIngressModePassthrough:
-			// continue
-		case OpenAIWSIngressModeShared, OpenAIWSIngressModeDedicated:
-			// 历史值兼容：按 ctx_pool 处理。
-			mode = OpenAIWSIngressModeCtxPool
-		default:
-			return openAIWSHTTPDecision("account_mode_off")
-		}
-		if account.Concurrency <= 0 {
-			return openAIWSHTTPDecision("account_concurrency_invalid")
-		}
-		if wsCfg.ResponsesWebsocketsV2 {
-			return OpenAIWSProtocolDecision{
-				Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
-				Reason:    "ws_v2_mode_" + mode,
-			}
-		}
-		if wsCfg.ResponsesWebsockets {
-			return OpenAIWSProtocolDecision{
-				Transport: OpenAIUpstreamTransportResponsesWebsocket,
-				Reason:    "ws_v1_mode_" + mode,
-			}
-		}
-		return openAIWSHTTPDecision("feature_disabled")
+	mode := account.ResolveOpenAIResponsesWebSocketV2Mode(wsCfg.IngressModeDefault)
+	switch mode {
+	case OpenAIWSIngressModeOff:
+		return openAIWSHTTPDecision("account_mode_off")
+	case OpenAIWSIngressModeCtxPool, OpenAIWSIngressModePassthrough:
+		// continue
+	case OpenAIWSIngressModeShared, OpenAIWSIngressModeDedicated:
+		mode = OpenAIWSIngressModeCtxPool
+	default:
+		return openAIWSHTTPDecision("account_mode_off")
 	}
-	if !account.IsOpenAIResponsesWebSocketV2Enabled() {
-		return openAIWSHTTPDecision("account_disabled")
+	if account.Concurrency <= 0 {
+		return openAIWSHTTPDecision("account_concurrency_invalid")
 	}
 	if wsCfg.ResponsesWebsocketsV2 {
 		return OpenAIWSProtocolDecision{
 			Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
-			Reason:    "ws_v2_enabled",
-		}
-	}
-	if wsCfg.ResponsesWebsockets {
-		return OpenAIWSProtocolDecision{
-			Transport: OpenAIUpstreamTransportResponsesWebsocket,
-			Reason:    "ws_v1_enabled",
+			Reason:    "ws_v2_mode_" + mode,
 		}
 	}
 	return openAIWSHTTPDecision("feature_disabled")
