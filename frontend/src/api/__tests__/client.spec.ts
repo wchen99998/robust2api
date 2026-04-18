@@ -10,6 +10,25 @@ describe('API Client', () => {
   let apiClient: AxiosInstance
   let cookieValue = 'control_csrf_token=test-csrf-token'
   const originalLocation = window.location
+  let locationHref = '/dashboard'
+
+  const installLocationStub = (onHrefSet?: (value: string) => void) => {
+    locationHref = '/dashboard'
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: {
+        pathname: '/dashboard',
+        get href() {
+          return locationHref
+        },
+        set href(value: string) {
+          onHrefSet?.(value)
+          locationHref = value
+        }
+      }
+    })
+  }
 
   beforeEach(async () => {
     localStorage.clear()
@@ -20,14 +39,7 @@ describe('API Client', () => {
       configurable: true,
       get: () => cookieValue
     })
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      writable: true,
-      value: {
-        pathname: '/dashboard',
-        href: '/dashboard'
-      }
-    })
+    installLocationStub()
     const mod = await import('@/api/client')
     apiClient = mod.apiClient
   })
@@ -36,6 +48,7 @@ describe('API Client', () => {
     vi.restoreAllMocks()
     Object.defineProperty(window, 'location', {
       configurable: true,
+      writable: true,
       value: originalLocation
     })
   })
@@ -209,7 +222,6 @@ describe('API Client', () => {
         }
       })
       apiClient.defaults.adapter = adapter
-      const setItemSpy = vi.spyOn(window.sessionStorage, 'setItem')
 
       await expect(
         apiClient.post('/session/login', {
@@ -221,11 +233,16 @@ describe('API Client', () => {
         code: 'INVALID_CREDENTIALS'
       })
 
-      expect(setItemSpy).not.toHaveBeenCalledWith('auth_expired', '1')
+      expect(window.sessionStorage.getItem('auth_expired')).toBeNull()
       expect(window.location.href).toBe('/login')
     })
 
     it('marks auth as expired when refresh fails for a protected endpoint', async () => {
+      const hrefSetter = vi.fn((nextHref: string) => {
+        expect(window.sessionStorage.getItem('auth_expired')).toBe('1')
+        expect(nextHref).toBe('/login')
+      })
+      installLocationStub(hrefSetter)
       const adapter = vi.fn().mockRejectedValue({
         response: {
           status: 401,
@@ -241,7 +258,6 @@ describe('API Client', () => {
         }
       })
       apiClient.defaults.adapter = adapter
-      const setItemSpy = vi.spyOn(window.sessionStorage, 'setItem')
       vi.spyOn(axios, 'post').mockRejectedValue(new Error('refresh failed'))
 
       await expect(apiClient.post('/me/password/change', { password: 'new-password' })).rejects.toMatchObject({
@@ -249,7 +265,8 @@ describe('API Client', () => {
         code: 'TOKEN_REFRESH_FAILED'
       })
 
-      expect(setItemSpy).toHaveBeenCalledWith('auth_expired', '1')
+      expect(hrefSetter).toHaveBeenCalledOnce()
+      expect(window.sessionStorage.getItem('auth_expired')).toBe('1')
       expect(window.location.href).toBe('/login')
     })
   })
