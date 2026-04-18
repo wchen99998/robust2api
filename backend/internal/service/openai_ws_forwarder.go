@@ -2395,6 +2395,9 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 		)
 	}()
 	ingressMode := OpenAIWSIngressModeCtxPool
+	if s == nil || s.cfg == nil {
+		return errors.New("openai websocket config is nil")
+	}
 	ingressMode = account.ResolveOpenAIResponsesWebSocketV2Mode(s.cfg.Gateway.OpenAIWS.IngressModeDefault)
 	if ingressMode == OpenAIWSIngressModeOff {
 		return NewOpenAIWSClientCloseError(

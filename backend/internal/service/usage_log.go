@@ -68,6 +68,16 @@ func ParseUsageRequestType(value string) (RequestType, error) {
 	}
 }
 
+func RequestTypeFromLegacy(stream bool, openAIWSMode bool) RequestType {
+	if openAIWSMode {
+		return RequestTypeWSV2
+	}
+	if stream {
+		return RequestTypeStream
+	}
+	return RequestTypeSync
+}
+
 func LegacyRequestFlagsForType(requestType RequestType) (stream bool, openAIWSMode bool) {
 	switch requestType.Normalize() {
 	case RequestTypeSync:

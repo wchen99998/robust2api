@@ -51,6 +51,14 @@ func TestRequestTypeNormalizeAndString(t *testing.T) {
 	require.Equal(t, "ws_v2", RequestTypeWSV2.String())
 }
 
+func TestRequestTypeFromLegacy(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, RequestTypeWSV2, RequestTypeFromLegacy(false, true))
+	require.Equal(t, RequestTypeStream, RequestTypeFromLegacy(true, false))
+	require.Equal(t, RequestTypeSync, RequestTypeFromLegacy(false, false))
+}
+
 func TestLegacyRequestFlagsForType(t *testing.T) {
 	t.Parallel()
 
