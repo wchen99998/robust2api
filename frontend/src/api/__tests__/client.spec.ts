@@ -9,21 +9,48 @@ vi.mock('@/i18n', () => ({
 describe('API Client', () => {
   let apiClient: AxiosInstance
   let cookieValue = 'control_csrf_token=test-csrf-token'
+  const originalLocation = window.location
+  let locationHref = '/dashboard'
+
+  const installLocationStub = (onHrefSet?: (value: string) => void) => {
+    locationHref = '/dashboard'
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: {
+        pathname: '/dashboard',
+        get href() {
+          return locationHref
+        },
+        set href(value: string) {
+          onHrefSet?.(value)
+          locationHref = value
+        }
+      }
+    })
+  }
 
   beforeEach(async () => {
     localStorage.clear()
+    sessionStorage.clear()
     vi.resetModules()
     cookieValue = 'control_csrf_token=test-csrf-token'
     Object.defineProperty(document, 'cookie', {
       configurable: true,
       get: () => cookieValue
     })
+    installLocationStub()
     const mod = await import('@/api/client')
     apiClient = mod.apiClient
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      writable: true,
+      value: originalLocation
+    })
   })
 
   describe('request interceptor', () => {
@@ -177,6 +204,70 @@ describe('API Client', () => {
       expect(refreshSpy).toHaveBeenCalledTimes(1)
       expect(adapter).toHaveBeenCalledTimes(2)
       expect(response.data).toEqual({ ok: true })
+    })
+
+    it('does not mark auth as expired when login returns 401', async () => {
+      const adapter = vi.fn().mockRejectedValue({
+        response: {
+          status: 401,
+          data: {
+            code: 'INVALID_CREDENTIALS',
+            message: 'invalid credentials'
+          }
+        },
+        config: {
+          url: '/session/login',
+          method: 'post',
+          headers: {}
+        }
+      })
+      apiClient.defaults.adapter = adapter
+
+      await expect(
+        apiClient.post('/session/login', {
+          email: 'test@example.com',
+          password: 'bad-password'
+        })
+      ).rejects.toMatchObject({
+        status: 401,
+        code: 'INVALID_CREDENTIALS'
+      })
+
+      expect(window.sessionStorage.getItem('auth_expired')).toBeNull()
+      expect(window.location.href).toBe('/login')
+    })
+
+    it('marks auth as expired when refresh fails for a protected endpoint', async () => {
+      const hrefSetter = vi.fn((nextHref: string) => {
+        expect(window.sessionStorage.getItem('auth_expired')).toBe('1')
+        expect(nextHref).toBe('/login')
+      })
+      installLocationStub(hrefSetter)
+      const adapter = vi.fn().mockRejectedValue({
+        response: {
+          status: 401,
+          data: {
+            code: 'TOKEN_EXPIRED',
+            message: 'expired'
+          }
+        },
+        config: {
+          url: '/me/password/change',
+          method: 'post',
+          headers: {}
+        }
+      })
+      apiClient.defaults.adapter = adapter
+      vi.spyOn(axios, 'post').mockRejectedValue(new Error('refresh failed'))
+
+      await expect(apiClient.post('/me/password/change', { password: 'new-password' })).rejects.toMatchObject({
+        status: 401,
+        code: 'TOKEN_REFRESH_FAILED'
+      })
+
+      expect(hrefSetter).toHaveBeenCalledOnce()
+      expect(window.sessionStorage.getItem('auth_expired')).toBe('1')
+      expect(window.location.href).toBe('/login')
     })
   })
 })
