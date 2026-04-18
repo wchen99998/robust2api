@@ -7,7 +7,7 @@ import (
 )
 
 func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
-	// 续链场景：保留 item_reference 与 id，但不再强制 store=true。
+	// 续链场景：保留 item_reference 与 id，并统一显式 store=false。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.2",
@@ -20,7 +20,7 @@ func TestApplyCodexOAuthTransform_ToolContinuationPreservesInput(t *testing.T) {
 
 	applyCodexOAuthTransform(reqBody, false, false)
 
-	// 未显式设置 store=true，默认为 false。
+	// 未显式设置 store 时，统一改写为 false。
 	store, ok := reqBody["store"].(bool)
 	require.True(t, ok)
 	require.False(t, store)
@@ -92,8 +92,8 @@ func TestApplyCodexOAuthTransform_ToolContinuationNormalizesToolReferenceIDsOnly
 	require.Equal(t, "fc1", second["call_id"])
 }
 
-func TestApplyCodexOAuthTransform_ExplicitStoreFalsePreserved(t *testing.T) {
-	// 续链场景：显式 store=false 不再强制为 true，保持 false。
+func TestApplyCodexOAuthTransform_ExplicitStoreFalseRemainsFalse(t *testing.T) {
+	// 续链场景显式 store=false 保持为 false。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",
@@ -112,7 +112,7 @@ func TestApplyCodexOAuthTransform_ExplicitStoreFalsePreserved(t *testing.T) {
 }
 
 func TestApplyCodexOAuthTransform_ExplicitStoreTrueForcedFalse(t *testing.T) {
-	// 显式 store=true 也会强制为 false。
+	// 非 compact HTTP codex 路径统一改写为 store=false。
 
 	reqBody := map[string]any{
 		"model": "gpt-5.1",

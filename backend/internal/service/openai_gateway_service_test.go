@@ -1079,73 +1079,6 @@ func TestOpenAIStreamingMissingTerminalEventReturnsIncompleteError(t *testing.T)
 	}
 }
 
-func TestOpenAIStreamingPassthroughMissingTerminalEventReturnsIncompleteError(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{
-		Gateway: config.GatewayConfig{
-			MaxLineSize: defaultMaxLineSize,
-		},
-	}
-	svc := &OpenAIGatewayService{cfg: cfg}
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	pr, pw := io.Pipe()
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       pr,
-		Header:     http.Header{},
-	}
-
-	go func() {
-		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.in_progress\",\"response\":{}}\n\n"))
-	}()
-
-	_, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now())
-	_ = pr.Close()
-	if err == nil || !strings.Contains(err.Error(), "missing terminal event") {
-		t.Fatalf("expected missing terminal event error, got %v", err)
-	}
-}
-
-func TestOpenAIStreamingPassthroughResponseDoneWithoutDoneMarkerStillSucceeds(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	cfg := &config.Config{
-		Gateway: config.GatewayConfig{
-			MaxLineSize: defaultMaxLineSize,
-		},
-	}
-	svc := &OpenAIGatewayService{cfg: cfg}
-
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/", nil)
-
-	pr, pw := io.Pipe()
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Body:       pr,
-		Header:     http.Header{},
-	}
-
-	go func() {
-		defer func() { _ = pw.Close() }()
-		_, _ = pw.Write([]byte("data: {\"type\":\"response.done\",\"response\":{\"usage\":{\"input_tokens\":2,\"output_tokens\":3,\"input_tokens_details\":{\"cached_tokens\":1}}}}\n\n"))
-	}()
-
-	result, err := svc.handleStreamingResponsePassthrough(c.Request.Context(), resp, c, &Account{ID: 1}, time.Now())
-	_ = pr.Close()
-	require.NoError(t, err)
-	require.NotNil(t, result)
-	require.NotNil(t, result.usage)
-	require.Equal(t, 2, result.usage.InputTokens)
-	require.Equal(t, 3, result.usage.OutputTokens)
-	require.Equal(t, 1, result.usage.CacheReadInputTokens)
-}
-
 func TestOpenAIStreamingTooLong(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	cfg := &config.Config{
@@ -1465,23 +1398,6 @@ func TestOpenAIResponsesRequestPathSuffix(t *testing.T) {
 			require.Equal(t, tt.want, openAIResponsesRequestPathSuffix(c))
 		})
 	}
-}
-
-func TestOpenAIBuildUpstreamRequestOpenAIPassthroughPreservesCompactPath(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	rec := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(rec)
-	c.Request = httptest.NewRequest(http.MethodPost, "/v1/responses/compact", bytes.NewReader([]byte(`{"model":"gpt-5"}`)))
-
-	svc := &OpenAIGatewayService{}
-	account := &Account{Type: AccountTypeOAuth}
-
-	req, err := svc.buildUpstreamRequestOpenAIPassthrough(c.Request.Context(), c, account, []byte(`{"model":"gpt-5"}`), "token")
-	require.NoError(t, err)
-	require.Equal(t, chatgptCodexURL+"/compact", req.URL.String())
-	require.Equal(t, "application/json", req.Header.Get("Accept"))
-	require.Equal(t, codexCLIVersion, req.Header.Get("Version"))
-	require.NotEmpty(t, req.Header.Get("Session_Id"))
 }
 
 func TestOpenAIBuildUpstreamRequestCompactForcesJSONAcceptForOAuth(t *testing.T) {

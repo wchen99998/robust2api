@@ -31,57 +31,6 @@
         </p>
       </div>
 
-      <!-- OpenAI passthrough -->
-      <div
-        v-if="allOpenAIPassthroughCapable"
-        class="border-t border-gray-200 pt-4 dark:border-dark-600"
-      >
-        <div class="mb-3 flex items-center justify-between">
-          <div class="flex-1 pr-4">
-            <label
-              id="bulk-edit-openai-passthrough-label"
-              class="input-label mb-0"
-              for="bulk-edit-openai-passthrough-enabled"
-            >
-              {{ t('admin.accounts.openai.oauthPassthrough') }}
-            </label>
-            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              {{ t('admin.accounts.openai.oauthPassthroughDesc') }}
-            </p>
-          </div>
-          <input
-            v-model="enableOpenAIPassthrough"
-            id="bulk-edit-openai-passthrough-enabled"
-            type="checkbox"
-            aria-controls="bulk-edit-openai-passthrough-body"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          />
-        </div>
-        <div
-          id="bulk-edit-openai-passthrough-body"
-          :class="!enableOpenAIPassthrough && 'pointer-events-none opacity-50'"
-          role="group"
-          aria-labelledby="bulk-edit-openai-passthrough-label"
-        >
-          <button
-            id="bulk-edit-openai-passthrough-toggle"
-            type="button"
-            :class="[
-              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
-              openaiPassthroughEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
-            ]"
-            @click="openaiPassthroughEnabled = !openaiPassthroughEnabled"
-          >
-            <span
-              :class="[
-                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                openaiPassthroughEnabled ? 'translate-x-5' : 'translate-x-0'
-              ]"
-            />
-          </button>
-        </div>
-      </div>
-
       <!-- Base URL (API Key only) -->
       <div class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -140,18 +89,8 @@
           role="group"
           aria-labelledby="bulk-edit-model-restriction-label"
         >
-          <div
-            v-if="isOpenAIModelRestrictionDisabled"
-            class="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20"
-          >
-            <p class="text-xs text-amber-700 dark:text-amber-400">
-              {{ t('admin.accounts.openai.modelRestrictionDisabledByPassthrough') }}
-            </p>
-          </div>
-
-          <template v-else>
-            <!-- Mode Toggle -->
-            <div class="mb-4 flex gap-2">
+          <!-- Mode Toggle -->
+          <div class="mb-4 flex gap-2">
               <button
                 type="button"
                 :class="[
@@ -341,8 +280,7 @@
                   + {{ preset.label }}
                 </button>
               </div>
-            </div>
-          </template>
+          </div>
         </div>
       </div>
 
@@ -661,43 +599,6 @@
         </div>
       </div>
 
-      <!-- OpenAI OAuth WS mode -->
-      <div v-if="allOpenAIOAuth" class="border-t border-gray-200 pt-4 dark:border-dark-600">
-        <div class="mb-3 flex items-center justify-between">
-          <label
-            id="bulk-edit-openai-ws-mode-label"
-            class="input-label mb-0"
-            for="bulk-edit-openai-ws-mode-enabled"
-          >
-            {{ t('admin.accounts.openai.wsMode') }}
-          </label>
-          <input
-            v-model="enableOpenAIWSMode"
-            id="bulk-edit-openai-ws-mode-enabled"
-            type="checkbox"
-            aria-controls="bulk-edit-openai-ws-mode"
-            class="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-          />
-        </div>
-        <div
-          id="bulk-edit-openai-ws-mode"
-          :class="!enableOpenAIWSMode && 'pointer-events-none opacity-50'"
-        >
-          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
-            {{ t('admin.accounts.openai.wsModeDesc') }}
-          </p>
-          <p class="mb-3 text-xs text-gray-500 dark:text-gray-400">
-            {{ t(openAIWSModeConcurrencyHintKey) }}
-          </p>
-          <Select
-            v-model="openaiOAuthResponsesWebSocketV2Mode"
-            data-testid="bulk-edit-openai-ws-mode-select"
-            :options="openAIWSModeOptions"
-            aria-labelledby="bulk-edit-openai-ws-mode-label"
-          />
-        </div>
-      </div>
-
       <!-- RPM Limit (仅全部为 Anthropic OAuth/SetupToken 时显示) -->
       <div v-if="allAnthropicOAuthOrSetupToken" class="border-t border-gray-200 pt-4 dark:border-dark-600">
         <div class="mb-3 flex items-center justify-between">
@@ -920,13 +821,6 @@ import {
   buildModelMappingObject as buildModelMappingPayload,
   getPresetMappingsByPlatform
 } from '@/composables/useModelWhitelist'
-import {
-  OPENAI_WS_MODE_OFF,
-  OPENAI_WS_MODE_PASSTHROUGH,
-  isOpenAIWSModeEnabled,
-  resolveOpenAIWSModeConcurrencyHintKey
-} from '@/utils/openaiWsMode'
-import type { OpenAIWSMode } from '@/utils/openaiWsMode'
 interface Props {
   show: boolean
   accountIds: number[]
@@ -947,24 +841,6 @@ const appStore = useAppStore()
 
 // Platform awareness
 const isMixedPlatform = computed(() => props.selectedPlatforms.length > 1)
-
-const allOpenAIPassthroughCapable = computed(() => {
-  return (
-    props.selectedPlatforms.length === 1 &&
-    props.selectedPlatforms[0] === 'openai' &&
-    props.selectedTypes.length > 0 &&
-    props.selectedTypes.every(t => t === 'oauth' || t === 'apikey')
-  )
-})
-
-const allOpenAIOAuth = computed(() => {
-  return (
-    props.selectedPlatforms.length === 1 &&
-    props.selectedPlatforms[0] === 'openai' &&
-    props.selectedTypes.length > 0 &&
-    props.selectedTypes.every(t => t === 'oauth')
-  )
-})
 
 // 是否全部为 Anthropic OAuth/SetupToken（RPM 配置仅在此条件下显示）
 const allAnthropicOAuthOrSetupToken = computed(() => {
@@ -1009,8 +885,6 @@ const enablePriority = ref(false)
 const enableRateMultiplier = ref(false)
 const enableStatus = ref(false)
 const enableGroups = ref(false)
-const enableOpenAIPassthrough = ref(false)
-const enableOpenAIWSMode = ref(false)
 const enableRpmLimit = ref(false)
 
 // State - field values
@@ -1032,8 +906,6 @@ const priority = ref(1)
 const rateMultiplier = ref(1)
 const status = ref<'active' | 'inactive'>('active')
 const groupIds = ref<number[]>([])
-const openaiPassthroughEnabled = ref(false)
-const openaiOAuthResponsesWebSocketV2Mode = ref<OpenAIWSMode>(OPENAI_WS_MODE_OFF)
 const rpmLimitEnabled = ref(false)
 const bulkBaseRpm = ref<number | null>(null)
 const bulkRpmStrategy = ref<'tiered' | 'sticky_exempt'>('tiered')
@@ -1060,20 +932,6 @@ const statusOptions = computed(() => [
   { value: 'active', label: t('common.active') },
   { value: 'inactive', label: t('common.inactive') }
 ])
-const isOpenAIModelRestrictionDisabled = computed(
-  () =>
-    allOpenAIPassthroughCapable.value &&
-    enableOpenAIPassthrough.value &&
-    openaiPassthroughEnabled.value
-)
-
-const openAIWSModeOptions = computed(() => [
-  { value: OPENAI_WS_MODE_OFF, label: t('admin.accounts.openai.wsModeOff') },
-  { value: OPENAI_WS_MODE_PASSTHROUGH, label: t('admin.accounts.openai.wsModePassthrough') }
-])
-const openAIWSModeConcurrencyHintKey = computed(() =>
-  resolveOpenAIWSModeConcurrencyHintKey(openaiOAuthResponsesWebSocketV2Mode.value)
-)
 
 // Model mapping helpers
 const addModelMapping = () => {
@@ -1202,15 +1060,7 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     }
   }
 
-  if (enableOpenAIPassthrough.value) {
-    const extra = ensureExtra()
-    extra.openai_passthrough = openaiPassthroughEnabled.value
-    if (!openaiPassthroughEnabled.value) {
-      extra.openai_oauth_passthrough = false
-    }
-  }
-
-  if (enableModelRestriction.value && !isOpenAIModelRestrictionDisabled.value) {
+  if (enableModelRestriction.value) {
     // 统一使用 model_mapping 字段
     if (modelRestrictionMode.value === 'whitelist') {
       // 白名单模式：将模型转换为 model_mapping 格式（key=value）
@@ -1242,14 +1092,6 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
 
   if (credentialsChanged) {
     updates.credentials = credentials
-  }
-
-  if (enableOpenAIWSMode.value) {
-    const extra = ensureExtra()
-    extra.openai_oauth_responses_websockets_v2_mode = openaiOAuthResponsesWebSocketV2Mode.value
-    extra.openai_oauth_responses_websockets_v2_enabled = isOpenAIWSModeEnabled(
-      openaiOAuthResponsesWebSocketV2Mode.value
-    )
   }
 
   // RPM limit settings (写入 extra 字段)
@@ -1330,7 +1172,6 @@ const handleSubmit = async () => {
 
   const hasAnyFieldEnabled =
     enableBaseUrl.value ||
-    enableOpenAIPassthrough.value ||
     enableModelRestriction.value ||
     enableCustomErrorCodes.value ||
     enableInterceptWarmup.value ||
@@ -1341,7 +1182,6 @@ const handleSubmit = async () => {
     enableRateMultiplier.value ||
     enableStatus.value ||
     enableGroups.value ||
-    enableOpenAIWSMode.value ||
     enableRpmLimit.value ||
     userMsgQueueMode.value !== null
 
@@ -1433,13 +1273,10 @@ watch(
       enableRateMultiplier.value = false
       enableStatus.value = false
       enableGroups.value = false
-      enableOpenAIPassthrough.value = false
-      enableOpenAIWSMode.value = false
       enableRpmLimit.value = false
 
       // Reset all values
       baseUrl.value = ''
-      openaiPassthroughEnabled.value = false
       modelRestrictionMode.value = 'whitelist'
       allowedModels.value = []
       modelMappings.value = []
@@ -1453,7 +1290,6 @@ watch(
       rateMultiplier.value = 1
       status.value = 'active'
       groupIds.value = []
-      openaiOAuthResponsesWebSocketV2Mode.value = OPENAI_WS_MODE_OFF
       rpmLimitEnabled.value = false
       bulkBaseRpm.value = null
       bulkRpmStrategy.value = 'tiered'

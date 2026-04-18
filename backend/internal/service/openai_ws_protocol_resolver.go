@@ -49,41 +49,16 @@ func (r *defaultOpenAIWSProtocolResolver) Resolve(account *Account) OpenAIWSProt
 	if wsCfg.ForceHTTP {
 		return openAIWSHTTPDecision("global_force_http")
 	}
-	if !wsCfg.Enabled {
-		return openAIWSHTTPDecision("global_disabled")
-	}
-	if account.IsOpenAIOAuth() {
-		if !wsCfg.OAuthEnabled {
-			return openAIWSHTTPDecision("oauth_disabled")
-		}
-	} else if account.IsOpenAIApiKey() {
-		if !wsCfg.APIKeyEnabled {
-			return openAIWSHTTPDecision("apikey_disabled")
-		}
-	} else {
+	if !account.IsOpenAIOAuth() && !account.IsOpenAIApiKey() {
 		return openAIWSHTTPDecision("unknown_auth_type")
-	}
-	mode := account.ResolveOpenAIResponsesWebSocketV2Mode(wsCfg.IngressModeDefault)
-	switch mode {
-	case OpenAIWSIngressModeOff:
-		return openAIWSHTTPDecision("account_mode_off")
-	case OpenAIWSIngressModeCtxPool, OpenAIWSIngressModePassthrough:
-		// continue
-	case OpenAIWSIngressModeShared, OpenAIWSIngressModeDedicated:
-		mode = OpenAIWSIngressModeCtxPool
-	default:
-		return openAIWSHTTPDecision("account_mode_off")
 	}
 	if account.Concurrency <= 0 {
 		return openAIWSHTTPDecision("account_concurrency_invalid")
 	}
-	if wsCfg.ResponsesWebsocketsV2 {
-		return OpenAIWSProtocolDecision{
-			Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
-			Reason:    "ws_v2_mode_" + mode,
-		}
+	return OpenAIWSProtocolDecision{
+		Transport: OpenAIUpstreamTransportResponsesWebsocketV2,
+		Reason:    "ws_v2_default",
 	}
-	return openAIWSHTTPDecision("feature_disabled")
 }
 
 func openAIWSHTTPDecision(reason string) OpenAIWSProtocolDecision {

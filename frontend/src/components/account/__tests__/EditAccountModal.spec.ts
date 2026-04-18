@@ -82,7 +82,7 @@ const ModelWhitelistSelectorStub = defineComponent({
   `
 })
 
-function buildAccount() {
+function buildAccount(overrides: Record<string, unknown> = {}) {
   return {
     id: 1,
     name: 'OpenAI Key',
@@ -104,7 +104,8 @@ function buildAccount() {
     status: 'active',
     group_ids: [],
     expires_at: null,
-    auto_pause_on_expired: false
+    auto_pause_on_expired: false,
+    ...overrides
   } as any
 }
 
@@ -130,6 +131,13 @@ function mountModal(account = buildAccount()) {
 }
 
 describe('EditAccountModal', () => {
+  it('does not render OpenAI passthrough or WS mode controls anymore', () => {
+    const wrapper = mountModal(buildAccount({ type: 'oauth' }))
+
+    expect(wrapper.text()).not.toContain('admin.accounts.openai.oauthPassthrough')
+    expect(wrapper.text()).not.toContain('admin.accounts.openai.wsMode')
+  })
+
   it('reopening the same account rehydrates the OpenAI whitelist from props', async () => {
     const account = buildAccount()
     updateAccountMock.mockReset()
@@ -156,4 +164,5 @@ describe('EditAccountModal', () => {
       'gpt-5.2': 'gpt-5.2'
     })
   })
+
 })

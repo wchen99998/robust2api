@@ -1929,34 +1929,9 @@ export default {
       openai: {
         baseUrlHint: 'Leave default for official OpenAI API',
         apiKeyHint: 'Your OpenAI API Key',
-        oauthPassthrough: 'Auto passthrough (auth only)',
-        oauthPassthroughDesc:
-          'When enabled, this OpenAI account uses automatic passthrough: the gateway forwards request/response as-is and only swaps auth, while keeping billing/concurrency/audit and necessary safety filtering.',
-        responsesWebsocketsV2: 'Responses WebSocket v2',
-        responsesWebsocketsV2Desc:
-          'Disabled by default. Enable to allow responses_websockets_v2 capability (still gated by global and account-type switches).',
-        wsMode: 'WS mode',
-        wsModeDesc: 'Only applies to the current OpenAI account type.',
-        wsModeOff: 'Off (off)',
-        wsModeCtxPool: 'Context Pool (ctx_pool)',
-        wsModePassthrough: 'Passthrough (passthrough)',
-        wsModeShared: 'Shared (shared)',
-        wsModeDedicated: 'Dedicated (dedicated)',
-        wsModeConcurrencyHint:
-          'When WS mode is enabled, account concurrency becomes the WS connection pool limit for this account.',
-        wsModePassthroughHint: 'Passthrough mode does not use the WS connection pool.',
-        oauthResponsesWebsocketsV2: 'OAuth WebSocket Mode',
-        oauthResponsesWebsocketsV2Desc:
-          'Only applies to OpenAI OAuth. This account can use OpenAI WebSocket Mode only when enabled.',
-        apiKeyResponsesWebsocketsV2: 'API Key WebSocket Mode',
-        apiKeyResponsesWebsocketsV2Desc:
-          'Only applies to OpenAI API Key. This account can use OpenAI WebSocket Mode only when enabled.',
-        responsesWebsocketsV2PassthroughHint:
-          'Automatic passthrough is currently enabled: it only affects HTTP passthrough and does not disable WS mode.',
         codexCLIOnly: 'Codex official clients only',
         codexCLIOnlyDesc:
           'Only applies to OpenAI OAuth. When enabled, only Codex official client families are allowed; when disabled, the gateway bypasses this restriction and keeps existing behavior.',
-        modelRestrictionDisabledByPassthrough: 'Automatic passthrough is enabled: model whitelist/mapping will not take effect.',
       },
       anthropic: {
         apiKeyPassthrough: 'Auto passthrough (auth only)',

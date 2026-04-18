@@ -400,9 +400,6 @@ type GatewayConfig struct {
 	// ForcedCodexInstructionsTemplate: 启动时从模板文件读取并缓存的模板内容。
 	// 该字段不直接参与配置反序列化，仅用于请求热路径避免重复读盘。
 	ForcedCodexInstructionsTemplate string `mapstructure:"-"`
-	// OpenAIPassthroughAllowTimeoutHeaders: OpenAI 透传模式是否放行客户端超时头
-	// 关闭（默认）可避免 x-stainless-timeout 等头导致上游提前断流。
-	OpenAIPassthroughAllowTimeoutHeaders bool `mapstructure:"openai_passthrough_allow_timeout_headers"`
 	// OpenAIWS: OpenAI Responses WebSocket 配置（默认开启，可按需回滚到 HTTP）
 	OpenAIWS GatewayOpenAIWSConfig `mapstructure:"openai_ws"`
 
@@ -522,8 +519,6 @@ func (c *UserMessageQueueConfig) GetEffectiveMode() string {
 // GatewayOpenAIWSConfig OpenAI Responses WebSocket 配置。
 // 注意：默认全局开启；如需回滚可使用 force_http 或关闭 enabled。
 type GatewayOpenAIWSConfig struct {
-	// IngressModeDefault: ingress 默认模式（off/ctx_pool/passthrough）
-	IngressModeDefault string `mapstructure:"ingress_mode_default"`
 	// Enabled: 全局总开关（默认 true）
 	Enabled bool `mapstructure:"enabled"`
 	// OAuthEnabled: 是否允许 OpenAI OAuth 账号使用 WS
@@ -532,24 +527,10 @@ type GatewayOpenAIWSConfig struct {
 	APIKeyEnabled bool `mapstructure:"apikey_enabled"`
 	// ForceHTTP: 全局强制 HTTP（用于紧急回滚）
 	ForceHTTP bool `mapstructure:"force_http"`
-	// AllowStoreRecovery: 允许在 WSv2 下按策略恢复 store=true（默认 false）
-	AllowStoreRecovery bool `mapstructure:"allow_store_recovery"`
 	// IngressPreviousResponseRecoveryEnabled: ingress 模式收到 previous_response_not_found 时，是否允许自动去掉 previous_response_id 重试一次（默认 true）
 	IngressPreviousResponseRecoveryEnabled bool `mapstructure:"ingress_previous_response_recovery_enabled"`
-	// StoreDisabledConnMode: store=false 且无可复用会话连接时的建连策略（strict/adaptive/off）
-	// - strict: 强制新建连接（隔离优先）
-	// - adaptive: 仅在高风险失败后强制新建连接（性能与隔离折中）
-	// - off: 不强制新建连接（复用优先）
-	StoreDisabledConnMode string `mapstructure:"store_disabled_conn_mode"`
-	// StoreDisabledForceNewConn: store=false 且无可复用粘连连接时是否强制新建连接（默认 true，保障会话隔离）
-	// 兼容旧配置；当 StoreDisabledConnMode 为空时才生效。
-	StoreDisabledForceNewConn bool `mapstructure:"store_disabled_force_new_conn"`
 	// PrewarmGenerateEnabled: 是否启用 WSv2 generate=false 预热（默认 false）
 	PrewarmGenerateEnabled bool `mapstructure:"prewarm_generate_enabled"`
-
-	// Feature 开关：当前仅支持 Responses WebSocket v2。
-	ResponsesWebsocketsV2 bool `mapstructure:"responses_websockets_v2"`
-
 	// 连接池参数
 	MaxConnsPerAccount int `mapstructure:"max_conns_per_account"`
 	MinIdlePerAccount  int `mapstructure:"min_idle_per_account"`
@@ -1376,19 +1357,13 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_account_switches", 10)
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
 	viper.SetDefault("gateway.force_codex_cli", false)
-	viper.SetDefault("gateway.openai_passthrough_allow_timeout_headers", false)
 	// OpenAI Responses WebSocket（默认开启；可通过 force_http 紧急回滚）
 	viper.SetDefault("gateway.openai_ws.enabled", true)
-	viper.SetDefault("gateway.openai_ws.ingress_mode_default", "ctx_pool")
 	viper.SetDefault("gateway.openai_ws.oauth_enabled", true)
 	viper.SetDefault("gateway.openai_ws.apikey_enabled", true)
 	viper.SetDefault("gateway.openai_ws.force_http", false)
-	viper.SetDefault("gateway.openai_ws.allow_store_recovery", false)
 	viper.SetDefault("gateway.openai_ws.ingress_previous_response_recovery_enabled", true)
-	viper.SetDefault("gateway.openai_ws.store_disabled_conn_mode", "strict")
-	viper.SetDefault("gateway.openai_ws.store_disabled_force_new_conn", true)
 	viper.SetDefault("gateway.openai_ws.prewarm_generate_enabled", false)
-	viper.SetDefault("gateway.openai_ws.responses_websockets_v2", true)
 	viper.SetDefault("gateway.openai_ws.max_conns_per_account", 128)
 	viper.SetDefault("gateway.openai_ws.min_idle_per_account", 4)
 	viper.SetDefault("gateway.openai_ws.max_idle_per_account", 12)
@@ -1411,9 +1386,6 @@ func setDefaults() {
 	viper.SetDefault("gateway.openai_ws.payload_log_sample_rate", 0.2)
 	viper.SetDefault("gateway.openai_ws.lb_top_k", 7)
 	viper.SetDefault("gateway.openai_ws.sticky_session_ttl_seconds", 3600)
-	viper.SetDefault("gateway.openai_ws.session_hash_read_old_fallback", true)
-	viper.SetDefault("gateway.openai_ws.session_hash_dual_write_old", true)
-	viper.SetDefault("gateway.openai_ws.metadata_bridge_enabled", true)
 	viper.SetDefault("gateway.openai_ws.sticky_response_id_ttl_seconds", 3600)
 	viper.SetDefault("gateway.openai_ws.sticky_previous_response_ttl_seconds", 3600)
 	viper.SetDefault("gateway.openai_ws.scheduler_score_weights.priority", 1.0)
@@ -2126,22 +2098,6 @@ func (c *Config) ValidateForRole(role Role) error {
 	}
 	if c.Gateway.OpenAIWS.RetryTotalBudgetMS < 0 {
 		return fmt.Errorf("gateway.openai_ws.retry_total_budget_ms must be non-negative")
-	}
-	if mode := strings.ToLower(strings.TrimSpace(c.Gateway.OpenAIWS.IngressModeDefault)); mode != "" {
-		switch mode {
-		case "off", "ctx_pool", "passthrough":
-		case "shared", "dedicated":
-			slog.Warn("gateway.openai_ws.ingress_mode_default is deprecated, treating as ctx_pool; please update to off|ctx_pool|passthrough", "value", mode)
-		default:
-			return fmt.Errorf("gateway.openai_ws.ingress_mode_default must be one of off|ctx_pool|passthrough")
-		}
-	}
-	if mode := strings.ToLower(strings.TrimSpace(c.Gateway.OpenAIWS.StoreDisabledConnMode)); mode != "" {
-		switch mode {
-		case "strict", "adaptive", "off":
-		default:
-			return fmt.Errorf("gateway.openai_ws.store_disabled_conn_mode must be one of strict|adaptive|off")
-		}
 	}
 	if c.Gateway.OpenAIWS.PayloadLogSampleRate < 0 || c.Gateway.OpenAIWS.PayloadLogSampleRate > 1 {
 		return fmt.Errorf("gateway.openai_ws.payload_log_sample_rate must be within [0,1]")

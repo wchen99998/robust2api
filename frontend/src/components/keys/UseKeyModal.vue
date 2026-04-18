@@ -534,7 +534,6 @@ function generateOpenAIFiles(baseUrl: string, apiKey: string): FileConfig[] {
 model = "gpt-5.4"
 review_model = "gpt-5.4"
 model_reasoning_effort = "xhigh"
-disable_response_storage = true
 network_access = "enabled"
 windows_wsl_setup_acknowledged = true
 model_context_window = 1000000
@@ -573,7 +572,6 @@ function generateOpenAIWsFiles(baseUrl: string, apiKey: string): FileConfig[] {
 model = "gpt-5.4"
 review_model = "gpt-5.4"
 model_reasoning_effort = "xhigh"
-disable_response_storage = true
 network_access = "enabled"
 windows_wsl_setup_acknowledged = true
 model_context_window = 1000000
@@ -584,10 +582,7 @@ name = "OpenAI"
 base_url = "${baseUrl}"
 wire_api = "responses"
 supports_websockets = true
-requires_openai_auth = true
-
-[features]
-responses_websockets_v2 = true`
+requires_openai_auth = true`
 
   // auth.json content
   const authContent = `{
@@ -623,9 +618,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         context: 400000,
         output: 128000
       },
-      options: {
-        store: false
-      },
       variants: {
         low: {},
         medium: {},
@@ -637,9 +629,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       limit: {
         context: 400000,
         output: 128000
-      },
-      options: {
-        store: false
       },
       variants: {
         low: {},
@@ -653,9 +642,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         context: 400000,
         output: 128000
       },
-      options: {
-        store: false
-      },
       variants: {
         low: {},
         medium: {},
@@ -668,9 +654,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         context: 400000,
         output: 128000
       },
-      options: {
-        store: false
-      },
       variants: {
         low: {},
         medium: {},
@@ -682,9 +665,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       limit: {
         context: 400000,
         output: 128000
-      },
-      options: {
-        store: false
       },
       variants: {
         low: {},
@@ -699,9 +679,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         context: 1050000,
         output: 128000
       },
-      options: {
-        store: false
-      },
       variants: {
         low: {},
         medium: {},
@@ -714,9 +691,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       limit: {
         context: 400000,
         output: 128000
-      },
-      options: {
-        store: false
       },
       variants: {
         low: {},
@@ -731,9 +705,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         context: 400000,
         output: 128000
       },
-      options: {
-        store: false
-      },
       variants: {
         low: {},
         medium: {},
@@ -746,9 +717,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       limit: {
         context: 128000,
         output: 32000
-      },
-      options: {
-        store: false
       },
       variants: {
         low: {},
@@ -763,9 +731,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         context: 400000,
         output: 128000
       },
-      options: {
-        store: false
-      },
       variants: {
         low: {},
         medium: {},
@@ -779,9 +744,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
         context: 400000,
         output: 128000
       },
-      options: {
-        store: false
-      },
       variants: {
         low: {},
         medium: {},
@@ -794,9 +756,6 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
       limit: {
         context: 200000,
         output: 100000
-      },
-      options: {
-        store: false
       },
       variants: {
         low: {},
@@ -1087,16 +1046,8 @@ function generateOpenCodeConfig(platform: string, baseUrl: string, apiKey: strin
   const agent =
     platform === 'openai'
       ? {
-          build: {
-            options: {
-              store: false
-            }
-          },
-          plan: {
-            options: {
-              store: false
-            }
-          }
+          build: {},
+          plan: {}
         }
       : undefined
 

@@ -116,6 +116,7 @@ func TestOpenAIGatewayService_Forward_WSv2ErrorEventUsageLimitPersistsRateLimit(
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	SetOpenAIClientTransport(c, OpenAIClientTransportWS)
 	c.Request.Header.Set("User-Agent", "unit-test-agent/1.0")
 
 	upstream := &httpUpstreamRecorder{
@@ -186,6 +187,7 @@ func TestOpenAIGatewayService_Forward_WSv2Handshake429PersistsRateLimit(t *testi
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
 	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", nil)
+	SetOpenAIClientTransport(c, OpenAIClientTransportWS)
 	c.Request.Header.Set("User-Agent", "unit-test-agent/1.0")
 
 	upstream := &httpUpstreamRecorder{
@@ -282,14 +284,15 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ErrorEventUsageL
 	repo := &openAIWSRateLimitSignalRepo{stubOpenAIAccountRepo: stubOpenAIAccountRepo{accounts: []Account{account}}}
 	rateSvc := &RateLimitService{accountRepo: repo}
 	svc := &OpenAIGatewayService{
-		accountRepo:      repo,
-		rateLimitService: rateSvc,
-		httpUpstream:     &httpUpstreamRecorder{},
-		cache:            &stubGatewayCache{},
-		cfg:              cfg,
-		openaiWSResolver: NewOpenAIWSProtocolResolver(cfg),
-		toolCorrector:    NewCodexToolCorrector(),
-		openaiWSPool:     pool,
+		accountRepo:               repo,
+		rateLimitService:          rateSvc,
+		httpUpstream:              &httpUpstreamRecorder{},
+		cache:                     &stubGatewayCache{},
+		cfg:                       cfg,
+		openaiWSResolver:          NewOpenAIWSProtocolResolver(cfg),
+		toolCorrector:             NewCodexToolCorrector(),
+		openaiWSPool:              pool,
+		openaiWSPassthroughDialer: captureDialer,
 	}
 
 	serverErrCh := make(chan error, 1)
@@ -337,7 +340,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ErrorEventUsageL
 
 	select {
 	case serverErr := <-serverErrCh:
-		require.Error(t, serverErr)
+		require.NoError(t, serverErr)
 		require.Len(t, repo.rateLimitCalls, 1)
 		require.WithinDuration(t, time.Unix(resetAt, 0), repo.rateLimitCalls[0], 2*time.Second)
 	case <-time.After(5 * time.Second):

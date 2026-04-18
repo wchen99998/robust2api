@@ -158,7 +158,6 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_PreviousResponseSticky(
 	cfg.Gateway.OpenAIWS.Enabled = true
 	cfg.Gateway.OpenAIWS.OAuthEnabled = true
 	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
-	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
 	cfg.Gateway.OpenAIWS.StickySessionTTLSeconds = 1800
 	cfg.Gateway.OpenAIWS.StickyResponseIDTTLSeconds = 3600
 
@@ -271,7 +270,6 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyBusyKeepsS
 	cfg.Gateway.OpenAIWS.Enabled = true
 	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
 	cfg.Gateway.OpenAIWS.OAuthEnabled = true
-	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
 
 	concurrencyCache := stubConcurrencyCache{
 		acquireResults: map[int64]bool{
@@ -374,7 +372,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 			Concurrency: 1,
 			Priority:    0,
 			Extra: map[string]any{
-				"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeOff,
+				"openai_ws_force_http": true,
 			},
 		},
 		{
@@ -385,9 +383,6 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 			Schedulable: true,
 			Concurrency: 1,
 			Priority:    5,
-			Extra: map[string]any{
-				"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeCtxPool,
-			},
 		},
 	}
 	cache := &stubGatewayCache{
@@ -445,7 +440,7 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_NoAvailabl
 			Schedulable: true,
 			Concurrency: 1,
 			Extra: map[string]any{
-				"openai_oauth_responses_websockets_v2_mode": OpenAIWSIngressModeOff,
+				"openai_ws_force_http": true,
 			},
 		},
 	}

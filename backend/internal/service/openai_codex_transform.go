@@ -104,8 +104,7 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 			result.Modified = true
 		}
 	} else {
-		// OAuth 走 ChatGPT internal API 时，store 必须为 false；显式 true 也会强制覆盖。
-		// 避免上游返回 "Store must be set to false"。
+		// HTTP codex transform keeps upstream responses ephemeral by default.
 		if v, ok := reqBody["store"].(bool); !ok || v {
 			reqBody["store"] = false
 			result.Modified = true

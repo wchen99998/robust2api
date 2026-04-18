@@ -203,28 +203,6 @@ func TestClassifyOpenAIWSReadFallbackReason(t *testing.T) {
 	require.Equal(t, "read_event", classifyOpenAIWSReadFallbackReason(errors.New("io")))
 }
 
-func TestOpenAIWSStoreDisabledConnMode(t *testing.T) {
-	svc := &OpenAIGatewayService{cfg: &config.Config{}}
-	svc.cfg.Gateway.OpenAIWS.StoreDisabledForceNewConn = true
-	require.Equal(t, openAIWSStoreDisabledConnModeStrict, svc.openAIWSStoreDisabledConnMode())
-
-	svc.cfg.Gateway.OpenAIWS.StoreDisabledConnMode = "adaptive"
-	require.Equal(t, openAIWSStoreDisabledConnModeAdaptive, svc.openAIWSStoreDisabledConnMode())
-
-	svc.cfg.Gateway.OpenAIWS.StoreDisabledConnMode = ""
-	svc.cfg.Gateway.OpenAIWS.StoreDisabledForceNewConn = false
-	require.Equal(t, openAIWSStoreDisabledConnModeOff, svc.openAIWSStoreDisabledConnMode())
-}
-
-func TestShouldForceNewConnOnStoreDisabled(t *testing.T) {
-	require.True(t, shouldForceNewConnOnStoreDisabled(openAIWSStoreDisabledConnModeStrict, ""))
-	require.False(t, shouldForceNewConnOnStoreDisabled(openAIWSStoreDisabledConnModeOff, "policy_violation"))
-
-	require.True(t, shouldForceNewConnOnStoreDisabled(openAIWSStoreDisabledConnModeAdaptive, "policy_violation"))
-	require.True(t, shouldForceNewConnOnStoreDisabled(openAIWSStoreDisabledConnModeAdaptive, "prewarm_message_too_big"))
-	require.False(t, shouldForceNewConnOnStoreDisabled(openAIWSStoreDisabledConnModeAdaptive, "read_event"))
-}
-
 func TestOpenAIWSRetryMetricsSnapshot(t *testing.T) {
 	svc := &OpenAIGatewayService{}
 	svc.recordOpenAIWSRetryAttempt(150 * time.Millisecond)

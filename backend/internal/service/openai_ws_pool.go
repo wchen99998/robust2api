@@ -1557,16 +1557,25 @@ func (p *openAIWSConnPool) effectiveMaxConnsByAccount(account *Account) int {
 	if hardCap <= 0 {
 		return 0
 	}
-	if account == nil {
+	if account == nil || !p.dynamicMaxConnsEnabled() {
 		return hardCap
 	}
 	if account.Concurrency <= 0 {
-		return 0
-	}
-	if account.Concurrency > hardCap {
+		// 0/-1 等“无限制”并发场景下，仍由全局硬上限兜底。
 		return hardCap
 	}
-	return account.Concurrency
+	factor := p.maxConnsFactorByAccount(account)
+	if factor <= 0 {
+		factor = 1.0
+	}
+	effective := int(math.Ceil(float64(account.Concurrency) * factor))
+	if effective < 1 {
+		effective = 1
+	}
+	if effective > hardCap {
+		effective = hardCap
+	}
+	return effective
 }
 
 func (p *openAIWSConnPool) minIdlePerAccount() int {

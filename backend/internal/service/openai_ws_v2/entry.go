@@ -13,7 +13,7 @@ type EntryInput struct {
 
 // RunEntry 是 openai_ws_v2 包对外的统一入口。
 func RunEntry(input EntryInput) (RelayResult, *RelayExit) {
-	return runCaddyStyleRelay(
+	return runDuplexRelay(
 		input.Ctx,
 		input.ClientConn,
 		input.UpstreamConn,
