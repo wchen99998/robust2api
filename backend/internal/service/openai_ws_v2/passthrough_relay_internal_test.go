@@ -46,6 +46,7 @@ func TestRunClientToUpstream_ErrorPaths(t *testing.T) {
 			context.Background(),
 			newPassthroughTestFrameConn(nil, true),
 			func(_ coderws.MessageType, _ []byte) error { return nil },
+			nil,
 			func() {},
 			nil,
 			nil,
@@ -66,6 +67,7 @@ func TestRunClientToUpstream_ErrorPaths(t *testing.T) {
 				{msgType: coderws.MessageText, payload: []byte(`{"x":1}`)},
 			}, true),
 			func(_ coderws.MessageType, _ []byte) error { return errors.New("boom") },
+			nil,
 			func() {},
 			nil,
 			nil,
@@ -88,6 +90,7 @@ func TestRunClientToUpstream_ErrorPaths(t *testing.T) {
 				{msgType: coderws.MessageText, payload: []byte(`{"x":1}`)},
 			}, true),
 			func(_ coderws.MessageType, _ []byte) error { return nil },
+			nil,
 			func() {},
 			forwarded,
 			func(event RelayTraceEvent) {
@@ -120,6 +123,7 @@ func TestRunUpstreamToClient_ErrorAndDropPaths(t *testing.T) {
 			&relayState{},
 			nil,
 			nil,
+			nil,
 			drop,
 			nil,
 			nil,
@@ -147,6 +151,7 @@ func TestRunUpstreamToClient_ErrorAndDropPaths(t *testing.T) {
 			time.Now(),
 			time.Now,
 			&relayState{},
+			nil,
 			nil,
 			nil,
 			drop,
@@ -179,6 +184,7 @@ func TestRunUpstreamToClient_ErrorAndDropPaths(t *testing.T) {
 			time.Now(),
 			time.Now,
 			&relayState{},
+			nil,
 			nil,
 			nil,
 			drop,
@@ -310,36 +316,42 @@ func TestEmitTurnCompleteCoverage(t *testing.T) {
 
 	// 非 terminal 事件不应触发。
 	called := 0
-	emitTurnComplete(func(turn RelayTurnResult) {
+	err := emitTurnComplete(func(turn RelayTurnResult) error {
 		called++
+		return nil
 	}, &relayState{requestModel: "gpt-5"}, observedUpstreamEvent{
 		terminal:   false,
 		eventType:  "response.output_text.delta",
 		responseID: "resp_ignored",
 		usage:      Usage{InputTokens: 1},
 	})
+	require.NoError(t, err)
 	require.Equal(t, 0, called)
 
 	// 缺少 response_id 时不应触发。
-	emitTurnComplete(func(turn RelayTurnResult) {
+	err = emitTurnComplete(func(turn RelayTurnResult) error {
 		called++
+		return nil
 	}, &relayState{requestModel: "gpt-5"}, observedUpstreamEvent{
 		terminal:  true,
 		eventType: "response.completed",
 	})
+	require.NoError(t, err)
 	require.Equal(t, 0, called)
 
 	// terminal 且 response_id 存在，应该触发；state=nil 时 model 为空串。
 	var got RelayTurnResult
-	emitTurnComplete(func(turn RelayTurnResult) {
+	err = emitTurnComplete(func(turn RelayTurnResult) error {
 		called++
 		got = turn
+		return nil
 	}, nil, observedUpstreamEvent{
 		terminal:   true,
 		eventType:  "response.completed",
 		responseID: "resp_emit",
 		usage:      Usage{InputTokens: 2, OutputTokens: 3},
 	})
+	require.NoError(t, err)
 	require.Equal(t, 1, called)
 	require.Equal(t, "resp_emit", got.RequestID)
 	require.Equal(t, "response.completed", got.TerminalEventType)
