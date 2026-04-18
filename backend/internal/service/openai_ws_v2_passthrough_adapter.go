@@ -28,6 +28,16 @@ const openaiWSV2PassthroughModeFields = "ws_mode=passthrough ws_router=v2"
 
 var _ openaiwsv2.FrameConn = (*openAIWSClientFrameConn)(nil)
 
+type openAIWSPassthroughTurnState struct {
+	info OpenAIWSIngressTurn
+	done chan struct{}
+}
+
+type openAIWSPassthroughPendingTurn struct {
+	turn   *openAIWSPassthroughTurnState
+	result *OpenAIForwardResult
+}
+
 func (c *openAIWSClientFrameConn) ReadFrame(ctx context.Context) (coderws.MessageType, []byte, error) {
 	if c == nil || c.conn == nil {
 		return coderws.MessageText, nil, errOpenAIWSConnClosed
@@ -155,12 +165,13 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 	}
 
 	completedTurns := atomic.Int32{}
-	enqueuedTurns := atomic.Int32{}
-	queuedTurnsMu := sync.Mutex{}
-	queuedTurns := make([]OpenAIWSIngressTurn, 0, 4)
-	failedTurnMu := sync.Mutex{}
-	var failedTurn *OpenAIWSIngressTurn
-	enqueueTurn := func(msgType coderws.MessageType, payload []byte) error {
+	turnMu := sync.Mutex{}
+	nextTurnNo := 0
+	lastTurnDone := make(chan struct{})
+	close(lastTurnDone)
+	var activeTurn *openAIWSPassthroughTurnState
+	var pendingTurn *openAIWSPassthroughPendingTurn
+	enqueueTurn := func(turnCtx context.Context, msgType coderws.MessageType, payload []byte) error {
 		// Only text frames carrying a model field initiate billing turns;
 		// binary frames (audio data) and control events are skipped.
 		if msgType != coderws.MessageText {
@@ -169,7 +180,18 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		if !gjson.GetBytes(payload, "model").Exists() {
 			return nil
 		}
-		turnNo := int(enqueuedTurns.Load()) + 1
+		turnMu.Lock()
+		nextTurnNo++
+		turnNo := nextTurnNo
+		waitCh := lastTurnDone
+		turnDone := make(chan struct{})
+		lastTurnDone = turnDone
+		turnMu.Unlock()
+		select {
+		case <-turnCtx.Done():
+			return turnCtx.Err()
+		case <-waitCh:
+		}
 		turnInfo := OpenAIWSIngressTurn{
 			Turn:               turnNo,
 			RequestPayloadHash: HashUsageRequestPayload(payload),
@@ -182,42 +204,53 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 				return err
 			}
 		}
-		enqueuedTurns.Store(int32(turnNo))
-		queuedTurnsMu.Lock()
-		defer queuedTurnsMu.Unlock()
-		queuedTurns = append(queuedTurns, turnInfo)
+		turnMu.Lock()
+		activeTurn = &openAIWSPassthroughTurnState{
+			info: turnInfo,
+			done: turnDone,
+		}
+		pendingTurn = nil
+		turnMu.Unlock()
 		return nil
 	}
-	popNextTurn := func() OpenAIWSIngressTurn {
-		queuedTurnsMu.Lock()
-		defer queuedTurnsMu.Unlock()
-		if len(queuedTurns) == 0 {
-			return OpenAIWSIngressTurn{Turn: int(completedTurns.Load()) + 1}
+	currentTurn := func() *openAIWSPassthroughTurnState {
+		turnMu.Lock()
+		defer turnMu.Unlock()
+		return activeTurn
+	}
+	rememberPendingTurn := func(pending *openAIWSPassthroughPendingTurn) {
+		turnMu.Lock()
+		defer turnMu.Unlock()
+		pendingTurn = pending
+	}
+	completeTurn := func(turnErr error) {
+		turnMu.Lock()
+		turnState := activeTurn
+		pending := pendingTurn
+		if turnErr == nil {
+			activeTurn = nil
+			pendingTurn = nil
 		}
-		turnInfo := queuedTurns[0]
-		queuedTurns = queuedTurns[1:]
-		return turnInfo
-	}
-	storeFailedTurn := func(turnInfo OpenAIWSIngressTurn) {
-		failedTurnMu.Lock()
-		defer failedTurnMu.Unlock()
-		copied := turnInfo
-		failedTurn = &copied
-	}
-	clearFailedTurn := func() {
-		failedTurnMu.Lock()
-		defer failedTurnMu.Unlock()
-		failedTurn = nil
-	}
-	takeFailedTurn := func() (OpenAIWSIngressTurn, bool) {
-		failedTurnMu.Lock()
-		defer failedTurnMu.Unlock()
-		if failedTurn == nil {
-			return OpenAIWSIngressTurn{}, false
+		turnMu.Unlock()
+		if turnState == nil {
+			return
 		}
-		turnInfo := *failedTurn
-		failedTurn = nil
-		return turnInfo, true
+		if turnErr != nil {
+			if hooks != nil && hooks.AfterTurn != nil {
+				hooks.AfterTurn(turnState.info, nil, turnErr)
+			}
+			return
+		}
+		if hooks != nil && hooks.AfterTurn != nil {
+			var turnResult *OpenAIForwardResult
+			if pending != nil {
+				turnResult = pending.result
+			}
+			hooks.AfterTurn(turnState.info, turnResult, nil)
+		}
+		if turnState.done != nil {
+			close(turnState.done)
+		}
 	}
 	relayResult, relayExit := openaiwsv2.RunEntry(openaiwsv2.EntryInput{
 		Ctx:                ctx,
@@ -236,15 +269,12 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					truncateOpenAIWSLogValue(usageRaw, openAIWSLogValueMaxLen),
 				)
 			},
-			OnTurnComplete: func(turn openaiwsv2.RelayTurnResult) error {
-				turnInfo := popNextTurn()
-				turnNo := turnInfo.Turn
-				if turnNo <= 0 {
-					turnNo = int(completedTurns.Load()) + 1
-					turnInfo.Turn = turnNo
+			OnTurnTerminal: func(turn openaiwsv2.RelayTurnResult) error {
+				turnState := currentTurn()
+				turnInfo := OpenAIWSIngressTurn{Turn: int(completedTurns.Load()) + 1}
+				if turnState != nil {
+					turnInfo = turnState.info
 				}
-				completedTurns.Store(int32(turnNo))
-				storeFailedTurn(turnInfo)
 				turnResult := &OpenAIForwardResult{
 					RequestID: turn.RequestID,
 					Usage: OpenAIUsage{
@@ -253,7 +283,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						CacheCreationInputTokens: turn.Usage.CacheCreationInputTokens,
 						CacheReadInputTokens:     turn.Usage.CacheReadInputTokens,
 					},
-					Model:           turn.RequestModel,
+					Model:           turnInfo.OriginalModel,
 					ServiceTier:     requestServiceTier,
 					Stream:          true,
 					OpenAIWSMode:    true,
@@ -266,10 +296,14 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 						return err
 					}
 				}
+				rememberPendingTurn(&openAIWSPassthroughPendingTurn{
+					turn:   turnState,
+					result: turnResult,
+				})
 				logOpenAIWSV2Passthrough(
 					"relay_turn_completed account_id=%d turn=%d request_id=%s terminal_event=%s duration_ms=%d first_token_ms=%d input_tokens=%d output_tokens=%d cache_read_tokens=%d",
 					account.ID,
-					turnNo,
+					turnInfo.Turn,
 					truncateOpenAIWSLogValue(turnResult.RequestID, openAIWSIDValueMaxLen),
 					truncateOpenAIWSLogValue(turn.TerminalEventType, openAIWSLogValueMaxLen),
 					turnResult.Duration.Milliseconds(),
@@ -278,10 +312,18 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 					turnResult.Usage.OutputTokens,
 					turnResult.Usage.CacheReadInputTokens,
 				)
-				if hooks != nil && hooks.AfterTurn != nil {
-					hooks.AfterTurn(turnInfo, turnResult, nil)
-				}
-				clearFailedTurn()
+				return nil
+			},
+			OnTurnComplete: func(turn openaiwsv2.RelayTurnResult) error {
+				completeTurn(nil)
+				completedTurns.Add(1)
+				logOpenAIWSV2Passthrough(
+					"relay_turn_delivered account_id=%d turn=%d request_id=%s terminal_event=%s",
+					account.ID,
+					completedTurns.Load(),
+					truncateOpenAIWSLogValue(turn.RequestID, openAIWSIDValueMaxLen),
+					truncateOpenAIWSLogValue(turn.TerminalEventType, openAIWSLogValueMaxLen),
+				)
 				return nil
 			},
 			OnTrace: func(event openaiwsv2.RelayTraceEvent) {
@@ -366,13 +408,7 @@ func (s *OpenAIGatewayService) proxyResponsesWebSocketV2Passthrough(
 		relayErr,
 		relayExit.WroteDownstream,
 	)
-	if hooks != nil && hooks.AfterTurn != nil {
-		if turnInfo, ok := takeFailedTurn(); ok {
-			hooks.AfterTurn(turnInfo, nil, turnErr)
-		} else {
-			hooks.AfterTurn(popNextTurn(), nil, turnErr)
-		}
-	}
+	completeTurn(turnErr)
 	return turnErr
 }
 

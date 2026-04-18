@@ -434,6 +434,163 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughModeR
 	require.Len(t, upstreamConn.writes, 1, "passthrough 模式应透传首条 response.create")
 }
 
+func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_PassthroughWaitsForPreviousAfterTurn(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	cfg := &config.Config{}
+	cfg.Security.URLAllowlist.Enabled = false
+	cfg.Security.URLAllowlist.AllowInsecureHTTP = true
+	cfg.Gateway.OpenAIWS.Enabled = true
+	cfg.Gateway.OpenAIWS.OAuthEnabled = true
+	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
+	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = true
+	cfg.Gateway.OpenAIWS.ModeRouterV2Enabled = true
+	cfg.Gateway.OpenAIWS.IngressModeDefault = OpenAIWSIngressModeCtxPool
+	cfg.Gateway.OpenAIWS.DialTimeoutSeconds = 3
+	cfg.Gateway.OpenAIWS.ReadTimeoutSeconds = 3
+	cfg.Gateway.OpenAIWS.WriteTimeoutSeconds = 3
+
+	upstreamConn := &openAIWSCaptureConn{
+		readDelays: []time.Duration{250 * time.Millisecond, 0},
+		events: [][]byte{
+			[]byte(`{"type":"response.completed","response":{"id":"resp_passthrough_order_1","model":"gpt-5.1","usage":{"input_tokens":1,"output_tokens":1}}}`),
+			[]byte(`{"type":"response.completed","response":{"id":"resp_passthrough_order_2","model":"gpt-5.1","usage":{"input_tokens":1,"output_tokens":1}}}`),
+		},
+	}
+	captureDialer := &openAIWSCaptureDialer{conn: upstreamConn}
+	svc := &OpenAIGatewayService{
+		cfg:                       cfg,
+		httpUpstream:              &httpUpstreamRecorder{},
+		cache:                     &stubGatewayCache{},
+		openaiWSResolver:          NewOpenAIWSProtocolResolver(cfg),
+		toolCorrector:             NewCodexToolCorrector(),
+		openaiWSPassthroughDialer: captureDialer,
+	}
+
+	account := &Account{
+		ID:          453,
+		Name:        "openai-ingress-passthrough-serialized",
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Credentials: map[string]any{
+			"api_key": "sk-test",
+		},
+		Extra: map[string]any{
+			"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModePassthrough,
+		},
+	}
+
+	serverErrCh := make(chan error, 1)
+	beforeTurnCh := make(chan int, 4)
+	afterTurnCh := make(chan int, 4)
+	hooks := &OpenAIWSIngressHooks{
+		BeforeTurn: func(turn OpenAIWSIngressTurn) error {
+			beforeTurnCh <- turn.Turn
+			return nil
+		},
+		AfterTurn: func(turn OpenAIWSIngressTurn, _ *OpenAIForwardResult, _ error) {
+			afterTurnCh <- turn.Turn
+		},
+	}
+
+	wsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := coderws.Accept(w, r, &coderws.AcceptOptions{
+			CompressionMode: coderws.CompressionContextTakeover,
+		})
+		if err != nil {
+			serverErrCh <- err
+			return
+		}
+		defer func() {
+			_ = conn.CloseNow()
+		}()
+
+		rec := httptest.NewRecorder()
+		ginCtx, _ := gin.CreateTestContext(rec)
+		req := r.Clone(r.Context())
+		req.Header = req.Header.Clone()
+		req.Header.Set("User-Agent", "unit-test-agent/1.0")
+		ginCtx.Request = req
+
+		readCtx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		msgType, firstMessage, readErr := conn.Read(readCtx)
+		cancel()
+		if readErr != nil {
+			serverErrCh <- readErr
+			return
+		}
+		if msgType != coderws.MessageText && msgType != coderws.MessageBinary {
+			serverErrCh <- errors.New("unsupported websocket client message type")
+			return
+		}
+
+		serverErrCh <- svc.ProxyResponsesWebSocketFromClient(r.Context(), ginCtx, conn, account, "sk-test", firstMessage, hooks)
+	}))
+	defer wsServer.Close()
+
+	dialCtx, cancelDial := context.WithTimeout(context.Background(), 3*time.Second)
+	clientConn, _, err := coderws.Dial(dialCtx, "ws"+strings.TrimPrefix(wsServer.URL, "http"), nil)
+	cancelDial()
+	require.NoError(t, err)
+	defer func() {
+		_ = clientConn.CloseNow()
+	}()
+
+	writeMessage := func(payload string) error {
+		writeCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		return clientConn.Write(writeCtx, coderws.MessageText, []byte(payload))
+	}
+	readMessage := func() []byte {
+		readCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		defer cancel()
+		msgType, message, readErr := clientConn.Read(readCtx)
+		require.NoError(t, readErr)
+		require.Equal(t, coderws.MessageText, msgType)
+		return message
+	}
+
+	require.NoError(t, writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false}`))
+	require.Equal(t, 1, <-beforeTurnCh)
+
+	secondWriteErrCh := make(chan error, 1)
+	go func() {
+		secondWriteErrCh <- writeMessage(`{"type":"response.create","model":"gpt-5.1","stream":false,"previous_response_id":"resp_passthrough_order_1"}`)
+	}()
+
+	select {
+	case turn := <-beforeTurnCh:
+		t.Fatalf("turn %d started before the previous turn finished", turn)
+	case turn := <-afterTurnCh:
+		t.Fatalf("turn %d finished earlier than expected in the pre-terminal window", turn)
+	case <-time.After(120 * time.Millisecond):
+	}
+
+	firstTurnEvent := readMessage()
+	require.Equal(t, "resp_passthrough_order_1", gjson.GetBytes(firstTurnEvent, "response.id").String())
+	require.Equal(t, 1, <-afterTurnCh)
+	require.Equal(t, 2, <-beforeTurnCh)
+	require.NoError(t, <-secondWriteErrCh)
+
+	secondTurnEvent := readMessage()
+	require.Equal(t, "resp_passthrough_order_2", gjson.GetBytes(secondTurnEvent, "response.id").String())
+	require.Equal(t, 2, <-afterTurnCh)
+
+	_ = clientConn.Close(coderws.StatusNormalClosure, "done")
+	select {
+	case serverErr := <-serverErrCh:
+		require.NoError(t, serverErr)
+	case <-time.After(5 * time.Second):
+		t.Fatal("等待 passthrough websocket 顺序化测试结束超时")
+	}
+
+	require.Equal(t, 1, captureDialer.DialCount(), "passthrough 模式应复用同一上游 websocket")
+	require.Len(t, upstreamConn.writes, 2, "第二轮 turn 应在首轮完成后再透传")
+}
+
 func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_ModeOffReturnsPolicyViolation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -1927,7 +2084,7 @@ func TestOpenAIGatewayService_ProxyResponsesWebSocketFromClient_BeforeTurnComple
 		require.ErrorIs(t, serverErr, hookErr)
 		var turnErr *openAIWSIngressTurnError
 		require.ErrorAs(t, serverErr, &turnErr)
-		require.Equal(t, "turn_complete_hook", turnErr.stage)
+		require.Equal(t, "turn_terminal_hook", turnErr.stage)
 	case <-time.After(5 * time.Second):
 		t.Fatal("等待 ingress websocket 结束超时")
 	}

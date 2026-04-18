@@ -35,6 +35,12 @@ type closeSpyFrameConn struct {
 	closeCalls atomic.Int32
 }
 
+type failOnWriteNFrameConn struct {
+	base      FrameConn
+	failOn    int32
+	writeCall atomic.Int32
+}
+
 func newPassthroughTestFrameConn(frames []passthroughTestFrame, autoClose bool) *passthroughTestFrameConn {
 	c := &passthroughTestFrameConn{
 		readCh: make(chan passthroughTestFrame, len(frames)+1),
@@ -158,6 +164,34 @@ func (c *closeSpyFrameConn) CloseCalls() int32 {
 		return 0
 	}
 	return c.closeCalls.Load()
+}
+
+func (c *failOnWriteNFrameConn) ReadFrame(ctx context.Context) (coderws.MessageType, []byte, error) {
+	if c == nil || c.base == nil {
+		return coderws.MessageText, nil, io.EOF
+	}
+	return c.base.ReadFrame(ctx)
+}
+
+func (c *failOnWriteNFrameConn) WriteFrame(ctx context.Context, msgType coderws.MessageType, payload []byte) error {
+	if c == nil {
+		return io.EOF
+	}
+	call := c.writeCall.Add(1)
+	if c.failOn > 0 && call == c.failOn {
+		return errors.New("terminal write failed")
+	}
+	if c.base == nil {
+		return nil
+	}
+	return c.base.WriteFrame(ctx, msgType, payload)
+}
+
+func (c *failOnWriteNFrameConn) Close() error {
+	if c == nil || c.base == nil {
+		return nil
+	}
+	return c.base.Close()
 }
 
 func TestRelay_BasicRelayAndUsage(t *testing.T) {
@@ -496,6 +530,45 @@ func TestRelay_OnTurnComplete_ProvidesTurnMetrics(t *testing.T) {
 	require.Greater(t, turn.Duration.Milliseconds(), int64(0))
 	require.NotNil(t, result.FirstTokenMs)
 	require.Greater(t, result.Duration.Milliseconds(), int64(0))
+}
+
+func TestRelay_TerminalWriteFailureDoesNotEmitTurnComplete(t *testing.T) {
+	t.Parallel()
+
+	clientConn := &failOnWriteNFrameConn{
+		base:   newPassthroughTestFrameConn(nil, false),
+		failOn: 1,
+	}
+	upstreamConn := newPassthroughTestFrameConn([]passthroughTestFrame{
+		{
+			msgType: coderws.MessageText,
+			payload: []byte(`{"type":"response.completed","response":{"id":"resp_terminal_fail","usage":{"input_tokens":2,"output_tokens":1}}}`),
+		},
+	}, true)
+
+	firstPayload := []byte(`{"type":"response.create","model":"gpt-5.3-codex","input":[]}`)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	terminalCalls := 0
+	completionCalls := 0
+	result, relayExit := Relay(ctx, clientConn, upstreamConn, firstPayload, RelayOptions{
+		OnTurnTerminal: func(turn RelayTurnResult) error {
+			terminalCalls++
+			require.Equal(t, "resp_terminal_fail", turn.RequestID)
+			return nil
+		},
+		OnTurnComplete: func(turn RelayTurnResult) error {
+			completionCalls++
+			require.Equal(t, "resp_terminal_fail", turn.RequestID)
+			return nil
+		},
+	})
+	require.NotNil(t, relayExit)
+	require.Equal(t, "write_client", relayExit.Stage)
+	require.Equal(t, 1, terminalCalls)
+	require.Zero(t, completionCalls)
+	require.Equal(t, "resp_terminal_fail", result.RequestID)
 }
 
 func TestRelay_BinaryFramePassthrough(t *testing.T) {

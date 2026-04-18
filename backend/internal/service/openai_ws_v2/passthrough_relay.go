@@ -59,8 +59,9 @@ type RelayOptions struct {
 	IdleTimeout          time.Duration
 	UpstreamDrainTimeout time.Duration
 	FirstMessageType     coderws.MessageType
-	OnClientFrame        func(msgType coderws.MessageType, payload []byte) error
+	OnClientFrame        func(ctx context.Context, msgType coderws.MessageType, payload []byte) error
 	OnUsageParseFailure  func(eventType string, usageRaw string)
+	OnTurnTerminal       func(turn RelayTurnResult) error
 	OnTurnComplete       func(turn RelayTurnResult) error
 	OnTrace              func(event RelayTraceEvent)
 	Now                  func() time.Time
@@ -171,7 +172,7 @@ func Relay(
 	})
 
 	if options.OnClientFrame != nil {
-		if err := options.OnClientFrame(firstMessageType, firstClientMessage); err != nil {
+		if err := options.OnClientFrame(relayCtx, firstMessageType, firstClientMessage); err != nil {
 			result.Duration = nowFn().Sub(startAt)
 			emitRelayTrace(onTrace, RelayTraceEvent{
 				Stage:        "client_frame_hook_failed",
@@ -214,6 +215,7 @@ func Relay(
 		nowFn,
 		state,
 		options.OnUsageParseFailure,
+		options.OnTurnTerminal,
 		options.OnTurnComplete,
 		&dropDownstreamWrites,
 		upstreamToClientFrames,
@@ -336,7 +338,7 @@ func runClientToUpstream(
 	ctx context.Context,
 	clientConn FrameConn,
 	writeUpstream func(msgType coderws.MessageType, payload []byte) error,
-	onClientFrame func(msgType coderws.MessageType, payload []byte) error,
+	onClientFrame func(ctx context.Context, msgType coderws.MessageType, payload []byte) error,
 	markActivity func(),
 	forwardedFrames *atomic.Int64,
 	onTrace func(event RelayTraceEvent),
@@ -356,7 +358,7 @@ func runClientToUpstream(
 		}
 		markActivity()
 		if onClientFrame != nil {
-			if err := onClientFrame(msgType, payload); err != nil {
+			if err := onClientFrame(ctx, msgType, payload); err != nil {
 				emitRelayTrace(onTrace, RelayTraceEvent{
 					Stage:        "client_frame_hook_failed",
 					Direction:    "client_to_upstream",
@@ -394,6 +396,7 @@ func runUpstreamToClient(
 	nowFn func() time.Time,
 	state *relayState,
 	onUsageParseFailure func(eventType string, usageRaw string),
+	onTurnTerminal func(turn RelayTurnResult) error,
 	onTurnComplete func(turn RelayTurnResult) error,
 	dropDownstreamWrites *atomic.Bool,
 	forwardedFrames *atomic.Int64,
@@ -429,14 +432,14 @@ func runUpstreamToClient(
 		case coderws.MessageBinary:
 			// binary frame 直接透传，不进入 JSON 观测路径（避免无效解析开销）。
 		}
-		if err := emitTurnComplete(onTurnComplete, state, observedEvent); err != nil {
+		if err := emitTurnComplete(onTurnTerminal, state, observedEvent); err != nil {
 			emitRelayTrace(onTrace, RelayTraceEvent{
-				Stage:           "turn_complete_hook_failed",
+				Stage:           "turn_terminal_hook_failed",
 				Direction:       "upstream_to_client",
 				WroteDownstream: wroteDownstream,
 				Error:           err.Error(),
 			})
-			exitCh <- relayExitSignal{stage: "turn_complete_hook", err: err, wroteDownstream: wroteDownstream}
+			exitCh <- relayExitSignal{stage: "turn_terminal_hook", err: err, wroteDownstream: wroteDownstream}
 			return
 		}
 		if dropDownstreamWrites != nil && dropDownstreamWrites.Load() {
@@ -451,6 +454,16 @@ func runUpstreamToClient(
 				WroteDownstream: wroteDownstream,
 			})
 			if observedEvent.terminal {
+				if err := emitTurnComplete(onTurnComplete, state, observedEvent); err != nil {
+					emitRelayTrace(onTrace, RelayTraceEvent{
+						Stage:           "turn_complete_hook_failed",
+						Direction:       "upstream_to_client",
+						WroteDownstream: wroteDownstream,
+						Error:           err.Error(),
+					})
+					exitCh <- relayExitSignal{stage: "turn_complete_hook", err: err, wroteDownstream: wroteDownstream}
+					return
+				}
 				exitCh <- relayExitSignal{
 					stage:           "drain_terminal",
 					graceful:        true,
@@ -476,6 +489,18 @@ func runUpstreamToClient(
 		wroteDownstream = true
 		if forwardedFrames != nil {
 			forwardedFrames.Add(1)
+		}
+		if observedEvent.terminal {
+			if err := emitTurnComplete(onTurnComplete, state, observedEvent); err != nil {
+				emitRelayTrace(onTrace, RelayTraceEvent{
+					Stage:           "turn_complete_hook_failed",
+					Direction:       "upstream_to_client",
+					WroteDownstream: wroteDownstream,
+					Error:           err.Error(),
+				})
+				exitCh <- relayExitSignal{stage: "turn_complete_hook", err: err, wroteDownstream: wroteDownstream}
+				return
+			}
 		}
 		markActivity()
 	}
