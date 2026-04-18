@@ -30,11 +30,11 @@ func (s *openAIRecordUsageLogRepoStub) Create(ctx context.Context, log *UsageLog
 }
 
 type testOpenAIBillingPublisher struct {
-	events []*BillingEvent
+	events []*UsageChargeEvent
 	err    error
 }
 
-func (p *testOpenAIBillingPublisher) Publish(_ context.Context, event *BillingEvent) error {
+func (p *testOpenAIBillingPublisher) Publish(_ context.Context, event *UsageChargeEvent) error {
 	p.events = append(p.events, event)
 	return p.err
 }

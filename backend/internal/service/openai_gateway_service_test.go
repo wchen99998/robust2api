@@ -203,7 +203,7 @@ func TestOpenAIGatewayService_GenerateSessionHash_UsesXXHash64(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-func TestOpenAIGatewayService_GenerateSessionHash_AttachesLegacyHashToContext(t *testing.T) {
+func TestOpenAIGatewayService_GenerateSessionHash_NoLegacyContextMutation(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	rec := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(rec)
@@ -216,7 +216,6 @@ func TestOpenAIGatewayService_GenerateSessionHash_AttachesLegacyHashToContext(t 
 	require.NotEmpty(t, sessionHash)
 	require.NotNil(t, c.Request)
 	require.NotNil(t, c.Request.Context())
-	require.NotEmpty(t, openAILegacySessionHashFromContext(c.Request.Context()))
 }
 
 func TestOpenAIGatewayService_GenerateSessionHashWithFallback(t *testing.T) {
@@ -231,7 +230,6 @@ func TestOpenAIGatewayService_GenerateSessionHashWithFallback(t *testing.T) {
 	got := svc.GenerateSessionHashWithFallback(c, []byte(`{}`), seed)
 	want := fmt.Sprintf("%016x", xxhash.Sum64String(seed))
 	require.Equal(t, want, got)
-	require.NotEmpty(t, openAILegacySessionHashFromContext(c.Request.Context()))
 
 	empty := svc.GenerateSessionHashWithFallback(c, []byte(`{}`), "   ")
 	require.Equal(t, "", empty)

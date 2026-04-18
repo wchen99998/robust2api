@@ -237,8 +237,8 @@ type OpenAICompatibilityFallbackMetricsSnapshot struct {
 
 	MetadataLegacyFallbackIsMaxTokensOneHaikuTotal int64 `json:"metadata_legacy_fallback_is_max_tokens_one_haiku_total"`
 	MetadataLegacyFallbackThinkingEnabledTotal     int64 `json:"metadata_legacy_fallback_thinking_enabled_total"`
-	MetadataLegacyFallbackPrefetchedStickyAccount  int64 `json:"metadata_legacy_fallback_prefetched_sticky_account_total"`
-	MetadataLegacyFallbackPrefetchedStickyGroup    int64 `json:"metadata_legacy_fallback_prefetched_sticky_group_total"`
+	MetadataLegacyFallbackPrefetchedStickyAccount  int64 `json:"metadata_legacy_fallback_prefetched_sticky_account"`
+	MetadataLegacyFallbackPrefetchedStickyGroup    int64 `json:"metadata_legacy_fallback_prefetched_sticky_group"`
 	MetadataLegacyFallbackSingleAccountRetryTotal  int64 `json:"metadata_legacy_fallback_single_account_retry_total"`
 	MetadataLegacyFallbackAccountSwitchCountTotal  int64 `json:"metadata_legacy_fallback_account_switch_count_total"`
 	MetadataLegacyFallbackTotal                    int64 `json:"metadata_legacy_fallback_total"`
@@ -1107,9 +1107,7 @@ func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) 
 		return ""
 	}
 
-	currentHash, legacyHash := deriveOpenAISessionHashes(sessionID)
-	attachOpenAILegacySessionHashToGin(c, legacyHash)
-	return currentHash
+	return DeriveSessionHashFromSeed(sessionID)
 }
 
 // GenerateSessionHashWithFallback 先按常规信号生成会话哈希；
@@ -1126,9 +1124,7 @@ func (s *OpenAIGatewayService) GenerateSessionHashWithFallback(c *gin.Context, b
 		return ""
 	}
 
-	currentHash, legacyHash := deriveOpenAISessionHashes(seed)
-	attachOpenAILegacySessionHashToGin(c, legacyHash)
-	return currentHash
+	return DeriveSessionHashFromSeed(seed)
 }
 
 func resolveOpenAIUpstreamOriginator(c *gin.Context, isOfficialClient bool) string {
@@ -3893,6 +3889,7 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.RateMultiplier = multiplier
 	usageLog.AccountRateMultiplier = &accountRateMultiplier
 	usageLog.BillingType = billingType
+	usageLog.RequestType = RequestTypeFromLegacy(result.Stream, result.OpenAIWSMode)
 	usageLog.Stream = result.Stream
 	usageLog.OpenAIWSMode = result.OpenAIWSMode
 	usageLog.DurationMs = &durationMs

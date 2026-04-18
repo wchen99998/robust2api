@@ -51,9 +51,6 @@ type UsageChargeEvent struct {
 	HasAPIKeyRateLimitUsage bool  `json:"has_api_key_rate_limit_usage"`
 }
 
-// BillingEvent is kept as an alias while the codebase migrates to UsageChargeEvent.
-type BillingEvent = UsageChargeEvent
-
 // NewUsageChargeEvent constructs a UsageChargeEvent from the billing params available at the gateway.
 func NewUsageChargeEvent(cmd *UsageBillingCommand, usageLog *UsageLog, groupID int64, hasRateLimits bool) *UsageChargeEvent {
 	return NewUsageChargeEventWithKind(UsageChargeEventKindCharge, cmd, usageLog, groupID, hasRateLimits)
@@ -90,11 +87,6 @@ func NewUsageChargeEventWithKind(kind UsageChargeEventKind, cmd *UsageBillingCom
 		GroupID:                 groupID,
 		HasAPIKeyRateLimitUsage: hasRateLimits,
 	}
-}
-
-// NewBillingEvent is kept as a compatibility wrapper for existing call sites and tests.
-func NewBillingEvent(cmd *UsageBillingCommand, usageLog *UsageLog, groupID int64, hasRateLimits bool) *BillingEvent {
-	return NewUsageChargeEvent(cmd, usageLog, groupID, hasRateLimits)
 }
 
 // BillingEventPublisher publishes billing events to a durable stream.

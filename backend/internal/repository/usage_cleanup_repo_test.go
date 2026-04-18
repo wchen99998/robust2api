@@ -479,11 +479,11 @@ func TestBuildUsageCleanupWhereRequestTypePriority(t *testing.T) {
 		Stream:      &stream,
 	})
 
-	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND (request_type = $3 OR (request_type = 0 AND openai_ws_mode = TRUE))", where)
+	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND request_type = $3", where)
 	require.Equal(t, []any{start, end, requestType}, args)
 }
 
-func TestBuildUsageCleanupWhereRequestTypeLegacyFallback(t *testing.T) {
+func TestBuildUsageCleanupWhereRequestType(t *testing.T) {
 	start := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
 	end := start.Add(24 * time.Hour)
 	requestType := int16(service.RequestTypeStream)
@@ -494,7 +494,7 @@ func TestBuildUsageCleanupWhereRequestTypeLegacyFallback(t *testing.T) {
 		RequestType: &requestType,
 	})
 
-	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND (request_type = $3 OR (request_type = 0 AND stream = TRUE AND openai_ws_mode = FALSE))", where)
+	require.Equal(t, "created_at >= $1 AND created_at <= $2 AND request_type = $3", where)
 	require.Equal(t, []any{start, end, requestType}, args)
 }
 

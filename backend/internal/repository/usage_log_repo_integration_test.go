@@ -523,11 +523,11 @@ func (s *UsageLogRepoSuite) TestGetByID_ReturnsOpenAIWSMode() {
 		AccountID:    account.ID,
 		RequestID:    uuid.New().String(),
 		Model:        "gpt-5.3-codex",
+		RequestType:  service.RequestTypeWSV2,
 		InputTokens:  10,
 		OutputTokens: 20,
 		TotalCost:    1.0,
 		ActualCost:   1.0,
-		OpenAIWSMode: true,
 		CreatedAt:    timezone.Today().Add(3 * time.Hour),
 	}
 	_, err := s.repo.Create(s.ctx, log)
@@ -538,7 +538,7 @@ func (s *UsageLogRepoSuite) TestGetByID_ReturnsOpenAIWSMode() {
 	s.Require().True(got.OpenAIWSMode)
 }
 
-func (s *UsageLogRepoSuite) TestGetByID_ReturnsRequestTypeAndLegacyFallback() {
+func (s *UsageLogRepoSuite) TestGetByID_ReturnsRequestTypeAndLegacyFields() {
 	user := mustCreateUser(s.T(), s.client, &service.User{Email: "getbyid-request-type@test.com"})
 	apiKey := mustCreateApiKey(s.T(), s.client, &service.APIKey{UserID: user.ID, Key: "sk-getbyid-request-type", Name: "k"})
 	account := mustCreateAccount(s.T(), s.client, &service.Account{Name: "acc-getbyid-request-type"})

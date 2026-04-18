@@ -607,21 +607,14 @@ func TestGatewayHotpathHelpers_CacheTTLAndStickyContext(t *testing.T) {
 		require.Equal(t, int64(0), prefetchedStickyAccountIDFromContext(context.TODO(), nil))
 		require.Equal(t, int64(0), prefetchedStickyAccountIDFromContext(context.Background(), nil))
 
-		ctx := context.WithValue(context.Background(), ctxkey.PrefetchedStickyAccountID, int64(123))
-		ctx = context.WithValue(ctx, ctxkey.PrefetchedStickyGroupID, int64(0))
+		ctx := WithPrefetchedStickySession(context.Background(), 123, 0)
 		require.Equal(t, int64(123), prefetchedStickyAccountIDFromContext(ctx, nil))
 
 		groupID := int64(9)
-		ctx2 := context.WithValue(context.Background(), ctxkey.PrefetchedStickyAccountID, 456)
-		ctx2 = context.WithValue(ctx2, ctxkey.PrefetchedStickyGroupID, groupID)
+		ctx2 := WithPrefetchedStickySession(context.Background(), 456, groupID)
 		require.Equal(t, int64(456), prefetchedStickyAccountIDFromContext(ctx2, &groupID))
 
-		ctx3 := context.WithValue(context.Background(), ctxkey.PrefetchedStickyAccountID, "invalid")
-		ctx3 = context.WithValue(ctx3, ctxkey.PrefetchedStickyGroupID, groupID)
-		require.Equal(t, int64(0), prefetchedStickyAccountIDFromContext(ctx3, &groupID))
-
-		ctx4 := context.WithValue(context.Background(), ctxkey.PrefetchedStickyAccountID, int64(789))
-		ctx4 = context.WithValue(ctx4, ctxkey.PrefetchedStickyGroupID, int64(10))
+		ctx4 := WithPrefetchedStickySession(context.Background(), 789, 10)
 		require.Equal(t, int64(0), prefetchedStickyAccountIDFromContext(ctx4, &groupID))
 	})
 
@@ -752,8 +745,7 @@ func TestSelectAccountWithLoadAwareness_StickyReadReuse(t *testing.T) {
 			modelsListCacheTTL: time.Minute,
 		}
 
-		ctx := context.WithValue(baseCtx, ctxkey.PrefetchedStickyAccountID, account.ID)
-		ctx = context.WithValue(ctx, ctxkey.PrefetchedStickyGroupID, int64(0))
+		ctx := WithPrefetchedStickySession(baseCtx, account.ID, 0)
 		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sess-hash", "", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -774,8 +766,7 @@ func TestSelectAccountWithLoadAwareness_StickyReadReuse(t *testing.T) {
 			modelsListCacheTTL: time.Minute,
 		}
 
-		ctx := context.WithValue(baseCtx, ctxkey.PrefetchedStickyAccountID, int64(999))
-		ctx = context.WithValue(ctx, ctxkey.PrefetchedStickyGroupID, int64(77))
+		ctx := WithPrefetchedStickySession(baseCtx, 999, 77)
 		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sess-hash", "", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)

@@ -17,13 +17,13 @@ import (
 )
 
 func streamingV2Enabled(cfg *config.Config, reqStream bool) bool {
-	if !reqStream || cfg == nil {
+	if !reqStream {
 		return false
 	}
-	if cfg.RunMode == config.RunModeSimple {
-		return false
+	if cfg == nil {
+		return true
 	}
-	return cfg.Billing.StreamingV2Enabled
+	return cfg.RunMode != config.RunModeSimple
 }
 
 func streamingBillingRequestID(ctx context.Context) string {

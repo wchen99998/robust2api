@@ -332,12 +332,10 @@ type ProxyProbeConfig struct {
 }
 
 type BillingConfig struct {
-	CircuitBreaker             CircuitBreakerConfig `mapstructure:"circuit_breaker"`
-	Stream                     BillingStreamConfig  `mapstructure:"stream"`
-	DBPool                     BillingDBPoolConfig  `mapstructure:"db_pool"`
-	HealthPort                 string               `mapstructure:"health_port"`
-	QueueFirstNonStreamEnabled bool                 `mapstructure:"queue_first_non_stream_enabled"`
-	StreamingV2Enabled         bool                 `mapstructure:"streaming_v2_enabled"`
+	CircuitBreaker CircuitBreakerConfig `mapstructure:"circuit_breaker"`
+	Stream         BillingStreamConfig  `mapstructure:"stream"`
+	DBPool         BillingDBPoolConfig  `mapstructure:"db_pool"`
+	HealthPort     string               `mapstructure:"health_port"`
 }
 
 // BillingStreamConfig configures the Redis Stream used as a message broker
@@ -533,7 +531,6 @@ type GatewayOpenAIWSConfig struct {
 	IngressPreviousResponseRecoveryEnabled bool `mapstructure:"ingress_previous_response_recovery_enabled"`
 	// PrewarmGenerateEnabled: 是否启用 WSv2 generate=false 预热（默认 false）
 	PrewarmGenerateEnabled bool `mapstructure:"prewarm_generate_enabled"`
-
 	// 连接池参数
 	MaxConnsPerAccount int `mapstructure:"max_conns_per_account"`
 	MinIdlePerAccount  int `mapstructure:"min_idle_per_account"`
@@ -1189,8 +1186,6 @@ func setDefaults() {
 	viper.SetDefault("billing.stream.publish_retries", 3)
 	viper.SetDefault("billing.stream.publish_timeout_seconds", 10)
 	viper.SetDefault("billing.health_port", "8082")
-	viper.SetDefault("billing.queue_first_non_stream_enabled", false)
-	viper.SetDefault("billing.streaming_v2_enabled", false)
 
 	// Turnstile
 	viper.SetDefault("turnstile.required", false)

@@ -275,7 +275,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			if apiKey.GroupID != nil {
 				prefetchedGroupID = *apiKey.GroupID
 			}
-			ctx := service.WithPrefetchedStickySession(c.Request.Context(), sessionBoundAccountID, prefetchedGroupID, h.metadataBridgeEnabled())
+			ctx := service.WithPrefetchedStickySession(c.Request.Context(), sessionBoundAccountID, prefetchedGroupID)
 			c.Request = c.Request.WithContext(ctx)
 		}
 	}
@@ -393,7 +393,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
 	if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), apiKey.GroupID) {
-		ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
+		ctx := service.WithSingleAccountRetry(c.Request.Context(), true)
 		c.Request = c.Request.WithContext(ctx)
 	}
 
@@ -407,7 +407,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 			action := fs.HandleSelectionExhausted(c.Request.Context())
 			switch action {
 			case FailoverContinue:
-				ctx := service.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
+				ctx := service.WithSingleAccountRetry(c.Request.Context(), true)
 				c.Request = c.Request.WithContext(ctx)
 				continue
 			case FailoverCanceled:
@@ -527,7 +527,7 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 		var result *service.ForwardResult
 		requestCtx := c.Request.Context()
 		if fs.SwitchCount > 0 {
-			requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
+			requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount)
 		}
 		if account.Platform == service.PlatformAntigravity && account.Type != service.AccountTypeAPIKey {
 			result, err = h.antigravityGatewayService.ForwardGemini(requestCtx, c, account, modelName, action, stream, body, hasBoundSession)
@@ -675,10 +675,6 @@ func (h *GatewayHandler) GeminiV1BetaModels(c *gin.Context) {
 				reqLog.Error("gemini.commit_buffered_response_failed", zap.Error(commitErr))
 			}
 			return
-		}
-		if stream {
-			recordLegacyStreamingBilling("/v1beta/models")
-			reqLog.Debug("gemini.legacy_streaming_billing")
 		}
 		if responseCapture != nil {
 			responseCapture.Discard(c)

@@ -110,6 +110,7 @@ func (s *UsageService) Create(ctx context.Context, req CreateUsageLogRequest) (*
 		TotalCost:             req.TotalCost,
 		ActualCost:            req.ActualCost,
 		RateMultiplier:        req.RateMultiplier,
+		RequestType:           RequestTypeFromLegacy(req.Stream, false),
 		Stream:                req.Stream,
 		DurationMs:            req.DurationMs,
 	}

@@ -50,7 +50,6 @@ type Metrics struct {
 	billingDLQMessages       metric.Int64Gauge
 	billingLastApplySuccess  metric.Int64Gauge
 	billingLastApplyFailure  metric.Int64Gauge
-	legacyStreamingBilling   metric.Int64Counter
 }
 
 // NewMetrics creates and registers all application metric instruments.
@@ -223,14 +222,6 @@ func NewMetrics() (*Metrics, error) {
 		return nil, err
 	}
 
-	m.legacyStreamingBilling, err = meter.Int64Counter("sub2api.billing.legacy_streaming_requests",
-		metric.WithDescription("Total streaming requests still using legacy post-response billing"),
-		metric.WithUnit("{request}"),
-	)
-	if err != nil {
-		return nil, err
-	}
-
 	return m, nil
 }
 
@@ -354,11 +345,6 @@ func (m *Metrics) SetBillingLastApplySuccessTimestamp(ctx context.Context, unixS
 
 func (m *Metrics) SetBillingLastApplyFailureTimestamp(ctx context.Context, unixSec int64) {
 	m.billingLastApplyFailure.Record(ctx, unixSec)
-}
-
-func (m *Metrics) RecordLegacyStreamingBilling(ctx context.Context, endpoint string) {
-	attrs := appendOptionalStringAttr(nil, "endpoint", endpoint)
-	m.legacyStreamingBilling.Add(ctx, 1, metric.WithAttributes(attrs...))
 }
 
 func appendOptionalStringAttr(attrs []attribute.KeyValue, key, value string) []attribute.KeyValue {

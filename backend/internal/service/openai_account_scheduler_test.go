@@ -383,9 +383,6 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_RequiredWSV2_SkipsStick
 			Schedulable: true,
 			Concurrency: 1,
 			Priority:    5,
-			Extra: map[string]any{
-				"openai_apikey_responses_websockets_v2_enabled": true,
-			},
 		},
 	}
 	cache := &stubGatewayCache{

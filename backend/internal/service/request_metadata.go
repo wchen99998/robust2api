@@ -46,12 +46,7 @@ func metadataFromContext(ctx context.Context) *RequestMetadata {
 	return md
 }
 
-func updateRequestMetadata(
-	ctx context.Context,
-	bridgeOldKeys bool,
-	update func(md *RequestMetadata),
-	legacyBridge func(ctx context.Context) context.Context,
-) context.Context {
+func updateRequestMetadata(ctx context.Context, update func(md *RequestMetadata)) context.Context {
 	if ctx == nil {
 		return nil
 	}
@@ -61,58 +56,43 @@ func updateRequestMetadata(
 		*next = *current
 	}
 	update(next)
-	ctx = context.WithValue(ctx, requestMetadataKey, next)
-	if bridgeOldKeys && legacyBridge != nil {
-		ctx = legacyBridge(ctx)
-	}
-	return ctx
+	return context.WithValue(ctx, requestMetadataKey, next)
 }
 
-func WithIsMaxTokensOneHaikuRequest(ctx context.Context, value bool, bridgeOldKeys bool) context.Context {
-	return updateRequestMetadata(ctx, bridgeOldKeys, func(md *RequestMetadata) {
+func WithIsMaxTokensOneHaikuRequest(ctx context.Context, value bool) context.Context {
+	return updateRequestMetadata(ctx, func(md *RequestMetadata) {
 		v := value
 		md.IsMaxTokensOneHaikuRequest = &v
-	}, func(base context.Context) context.Context {
-		return context.WithValue(base, ctxkey.IsMaxTokensOneHaikuRequest, value)
 	})
 }
 
-func WithThinkingEnabled(ctx context.Context, value bool, bridgeOldKeys bool) context.Context {
-	return updateRequestMetadata(ctx, bridgeOldKeys, func(md *RequestMetadata) {
+func WithThinkingEnabled(ctx context.Context, value bool) context.Context {
+	return updateRequestMetadata(ctx, func(md *RequestMetadata) {
 		v := value
 		md.ThinkingEnabled = &v
-	}, func(base context.Context) context.Context {
-		return context.WithValue(base, ctxkey.ThinkingEnabled, value)
 	})
 }
 
-func WithPrefetchedStickySession(ctx context.Context, accountID, groupID int64, bridgeOldKeys bool) context.Context {
-	return updateRequestMetadata(ctx, bridgeOldKeys, func(md *RequestMetadata) {
+func WithPrefetchedStickySession(ctx context.Context, accountID, groupID int64) context.Context {
+	return updateRequestMetadata(ctx, func(md *RequestMetadata) {
 		account := accountID
 		group := groupID
 		md.PrefetchedStickyAccountID = &account
 		md.PrefetchedStickyGroupID = &group
-	}, func(base context.Context) context.Context {
-		bridged := context.WithValue(base, ctxkey.PrefetchedStickyAccountID, accountID)
-		return context.WithValue(bridged, ctxkey.PrefetchedStickyGroupID, groupID)
 	})
 }
 
-func WithSingleAccountRetry(ctx context.Context, value bool, bridgeOldKeys bool) context.Context {
-	return updateRequestMetadata(ctx, bridgeOldKeys, func(md *RequestMetadata) {
+func WithSingleAccountRetry(ctx context.Context, value bool) context.Context {
+	return updateRequestMetadata(ctx, func(md *RequestMetadata) {
 		v := value
 		md.SingleAccountRetry = &v
-	}, func(base context.Context) context.Context {
-		return context.WithValue(base, ctxkey.SingleAccountRetry, value)
 	})
 }
 
-func WithAccountSwitchCount(ctx context.Context, value int, bridgeOldKeys bool) context.Context {
-	return updateRequestMetadata(ctx, bridgeOldKeys, func(md *RequestMetadata) {
+func WithAccountSwitchCount(ctx context.Context, value int) context.Context {
+	return updateRequestMetadata(ctx, func(md *RequestMetadata) {
 		v := value
 		md.AccountSwitchCount = &v
-	}, func(base context.Context) context.Context {
-		return context.WithValue(base, ctxkey.AccountSwitchCount, value)
 	})
 }
 
@@ -151,14 +131,13 @@ func PrefetchedStickyGroupIDFromContext(ctx context.Context) (int64, bool) {
 	if ctx == nil {
 		return 0, false
 	}
-	v := ctx.Value(ctxkey.PrefetchedStickyGroupID)
-	switch t := v.(type) {
+	switch value := ctx.Value(ctxkey.PrefetchedStickyGroupID).(type) {
 	case int64:
 		requestMetadataFallbackPrefetchedStickyGroup.Add(1)
-		return t, true
+		return value, true
 	case int:
 		requestMetadataFallbackPrefetchedStickyGroup.Add(1)
-		return int64(t), true
+		return int64(value), true
 	}
 	return 0, false
 }
@@ -170,14 +149,13 @@ func PrefetchedStickyAccountIDFromContext(ctx context.Context) (int64, bool) {
 	if ctx == nil {
 		return 0, false
 	}
-	v := ctx.Value(ctxkey.PrefetchedStickyAccountID)
-	switch t := v.(type) {
+	switch value := ctx.Value(ctxkey.PrefetchedStickyAccountID).(type) {
 	case int64:
 		requestMetadataFallbackPrefetchedStickyAccount.Add(1)
-		return t, true
+		return value, true
 	case int:
 		requestMetadataFallbackPrefetchedStickyAccount.Add(1)
-		return int64(t), true
+		return int64(value), true
 	}
 	return 0, false
 }
@@ -203,14 +181,13 @@ func AccountSwitchCountFromContext(ctx context.Context) (int, bool) {
 	if ctx == nil {
 		return 0, false
 	}
-	v := ctx.Value(ctxkey.AccountSwitchCount)
-	switch t := v.(type) {
+	switch value := ctx.Value(ctxkey.AccountSwitchCount).(type) {
 	case int:
 		requestMetadataFallbackAccountSwitchCountTotal.Add(1)
-		return t, true
+		return value, true
 	case int64:
 		requestMetadataFallbackAccountSwitchCountTotal.Add(1)
-		return int(t), true
+		return int(value), true
 	}
 	return 0, false
 }
