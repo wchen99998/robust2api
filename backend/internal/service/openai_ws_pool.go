@@ -1535,13 +1535,6 @@ func (p *openAIWSConnPool) dynamicMaxConnsEnabled() bool {
 	return false
 }
 
-func (p *openAIWSConnPool) modeRouterV2Enabled() bool {
-	if p != nil && p.cfg != nil {
-		return p.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled
-	}
-	return false
-}
-
 func (p *openAIWSConnPool) maxConnsFactorByAccount(account *Account) float64 {
 	if p == nil || p.cfg == nil || account == nil {
 		return 1.0
@@ -1564,34 +1557,16 @@ func (p *openAIWSConnPool) effectiveMaxConnsByAccount(account *Account) int {
 	if hardCap <= 0 {
 		return 0
 	}
-	if p.modeRouterV2Enabled() {
-		if account == nil {
-			return hardCap
-		}
-		if account.Concurrency <= 0 {
-			return 0
-		}
-		return account.Concurrency
-	}
-	if account == nil || !p.dynamicMaxConnsEnabled() {
+	if account == nil {
 		return hardCap
 	}
 	if account.Concurrency <= 0 {
-		// 0/-1 等“无限制”并发场景下，仍由全局硬上限兜底。
+		return 0
+	}
+	if account.Concurrency > hardCap {
 		return hardCap
 	}
-	factor := p.maxConnsFactorByAccount(account)
-	if factor <= 0 {
-		factor = 1.0
-	}
-	effective := int(math.Ceil(float64(account.Concurrency) * factor))
-	if effective < 1 {
-		effective = 1
-	}
-	if effective > hardCap {
-		effective = hardCap
-	}
-	return effective
+	return account.Concurrency
 }
 
 func (p *openAIWSConnPool) minIdlePerAccount() int {

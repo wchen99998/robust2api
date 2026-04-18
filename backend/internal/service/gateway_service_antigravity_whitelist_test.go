@@ -167,7 +167,7 @@ func TestGatewayService_isModelSupportedByAccountWithContext_ThinkingMode(t *tes
 				},
 			}
 
-			ctx := context.WithValue(context.Background(), ctxkey.ThinkingEnabled, tt.thinkingEnabled)
+			ctx := WithThinkingEnabled(context.Background(), tt.thinkingEnabled)
 			result := svc.isModelSupportedByAccountWithContext(ctx, account, tt.requestedModel)
 
 			require.Equal(t, tt.expected, result,
@@ -227,14 +227,14 @@ func TestGatewayService_isModelSupportedByAccountWithContext_CustomMappingThinki
 	}
 
 	// thinking=true: claude-sonnet-4-5 → mapped=claude-sonnet-4-5 → +thinking → check IsModelSupported(claude-sonnet-4-5-thinking)=true
-	ctx := context.WithValue(context.Background(), ctxkey.ThinkingEnabled, true)
+	ctx := WithThinkingEnabled(context.Background(), true)
 	require.True(t, svc.isModelSupportedByAccountWithContext(ctx, account, "claude-sonnet-4-5"))
 
 	// thinking=false: claude-sonnet-4-5 → mapped=claude-sonnet-4-5 → check IsModelSupported(claude-sonnet-4-5)=true
-	ctx = context.WithValue(context.Background(), ctxkey.ThinkingEnabled, false)
+	ctx = WithThinkingEnabled(context.Background(), false)
 	require.True(t, svc.isModelSupportedByAccountWithContext(ctx, account, "claude-sonnet-4-5"))
 
 	// 自定义模型（非 claude）不受 thinking 后缀影响，mapped 成功即通过
-	ctx = context.WithValue(context.Background(), ctxkey.ThinkingEnabled, true)
+	ctx = WithThinkingEnabled(context.Background(), true)
 	require.True(t, svc.isModelSupportedByAccountWithContext(ctx, account, "my-custom-model"))
 }

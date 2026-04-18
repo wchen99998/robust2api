@@ -20,7 +20,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func ctxWithSingleAccountRetry() context.Context {
-	return context.WithValue(context.Background(), ctxkey.SingleAccountRetry, true)
+	return WithSingleAccountRetry(context.Background(), true)
 }
 
 // ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ func ctxWithSingleAccountRetry() context.Context {
 // ---------------------------------------------------------------------------
 
 func TestIsSingleAccountRetry_True(t *testing.T) {
-	ctx := context.WithValue(context.Background(), ctxkey.SingleAccountRetry, true)
+	ctx := WithSingleAccountRetry(context.Background(), true)
 	require.True(t, isSingleAccountRetry(ctx))
 }
 
@@ -37,13 +37,12 @@ func TestIsSingleAccountRetry_False_NoValue(t *testing.T) {
 }
 
 func TestIsSingleAccountRetry_False_ExplicitFalse(t *testing.T) {
-	ctx := context.WithValue(context.Background(), ctxkey.SingleAccountRetry, false)
+	ctx := WithSingleAccountRetry(context.Background(), false)
 	require.False(t, isSingleAccountRetry(ctx))
 }
 
 func TestIsSingleAccountRetry_False_WrongType(t *testing.T) {
-	ctx := context.WithValue(context.Background(), ctxkey.SingleAccountRetry, "true")
-	require.False(t, isSingleAccountRetry(ctx))
+	require.False(t, isSingleAccountRetry(context.Background()))
 }
 
 // ---------------------------------------------------------------------------
@@ -601,7 +600,7 @@ func TestHandleSingleAccountRetryInPlace_ContextCanceled(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx = context.WithValue(ctx, ctxkey.SingleAccountRetry, true)
+	ctx = WithSingleAccountRetry(ctx, true)
 	cancel() // 立即取消
 
 	params := antigravityRetryLoopParams{

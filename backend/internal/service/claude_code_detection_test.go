@@ -191,7 +191,7 @@ func TestValidate_MaxTokensOneHaikuBypass(t *testing.T) {
 	req := httptest.NewRequest("POST", "/v1/messages", nil)
 	req.Header.Set("User-Agent", "claude-cli/1.0.0")
 	// 不设置 X-App 等头，通过 context 标记为 haiku 探测请求
-	ctx := context.WithValue(req.Context(), ctxkey.IsMaxTokensOneHaikuRequest, true)
+	ctx := WithIsMaxTokensOneHaikuRequest(req.Context(), true)
 	req = req.WithContext(ctx)
 
 	// 即使 body 不包含 system prompt，也应通过

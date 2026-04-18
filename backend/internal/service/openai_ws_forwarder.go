@@ -26,7 +26,6 @@ import (
 )
 
 const (
-	openAIWSBetaV1Value = "responses_websockets=2026-02-04"
 	openAIWSBetaV2Value = "responses_websockets=2026-02-06"
 
 	openAIWSTurnStateHeader    = "x-codex-turn-state"
@@ -579,8 +578,8 @@ func openAIWSPayloadBoolFromRaw(payload []byte, key string, defaultValue bool) b
 	return value.Bool()
 }
 
-func openAIWSSessionHashesFromID(sessionID string) (string, string) {
-	return deriveOpenAISessionHashes(sessionID)
+func openAIWSSessionHashFromID(sessionID string) string {
+	return DeriveSessionHashFromSeed(sessionID)
 }
 
 func extractOpenAIWSImageURL(value any) string {
@@ -1164,11 +1163,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSHeaders(
 		headers.Set("originator", resolveOpenAIUpstreamOriginator(c, isCodexCLI))
 	}
 
-	betaValue := openAIWSBetaV2Value
-	if decision.Transport == OpenAIUpstreamTransportResponsesWebsocket {
-		betaValue = openAIWSBetaV1Value
-	}
-	headers.Set("OpenAI-Beta", betaValue)
+	headers.Set("OpenAI-Beta", openAIWSBetaV2Value)
 
 	customUA := ""
 	if account != nil {
@@ -1777,9 +1772,7 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	groupID := getOpenAIGroupIDFromContext(c)
 	sessionHash := s.GenerateSessionHash(c, nil)
 	if sessionHash == "" {
-		var legacySessionHash string
-		sessionHash, legacySessionHash = openAIWSSessionHashesFromID(promptCacheKey)
-		attachOpenAILegacySessionHashToGin(c, legacySessionHash)
+		sessionHash = openAIWSSessionHashFromID(promptCacheKey)
 	}
 	if turnState == "" && stateStore != nil && sessionHash != "" {
 		if savedTurnState, ok := stateStore.GetSessionTurnState(groupID, sessionHash); ok {
@@ -2401,46 +2394,43 @@ func (s *OpenAIGatewayService) ProxyResponsesWebSocketFromClient(
 			retErr,
 		)
 	}()
-	modeRouterV2Enabled := s != nil && s.cfg != nil && s.cfg.Gateway.OpenAIWS.ModeRouterV2Enabled
 	ingressMode := OpenAIWSIngressModeCtxPool
-	if modeRouterV2Enabled {
-		ingressMode = account.ResolveOpenAIResponsesWebSocketV2Mode(s.cfg.Gateway.OpenAIWS.IngressModeDefault)
-		if ingressMode == OpenAIWSIngressModeOff {
-			return NewOpenAIWSClientCloseError(
-				coderws.StatusPolicyViolation,
-				"websocket mode is disabled for this account",
-				nil,
-			)
+	ingressMode = account.ResolveOpenAIResponsesWebSocketV2Mode(s.cfg.Gateway.OpenAIWS.IngressModeDefault)
+	if ingressMode == OpenAIWSIngressModeOff {
+		return NewOpenAIWSClientCloseError(
+			coderws.StatusPolicyViolation,
+			"websocket mode is disabled for this account",
+			nil,
+		)
+	}
+	switch ingressMode {
+	case OpenAIWSIngressModePassthrough:
+		if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
+			return fmt.Errorf("websocket ingress requires ws_v2 transport, got=%s", wsDecision.Transport)
 		}
-		switch ingressMode {
-		case OpenAIWSIngressModePassthrough:
-			if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
-				return fmt.Errorf("websocket ingress requires ws_v2 transport, got=%s", wsDecision.Transport)
-			}
-			return s.proxyResponsesWebSocketV2Passthrough(
-				ctx,
-				c,
-				clientConn,
-				account,
-				token,
-				firstClientMessage,
-				hooks,
-				wsDecision,
-			)
-		case OpenAIWSIngressModeCtxPool, OpenAIWSIngressModeShared, OpenAIWSIngressModeDedicated:
-			// continue
-		default:
-			return NewOpenAIWSClientCloseError(
-				coderws.StatusPolicyViolation,
-				"websocket mode only supports ctx_pool/passthrough",
-				nil,
-			)
-		}
+		return s.proxyResponsesWebSocketV2Passthrough(
+			ctx,
+			c,
+			clientConn,
+			account,
+			token,
+			firstClientMessage,
+			hooks,
+			wsDecision,
+		)
+	case OpenAIWSIngressModeCtxPool, OpenAIWSIngressModeShared, OpenAIWSIngressModeDedicated:
+		// continue
+	default:
+		return NewOpenAIWSClientCloseError(
+			coderws.StatusPolicyViolation,
+			"websocket mode only supports ctx_pool/passthrough",
+			nil,
+		)
 	}
 	if wsDecision.Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
 		return fmt.Errorf("websocket ingress requires ws_v2 transport, got=%s", wsDecision.Transport)
 	}
-	dedicatedMode := modeRouterV2Enabled && ingressMode == OpenAIWSIngressModeDedicated
+	dedicatedMode := ingressMode == OpenAIWSIngressModeDedicated
 
 	wsURL, err := s.buildOpenAIResponsesWSURL(account)
 	if err != nil {

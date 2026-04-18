@@ -538,7 +538,7 @@ func TestOpenAIGatewayService_Forward_WSv2FallbackCoolingSkipWS(t *testing.T) {
 	require.False(t, ok, "已移除 fallback cooling 快捷回退路径")
 }
 
-func TestOpenAIGatewayService_Forward_ReturnErrorWhenOnlyWSv1Enabled(t *testing.T) {
+func TestOpenAIGatewayService_Forward_FallsBackToHTTPWhenWSv2FeatureDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	rec := httptest.NewRecorder()
@@ -562,7 +562,6 @@ func TestOpenAIGatewayService_Forward_ReturnErrorWhenOnlyWSv1Enabled(t *testing.
 	cfg.Gateway.OpenAIWS.Enabled = true
 	cfg.Gateway.OpenAIWS.OAuthEnabled = true
 	cfg.Gateway.OpenAIWS.APIKeyEnabled = true
-	cfg.Gateway.OpenAIWS.ResponsesWebsockets = true
 	cfg.Gateway.OpenAIWS.ResponsesWebsocketsV2 = false
 
 	svc := &OpenAIGatewayService{
@@ -582,18 +581,15 @@ func TestOpenAIGatewayService_Forward_ReturnErrorWhenOnlyWSv1Enabled(t *testing.
 			"base_url": "https://api.openai.com/v1/responses",
 		},
 		Extra: map[string]any{
-			"responses_websockets_v2_enabled": true,
+			"openai_apikey_responses_websockets_v2_mode": OpenAIWSIngressModeCtxPool,
 		},
 	}
 
 	body := []byte(`{"model":"gpt-5.1","stream":false,"previous_response_id":"resp_v1","input":[{"type":"input_text","text":"hello"}]}`)
 	result, err := svc.Forward(context.Background(), c, account, body)
-	require.Error(t, err)
-	require.Nil(t, result)
-	require.Contains(t, err.Error(), "ws v1")
-	require.Equal(t, http.StatusBadRequest, rec.Code)
-	require.Contains(t, rec.Body.String(), "WSv1")
-	require.Nil(t, upstream.lastReq, "WSv1 不支持时不应触发 HTTP 上游请求")
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.NotNil(t, upstream.lastReq, "WSv2 功能关闭时应回退到 HTTP 上游")
 }
 
 func TestNewOpenAIGatewayService_InitializesOpenAIWSResolver(t *testing.T) {
