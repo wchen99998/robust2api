@@ -20,6 +20,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/gin-gonic/gin"
@@ -2543,7 +2544,7 @@ func sleepAntigravityBackoffWithContext(ctx context.Context, attempt int) bool {
 
 // isSingleAccountRetry 检查 context 中是否设置了单账号退避重试标记
 func isSingleAccountRetry(ctx context.Context) bool {
-	v, _ := SingleAccountRetryFromContext(ctx)
+	v, _ := requestmeta.SingleAccountRetryFromContext(ctx)
 	return v
 }
 

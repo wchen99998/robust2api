@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/apicompat"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
@@ -227,6 +228,21 @@ type OpenAIWSRetryMetricsSnapshot struct {
 	RetryBackoffMsTotal           int64 `json:"retry_backoff_ms_total"`
 	RetryExhaustedTotal           int64 `json:"retry_exhausted_total"`
 	NonRetryableFastFallbackTotal int64 `json:"non_retryable_fast_fallback_total"`
+}
+
+type OpenAICompatibilityFallbackMetricsSnapshot struct {
+	SessionHashLegacyReadFallbackTotal int64   `json:"session_hash_legacy_read_fallback_total"`
+	SessionHashLegacyReadFallbackHit   int64   `json:"session_hash_legacy_read_fallback_hit"`
+	SessionHashLegacyDualWriteTotal    int64   `json:"session_hash_legacy_dual_write_total"`
+	SessionHashLegacyReadHitRate       float64 `json:"session_hash_legacy_read_hit_rate"`
+
+	MetadataLegacyFallbackIsMaxTokensOneHaikuTotal int64 `json:"metadata_legacy_fallback_is_max_tokens_one_haiku_total"`
+	MetadataLegacyFallbackThinkingEnabledTotal     int64 `json:"metadata_legacy_fallback_thinking_enabled_total"`
+	MetadataLegacyFallbackPrefetchedStickyAccount  int64 `json:"metadata_legacy_fallback_prefetched_sticky_account_total"`
+	MetadataLegacyFallbackPrefetchedStickyGroup    int64 `json:"metadata_legacy_fallback_prefetched_sticky_group_total"`
+	MetadataLegacyFallbackSingleAccountRetryTotal  int64 `json:"metadata_legacy_fallback_single_account_retry_total"`
+	MetadataLegacyFallbackAccountSwitchCountTotal  int64 `json:"metadata_legacy_fallback_account_switch_count_total"`
+	MetadataLegacyFallbackTotal                    int64 `json:"metadata_legacy_fallback_total"`
 }
 
 type openAIWSRetryMetrics struct {
@@ -774,6 +790,32 @@ func (s *OpenAIGatewayService) SnapshotOpenAIWSRetryMetrics() OpenAIWSRetryMetri
 	}
 }
 
+func SnapshotOpenAICompatibilityFallbackMetrics() OpenAICompatibilityFallbackMetricsSnapshot {
+	legacyReadFallbackTotal, legacyReadFallbackHit, legacyDualWriteTotal := openAIStickyCompatStats()
+	isMaxTokensOneHaiku, thinkingEnabled, prefetchedStickyAccount, prefetchedStickyGroup, singleAccountRetry, accountSwitchCount := requestmeta.FallbackStats()
+
+	readHitRate := float64(0)
+	if legacyReadFallbackTotal > 0 {
+		readHitRate = float64(legacyReadFallbackHit) / float64(legacyReadFallbackTotal)
+	}
+	metadataFallbackTotal := isMaxTokensOneHaiku + thinkingEnabled + prefetchedStickyAccount + prefetchedStickyGroup + singleAccountRetry + accountSwitchCount
+
+	return OpenAICompatibilityFallbackMetricsSnapshot{
+		SessionHashLegacyReadFallbackTotal: legacyReadFallbackTotal,
+		SessionHashLegacyReadFallbackHit:   legacyReadFallbackHit,
+		SessionHashLegacyDualWriteTotal:    legacyDualWriteTotal,
+		SessionHashLegacyReadHitRate:       readHitRate,
+
+		MetadataLegacyFallbackIsMaxTokensOneHaikuTotal: isMaxTokensOneHaiku,
+		MetadataLegacyFallbackThinkingEnabledTotal:     thinkingEnabled,
+		MetadataLegacyFallbackPrefetchedStickyAccount:  prefetchedStickyAccount,
+		MetadataLegacyFallbackPrefetchedStickyGroup:    prefetchedStickyGroup,
+		MetadataLegacyFallbackSingleAccountRetryTotal:  singleAccountRetry,
+		MetadataLegacyFallbackAccountSwitchCountTotal:  accountSwitchCount,
+		MetadataLegacyFallbackTotal:                    metadataFallbackTotal,
+	}
+}
+
 func (s *OpenAIGatewayService) detectCodexClientRestriction(c *gin.Context, account *Account) CodexClientRestrictionDetectionResult {
 	return s.getCodexClientRestrictionDetector().Detect(c, account)
 }
@@ -1066,7 +1108,9 @@ func (s *OpenAIGatewayService) GenerateSessionHash(c *gin.Context, body []byte) 
 		return ""
 	}
 
-	return DeriveSessionHashFromSeed(sessionID)
+	currentHash, legacyHash := deriveOpenAISessionHashes(sessionID)
+	attachOpenAILegacySessionHashToGin(c, legacyHash)
+	return currentHash
 }
 
 // GenerateSessionHashWithFallback 先按常规信号生成会话哈希；
@@ -1083,7 +1127,9 @@ func (s *OpenAIGatewayService) GenerateSessionHashWithFallback(c *gin.Context, b
 		return ""
 	}
 
-	return DeriveSessionHashFromSeed(seed)
+	currentHash, legacyHash := deriveOpenAISessionHashes(seed)
+	attachOpenAILegacySessionHashToGin(c, legacyHash)
+	return currentHash
 }
 
 func resolveOpenAIUpstreamOriginator(c *gin.Context, isOfficialClient bool) string {
@@ -3848,7 +3894,6 @@ func (s *OpenAIGatewayService) RecordUsage(ctx context.Context, input *OpenAIRec
 	usageLog.RateMultiplier = multiplier
 	usageLog.AccountRateMultiplier = &accountRateMultiplier
 	usageLog.BillingType = billingType
-	usageLog.RequestType = RequestTypeFromLegacy(result.Stream, result.OpenAIWSMode)
 	usageLog.Stream = result.Stream
 	usageLog.OpenAIWSMode = result.OpenAIWSMode
 	usageLog.DurationMs = &durationMs

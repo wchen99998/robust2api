@@ -528,8 +528,8 @@ func openAIWSPayloadBoolFromRaw(payload []byte, key string, defaultValue bool) b
 	return value.Bool()
 }
 
-func openAIWSSessionHashFromID(sessionID string) string {
-	return DeriveSessionHashFromSeed(sessionID)
+func openAIWSSessionHashesFromID(sessionID string) (string, string) {
+	return deriveOpenAISessionHashes(sessionID)
 }
 
 func extractOpenAIWSImageURL(value any) string {
@@ -1149,7 +1149,7 @@ func (s *OpenAIGatewayService) buildOpenAIWSCreatePayload(reqBody map[string]any
 		payload["stream"] = true
 	}
 	payload["type"] = "response.create"
-	payload["store"] = false
+	payload["store"] = true
 	return payload
 }
 
@@ -1274,7 +1274,9 @@ func (s *OpenAIGatewayService) forwardOpenAIWSV2(
 	groupID := getOpenAIGroupIDFromContext(c)
 	sessionHash := s.GenerateSessionHash(c, nil)
 	if sessionHash == "" {
-		sessionHash = openAIWSSessionHashFromID(promptCacheKey)
+		var legacySessionHash string
+		sessionHash, legacySessionHash = openAIWSSessionHashesFromID(promptCacheKey)
+		attachOpenAILegacySessionHashToGin(c, legacySessionHash)
 	}
 	if turnState == "" && stateStore != nil && sessionHash != "" {
 		if savedTurnState, ok := stateStore.GetSessionTurnState(groupID, sessionHash); ok {

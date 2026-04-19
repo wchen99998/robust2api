@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/stretchr/testify/require"
 )
 
@@ -19,7 +20,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func ctxWithSingleAccountRetry() context.Context {
-	return WithSingleAccountRetry(context.Background(), true)
+	return requestmeta.WithSingleAccountRetry(context.Background(), true, false)
 }
 
 // ---------------------------------------------------------------------------
@@ -27,7 +28,7 @@ func ctxWithSingleAccountRetry() context.Context {
 // ---------------------------------------------------------------------------
 
 func TestIsSingleAccountRetry_True(t *testing.T) {
-	ctx := WithSingleAccountRetry(context.Background(), true)
+	ctx := requestmeta.WithSingleAccountRetry(context.Background(), true, false)
 	require.True(t, isSingleAccountRetry(ctx))
 }
 
@@ -36,7 +37,7 @@ func TestIsSingleAccountRetry_False_NoValue(t *testing.T) {
 }
 
 func TestIsSingleAccountRetry_False_ExplicitFalse(t *testing.T) {
-	ctx := WithSingleAccountRetry(context.Background(), false)
+	ctx := requestmeta.WithSingleAccountRetry(context.Background(), false, false)
 	require.False(t, isSingleAccountRetry(ctx))
 }
 
@@ -599,7 +600,7 @@ func TestHandleSingleAccountRetryInPlace_ContextCanceled(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx = WithSingleAccountRetry(ctx, true)
+	ctx = requestmeta.WithSingleAccountRetry(ctx, true, false)
 	cancel() // 立即取消
 
 	params := antigravityRetryLoopParams{

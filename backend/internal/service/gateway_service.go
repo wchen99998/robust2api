@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -424,7 +425,7 @@ func modelsListCacheKey(groupID *int64, platform string) string {
 }
 
 func prefetchedStickyGroupIDFromContext(ctx context.Context) (int64, bool) {
-	return PrefetchedStickyGroupIDFromContext(ctx)
+	return requestmeta.PrefetchedStickyGroupIDFromContext(ctx)
 }
 
 func prefetchedStickyAccountIDFromContext(ctx context.Context, groupID *int64) int64 {
@@ -432,7 +433,7 @@ func prefetchedStickyAccountIDFromContext(ctx context.Context, groupID *int64) i
 	if !ok || prefetchedGroupID != derefGroupID(groupID) {
 		return 0
 	}
-	if accountID, ok := PrefetchedStickyAccountIDFromContext(ctx); ok && accountID > 0 {
+	if accountID, ok := requestmeta.PrefetchedStickyAccountIDFromContext(ctx); ok && accountID > 0 {
 		return accountID
 	}
 	return 0
@@ -3436,7 +3437,7 @@ func (s *GatewayService) isModelSupportedByAccountWithContext(ctx context.Contex
 			return false
 		}
 		// 应用 thinking 后缀后检查最终模型是否在账号映射中
-		if enabled, ok := ThinkingEnabledFromContext(ctx); ok {
+		if enabled, ok := requestmeta.ThinkingEnabledFromContext(ctx); ok {
 			finalModel := applyThinkingModelSuffix(mapped, enabled)
 			if finalModel == mapped {
 				return true // thinking 后缀未改变模型名，映射已通过

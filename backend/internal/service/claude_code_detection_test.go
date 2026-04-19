@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/stretchr/testify/require"
 )
 
@@ -190,7 +191,7 @@ func TestValidate_MaxTokensOneHaikuBypass(t *testing.T) {
 	req := httptest.NewRequest("POST", "/v1/messages", nil)
 	req.Header.Set("User-Agent", "claude-cli/1.0.0")
 	// 不设置 X-App 等头，通过 context 标记为 haiku 探测请求
-	ctx := WithIsMaxTokensOneHaikuRequest(req.Context(), true)
+	ctx := requestmeta.WithIsMaxTokensOneHaikuRequest(req.Context(), true, false)
 	req = req.WithContext(ctx)
 
 	// 即使 body 不包含 system prompt，也应通过

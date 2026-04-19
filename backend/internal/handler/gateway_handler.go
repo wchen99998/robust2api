@@ -9,10 +9,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/domain"
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/failover"
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/antigravity"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/claude"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
@@ -31,6 +34,10 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
+
+const gatewayCompatibilityMetricsLogInterval = 1024
+
+var gatewayCompatibilityMetricsLogCounter atomic.Uint64
 
 // GatewayHandler handles API gateway requests
 type GatewayHandler struct {
@@ -143,6 +150,8 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	defer h.maybeLogCompatibilityFallbackMetrics(reqLog)
+
 	// 读取请求体
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
 	if err != nil {
@@ -181,7 +190,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 设置 max_tokens=1 + haiku 探测请求标识到 context 中
 	// 必须在 SetClaudeCodeClientContext 之前设置，因为 ClaudeCodeValidator 需要读取此标识进行绕过判断
 	if isMaxTokensOneHaikuRequest(reqModel, parsedReq.MaxTokens, reqStream) {
-		ctx := service.WithIsMaxTokensOneHaikuRequest(c.Request.Context(), true)
+		ctx := requestmeta.WithIsMaxTokensOneHaikuRequest(c.Request.Context(), true, h.metadataBridgeEnabled())
 		c.Request = c.Request.WithContext(ctx)
 	}
 
@@ -195,7 +204,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	}
 
 	// 在请求上下文中记录 thinking 状态，供 Antigravity 最终模型 key 推导/模型维度限流使用
-	c.Request = c.Request.WithContext(service.WithThinkingEnabled(c.Request.Context(), parsedReq.ThinkingEnabled))
+	c.Request = c.Request.WithContext(requestmeta.WithThinkingEnabled(c.Request.Context(), parsedReq.ThinkingEnabled, h.metadataBridgeEnabled()))
 
 	// 验证 model 必填
 	if reqModel == "" {
@@ -296,7 +305,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			if apiKey.GroupID != nil {
 				prefetchedGroupID = *apiKey.GroupID
 			}
-			ctx := service.WithPrefetchedStickySession(c.Request.Context(), sessionBoundAccountID, prefetchedGroupID)
+			ctx := requestmeta.WithPrefetchedStickySession(c.Request.Context(), sessionBoundAccountID, prefetchedGroupID, h.metadataBridgeEnabled())
 			c.Request = c.Request.WithContext(ctx)
 		}
 	}
@@ -304,7 +313,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	hasBoundSession := sessionKey != "" && sessionBoundAccountID > 0
 
 	if platform == service.PlatformGemini {
-		fs := NewFailoverState(h.maxAccountSwitchesGemini, hasBoundSession)
+		fs := failover.NewState(h.maxAccountSwitchesGemini, hasBoundSession)
 		streamReservationID := ""
 		streamReservationPublished := false
 		streamReservationFinalized := false
@@ -347,7 +356,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 		// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 		// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
 		if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), apiKey.GroupID) {
-			ctx := service.WithSingleAccountRetry(c.Request.Context(), true)
+			ctx := requestmeta.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
 			c.Request = c.Request.WithContext(ctx)
 		}
 
@@ -360,13 +369,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				action := fs.HandleSelectionExhausted(c.Request.Context())
 				switch action {
-				case FailoverContinue:
-					ctx := service.WithSingleAccountRetry(c.Request.Context(), true)
+				case failover.Continue:
+					ctx := requestmeta.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
 					c.Request = c.Request.WithContext(ctx)
 					continue
-				case FailoverCanceled:
+				case failover.Canceled:
 					return
-				default: // FailoverExhausted
+				default: // failover.Exhausted
 					if fs.LastFailoverErr != nil {
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, service.PlatformGemini, streamStarted)
 					} else {
@@ -451,7 +460,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
-				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount)
+				requestCtx = requestmeta.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
 			if streamingBillingV2 && !streamReservationPublished {
 				if err := h.executeUsageRecordTask(func(ctx context.Context) error {
@@ -506,7 +515,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					}
 					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 					switch action {
-					case FailoverContinue:
+					case failover.Continue:
 						if responseCapture != nil {
 							responseCapture.Discard(c)
 						}
@@ -514,7 +523,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 						// so the next iteration re-reserves on the replacement.
 						releaseStreamReservation("account_switch")
 						continue
-					case FailoverExhausted:
+					case failover.Exhausted:
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, service.PlatformGemini, streamStarted)
 						if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
 							h.errorResponse(c, http.StatusServiceUnavailable, "api_error", "Response too large")
@@ -522,7 +531,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 							reqLog.Error("gateway.commit_buffered_response_failed", zap.Error(commitErr))
 						}
 						return
-					case FailoverCanceled:
+					case failover.Canceled:
 						if responseCapture != nil {
 							responseCapture.Discard(c)
 						}
@@ -657,6 +666,11 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				return
 			}
+			if reqStream {
+				recordLegacyStreamingBilling("/v1/messages")
+				reqLog.Debug("gateway.legacy_streaming_billing")
+			}
+
 			// 响应写回后立即同步发布账务事件，避免在进程内队列中丢失权威账务数据。
 			h.submitUsageRecordTask(func(ctx context.Context) {
 				usageTracer := otel.Tracer("sub2api.gateway")
@@ -740,12 +754,12 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 	// 单账号分组提前设置 SingleAccountRetry 标记，让 Service 层首次 503 就不设模型限流标记。
 	// 避免单账号分组收到 503 (MODEL_CAPACITY_EXHAUSTED) 时设 29s 限流，导致后续请求连续快速失败。
 	if h.gatewayService.IsSingleAntigravityAccountGroup(c.Request.Context(), currentAPIKey.GroupID) {
-		ctx := service.WithSingleAccountRetry(c.Request.Context(), true)
+		ctx := requestmeta.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
 		c.Request = c.Request.WithContext(ctx)
 	}
 
 	for {
-		fs := NewFailoverState(h.maxAccountSwitches, hasBoundSession)
+		fs := failover.NewState(h.maxAccountSwitches, hasBoundSession)
 		retryWithFallback := false
 
 		for {
@@ -760,13 +774,13 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				action := fs.HandleSelectionExhausted(c.Request.Context())
 				switch action {
-				case FailoverContinue:
-					ctx := service.WithSingleAccountRetry(c.Request.Context(), true)
+				case failover.Continue:
+					ctx := requestmeta.WithSingleAccountRetry(c.Request.Context(), true, h.metadataBridgeEnabled())
 					c.Request = c.Request.WithContext(ctx)
 					continue
-				case FailoverCanceled:
+				case failover.Canceled:
 					return
-				default: // FailoverExhausted
+				default: // failover.Exhausted
 					if fs.LastFailoverErr != nil {
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, platform, streamStarted)
 					} else {
@@ -915,7 +929,7 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 			var result *service.ForwardResult
 			requestCtx := c.Request.Context()
 			if fs.SwitchCount > 0 {
-				requestCtx = service.WithAccountSwitchCount(requestCtx, fs.SwitchCount)
+				requestCtx = requestmeta.WithAccountSwitchCount(requestCtx, fs.SwitchCount, h.metadataBridgeEnabled())
 			}
 			if streamingBillingV2 && !streamReservationPublished {
 				if err := h.executeUsageRecordTask(func(ctx context.Context) error {
@@ -1049,17 +1063,17 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 					}
 					action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 					switch action {
-					case FailoverContinue:
+					case failover.Continue:
 						discardBufferedResponse()
 						// Release any reservation tied to the failing account
 						// so the next iteration re-reserves on the replacement.
 						releaseStreamReservation("account_switch")
 						continue
-					case FailoverExhausted:
+					case failover.Exhausted:
 						h.handleFailoverExhausted(c, fs.LastFailoverErr, account.Platform, streamStarted)
 						commitBufferedResponse()
 						return
-					case FailoverCanceled:
+					case failover.Canceled:
 						discardBufferedResponse()
 						return
 					}
@@ -1181,6 +1195,10 @@ func (h *GatewayHandler) Messages(c *gin.Context) {
 				}
 				commitBufferedResponse()
 				return
+			}
+			if reqStream {
+				recordLegacyStreamingBilling("/v1/messages")
+				reqLog.Debug("gateway.legacy_streaming_billing")
 			}
 			discardBufferedResponse()
 			h.submitUsageRecordTask(func(ctx context.Context) {
@@ -1765,6 +1783,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 		zap.Int64("api_key_id", apiKey.ID),
 		zap.Any("group_id", apiKey.GroupID),
 	)
+	defer h.maybeLogCompatibilityFallbackMetrics(reqLog)
 
 	// 读取请求体
 	body, err := pkghttputil.ReadRequestBodyWithPrealloc(c.Request)
@@ -1791,7 +1810,7 @@ func (h *GatewayHandler) CountTokens(c *gin.Context) {
 	SetClaudeCodeClientContext(c, body, parsedReq)
 	reqLog = reqLog.With(zap.String("model", parsedReq.Model), zap.Bool("stream", parsedReq.Stream))
 	// 在请求上下文中记录 thinking 状态，供 Antigravity 最终模型 key 推导/模型维度限流使用
-	c.Request = c.Request.WithContext(service.WithThinkingEnabled(c.Request.Context(), parsedReq.ThinkingEnabled))
+	c.Request = c.Request.WithContext(requestmeta.WithThinkingEnabled(c.Request.Context(), parsedReq.ThinkingEnabled, h.metadataBridgeEnabled()))
 
 	// 验证 model 必填
 	if parsedReq.Model == "" {
@@ -2075,6 +2094,30 @@ func billingErrorDetails(err error) (status int, code, message string) {
 		msg = "Billing error"
 	}
 	return http.StatusForbidden, "billing_error", msg
+}
+
+func (h *GatewayHandler) metadataBridgeEnabled() bool {
+	if h == nil || h.cfg == nil {
+		return true
+	}
+	return h.cfg.Gateway.OpenAIWS.MetadataBridgeEnabled
+}
+
+func (h *GatewayHandler) maybeLogCompatibilityFallbackMetrics(reqLog *zap.Logger) {
+	if reqLog == nil {
+		return
+	}
+	if gatewayCompatibilityMetricsLogCounter.Add(1)%gatewayCompatibilityMetricsLogInterval != 0 {
+		return
+	}
+	metrics := service.SnapshotOpenAICompatibilityFallbackMetrics()
+	reqLog.Info("gateway.compatibility_fallback_metrics",
+		zap.Int64("session_hash_legacy_read_fallback_total", metrics.SessionHashLegacyReadFallbackTotal),
+		zap.Int64("session_hash_legacy_read_fallback_hit", metrics.SessionHashLegacyReadFallbackHit),
+		zap.Int64("session_hash_legacy_dual_write_total", metrics.SessionHashLegacyDualWriteTotal),
+		zap.Float64("session_hash_legacy_read_hit_rate", metrics.SessionHashLegacyReadHitRate),
+		zap.Int64("metadata_legacy_fallback_total", metrics.MetadataLegacyFallbackTotal),
+	)
 }
 
 func (h *GatewayHandler) executeUsageRecordTask(task usageRecordErrTask) (err error) {

@@ -165,4 +165,30 @@ describe('EditAccountModal', () => {
     })
   })
 
+  it('removes legacy OpenAI passthrough and WS keys from extra on save', async () => {
+    const account = buildAccount({
+      extra: {
+        keep_me: 'yes',
+        openai_passthrough: true,
+        openai_oauth_passthrough: true,
+        openai_apikey_responses_websockets_v2_mode: 'off',
+        openai_apikey_responses_websockets_v2_enabled: false,
+        responses_websockets_v2_enabled: false,
+        openai_ws_enabled: false
+      }
+    })
+
+    updateAccountMock.mockReset()
+    checkMixedChannelRiskMock.mockReset()
+    checkMixedChannelRiskMock.mockResolvedValue({ has_risk: false })
+    updateAccountMock.mockResolvedValue(account)
+
+    const wrapper = mountModal(account)
+    await wrapper.get('form#edit-account-form').trigger('submit.prevent')
+
+    expect(updateAccountMock).toHaveBeenCalledTimes(1)
+    expect(updateAccountMock.mock.calls[0]?.[1]?.extra).toEqual({
+      keep_me: 'yes'
+    })
+  })
 })

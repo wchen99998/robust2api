@@ -104,9 +104,9 @@ func applyCodexOAuthTransform(reqBody map[string]any, isCodexCLI bool, isCompact
 			result.Modified = true
 		}
 	} else {
-		// HTTP codex transform keeps upstream responses ephemeral by default.
-		if v, ok := reqBody["store"].(bool); !ok || v {
-			reqBody["store"] = false
+		// 统一沿用 OpenAI 官方 continuation 语义，强制 store=true。
+		if v, ok := reqBody["store"].(bool); !ok || !v {
+			reqBody["store"] = true
 			result.Modified = true
 		}
 		if v, ok := reqBody["stream"].(bool); !ok || !v {

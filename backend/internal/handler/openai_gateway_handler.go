@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	runtimefailover "github.com/Wei-Shaw/sub2api/internal/gatewayruntime/failover"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/logger"
@@ -453,13 +454,11 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 							zap.Int("retry_limit", retryLimit),
 							zap.Int("retry_count", sameAccountRetryCount[account.ID]),
 						)
-						select {
-						case <-c.Request.Context().Done():
+						if !runtimefailover.SleepWithContext(c.Request.Context(), runtimefailover.SameAccountRetryDelay) {
 							if responseCapture != nil {
 								responseCapture.Discard(c)
 							}
 							return
-						case <-time.After(sameAccountRetryDelay):
 						}
 						if responseCapture != nil {
 							responseCapture.Discard(c)
@@ -1133,13 +1132,11 @@ func (h *OpenAIGatewayHandler) Messages(c *gin.Context) {
 							zap.Int("retry_limit", retryLimit),
 							zap.Int("retry_count", sameAccountRetryCount[account.ID]),
 						)
-						select {
-						case <-c.Request.Context().Done():
+						if !runtimefailover.SleepWithContext(c.Request.Context(), runtimefailover.SameAccountRetryDelay) {
 							if responseCapture != nil {
 								responseCapture.Discard(c)
 							}
 							return
-						case <-time.After(sameAccountRetryDelay):
 						}
 						if responseCapture != nil {
 							responseCapture.Discard(c)

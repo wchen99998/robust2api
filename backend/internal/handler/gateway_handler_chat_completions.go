@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/failover"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
 	middleware2 "github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -152,7 +153,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 	sessionHash := h.gatewayService.GenerateSessionHash(parsedReq)
 
 	// 3. Account selection + failover loop
-	fs := NewFailoverState(h.maxAccountSwitches, false)
+	fs := failover.NewState(h.maxAccountSwitches, false)
 	streamReservationID := ""
 	streamReservationPublished := false
 	streamReservationFinalized := false
@@ -201,9 +202,9 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 			}
 			action := fs.HandleSelectionExhausted(c.Request.Context())
 			switch action {
-			case FailoverContinue:
+			case failover.Continue:
 				continue
-			case FailoverCanceled:
+			case failover.Canceled:
 				return
 			default:
 				if fs.LastFailoverErr != nil {
@@ -294,7 +295,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 				}
 				action := fs.HandleFailoverError(c.Request.Context(), h.gatewayService, account.ID, account.Platform, failoverErr)
 				switch action {
-				case FailoverContinue:
+				case failover.Continue:
 					if responseCapture != nil {
 						responseCapture.Discard(c)
 					}
@@ -302,7 +303,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 					// the next iteration re-reserves on the replacement.
 					releaseStreamReservation("account_switch")
 					continue
-				case FailoverExhausted:
+				case failover.Exhausted:
 					h.handleCCFailoverExhausted(c, fs.LastFailoverErr, streamStarted)
 					if commitErr := commitBufferedResponseOrWriteError(c, responseCapture, func() {
 						h.chatCompletionsErrorResponse(c, http.StatusServiceUnavailable, "server_error", "Response too large")
@@ -310,7 +311,7 @@ func (h *GatewayHandler) ChatCompletions(c *gin.Context) {
 						reqLog.Error("gateway.cc.commit_buffered_response_failed", zap.Error(commitErr))
 					}
 					return
-				case FailoverCanceled:
+				case failover.Canceled:
 					if responseCapture != nil {
 						responseCapture.Discard(c)
 					}

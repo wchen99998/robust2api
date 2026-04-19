@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/usagestats"
 	gocache "github.com/patrickmn/go-cache"
@@ -607,14 +608,14 @@ func TestGatewayHotpathHelpers_CacheTTLAndStickyContext(t *testing.T) {
 		require.Equal(t, int64(0), prefetchedStickyAccountIDFromContext(context.TODO(), nil))
 		require.Equal(t, int64(0), prefetchedStickyAccountIDFromContext(context.Background(), nil))
 
-		ctx := WithPrefetchedStickySession(context.Background(), 123, 0)
+		ctx := requestmeta.WithPrefetchedStickySession(context.Background(), 123, 0, false)
 		require.Equal(t, int64(123), prefetchedStickyAccountIDFromContext(ctx, nil))
 
 		groupID := int64(9)
-		ctx2 := WithPrefetchedStickySession(context.Background(), 456, groupID)
+		ctx2 := requestmeta.WithPrefetchedStickySession(context.Background(), 456, groupID, false)
 		require.Equal(t, int64(456), prefetchedStickyAccountIDFromContext(ctx2, &groupID))
 
-		ctx4 := WithPrefetchedStickySession(context.Background(), 789, 10)
+		ctx4 := requestmeta.WithPrefetchedStickySession(context.Background(), 789, 10, false)
 		require.Equal(t, int64(0), prefetchedStickyAccountIDFromContext(ctx4, &groupID))
 	})
 
@@ -745,7 +746,7 @@ func TestSelectAccountWithLoadAwareness_StickyReadReuse(t *testing.T) {
 			modelsListCacheTTL: time.Minute,
 		}
 
-		ctx := WithPrefetchedStickySession(baseCtx, account.ID, 0)
+		ctx := requestmeta.WithPrefetchedStickySession(baseCtx, account.ID, 0, false)
 		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sess-hash", "", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
@@ -766,7 +767,7 @@ func TestSelectAccountWithLoadAwareness_StickyReadReuse(t *testing.T) {
 			modelsListCacheTTL: time.Minute,
 		}
 
-		ctx := WithPrefetchedStickySession(baseCtx, 999, 77)
+		ctx := requestmeta.WithPrefetchedStickySession(baseCtx, 999, 77, false)
 		result, err := svc.SelectAccountWithLoadAwareness(ctx, nil, "sess-hash", "", nil, "", int64(0))
 		require.NoError(t, err)
 		require.NotNil(t, result)
