@@ -166,7 +166,7 @@ func TestOpenAIGatewayService_Forward_WSv2_SuccessAndBindSticky(t *testing.T) {
 	require.True(t, received.StreamExists, "WS 请求应携带 stream 字段")
 	require.False(t, received.Stream, "应保持客户端 stream=false 的原始语义")
 	require.True(t, received.StoreExists, "WS 请求应显式携带 store 字段")
-	require.False(t, received.Store, "WSv2 路径应统一显式 store=false")
+	require.True(t, received.Store, "WSv2 路径应统一强制 store=true")
 
 	store := svc.getOpenAIWSStateStore()
 	mappedAccountID, getErr := store.GetResponseAccount(context.Background(), groupID, "resp_new_1")

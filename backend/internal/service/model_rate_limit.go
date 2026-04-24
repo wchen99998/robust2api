@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 )
 
 const modelRateLimitsKey = "model_rate_limits"
@@ -71,7 +73,7 @@ func resolveFinalAntigravityModelKey(ctx context.Context, account *Account, requ
 		return ""
 	}
 	// thinking 会影响 Antigravity 最终模型名（例如 claude-sonnet-4-5 -> claude-sonnet-4-5-thinking）
-	if enabled, ok := ThinkingEnabledFromContext(ctx); ok {
+	if enabled, ok := requestmeta.ThinkingEnabledFromContext(ctx); ok {
 		modelKey = applyThinkingModelSuffix(modelKey, enabled)
 	}
 	return modelKey

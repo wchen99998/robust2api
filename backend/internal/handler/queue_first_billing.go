@@ -25,13 +25,13 @@ func usageRecordTaskTimeout(cfg *config.Config) time.Duration {
 }
 
 func queueFirstNonStreamEnabled(cfg *config.Config, reqStream bool) bool {
-	if reqStream {
+	if reqStream || cfg == nil {
 		return false
 	}
-	if cfg == nil {
-		return true
+	if cfg.RunMode == config.RunModeSimple {
+		return false
 	}
-	return cfg.RunMode != config.RunModeSimple
+	return cfg.Billing.QueueFirstNonStreamEnabled
 }
 
 type bufferedResponseCapture struct {

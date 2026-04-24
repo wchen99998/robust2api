@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ctxkey"
 )
 
@@ -79,7 +80,7 @@ func (v *ClaudeCodeValidator) Validate(r *http.Request, body map[string]any) boo
 
 	// Step 3: 检查 max_tokens=1 + haiku 探测请求绕过
 	// 这类请求用于 Claude Code 验证 API 连通性，不携带 system prompt
-	if isMaxTokensOneHaiku, ok := IsMaxTokensOneHaikuRequestFromContext(r.Context()); ok && isMaxTokensOneHaiku {
+	if isMaxTokensOneHaiku, ok := requestmeta.IsMaxTokensOneHaikuRequestFromContext(r.Context()); ok && isMaxTokensOneHaiku {
 		return true // 绕过 system prompt 检查，UA 已在 Step 1 验证
 	}
 

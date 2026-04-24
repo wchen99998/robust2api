@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/Wei-Shaw/sub2api/internal/gatewayruntime/requestmeta"
 )
 
 func TestIsModelRateLimited(t *testing.T) {
@@ -190,7 +192,7 @@ func TestIsModelRateLimited_Antigravity_ThinkingAffectsModelKey(t *testing.T) {
 		},
 	}
 
-	ctx := WithThinkingEnabled(context.Background(), true)
+	ctx := requestmeta.WithThinkingEnabled(context.Background(), true)
 	if !account.isModelRateLimitedWithContext(ctx, "claude-sonnet-4-5") {
 		t.Errorf("expected model to be rate limited")
 	}

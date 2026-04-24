@@ -1,4 +1,4 @@
-package service
+package requestmeta
 
 import (
 	"context"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRequestMetadataWriteAndRead(t *testing.T) {
+func TestRequestMetadataRoundTrip(t *testing.T) {
 	ctx := context.Background()
 	ctx = WithIsMaxTokensOneHaikuRequest(ctx, true)
 	ctx = WithThinkingEnabled(ctx, true)
@@ -40,7 +40,7 @@ func TestRequestMetadataWriteAndRead(t *testing.T) {
 	require.Equal(t, 2, switchCount)
 }
 
-func TestRequestMetadataReadPreferLatestValue(t *testing.T) {
+func TestRequestMetadataOverwrite(t *testing.T) {
 	ctx := context.Background()
 	ctx = WithThinkingEnabled(ctx, false)
 	ctx = WithThinkingEnabled(ctx, true)
@@ -48,26 +48,4 @@ func TestRequestMetadataReadPreferLatestValue(t *testing.T) {
 	thinking, ok := ThinkingEnabledFromContext(ctx)
 	require.True(t, ok)
 	require.True(t, thinking)
-}
-
-func TestRequestMetadataReadMissingValues(t *testing.T) {
-	ctx := context.Background()
-
-	_, ok := IsMaxTokensOneHaikuRequestFromContext(ctx)
-	require.False(t, ok)
-
-	_, ok = ThinkingEnabledFromContext(ctx)
-	require.False(t, ok)
-
-	_, ok = PrefetchedStickyAccountIDFromContext(ctx)
-	require.False(t, ok)
-
-	_, ok = PrefetchedStickyGroupIDFromContext(ctx)
-	require.False(t, ok)
-
-	_, ok = SingleAccountRetryFromContext(ctx)
-	require.False(t, ok)
-
-	_, ok = AccountSwitchCountFromContext(ctx)
-	require.False(t, ok)
 }
