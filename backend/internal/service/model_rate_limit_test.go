@@ -192,7 +192,7 @@ func TestIsModelRateLimited_Antigravity_ThinkingAffectsModelKey(t *testing.T) {
 		},
 	}
 
-	ctx := requestmeta.WithThinkingEnabled(context.Background(), true, false)
+	ctx := requestmeta.WithThinkingEnabled(context.Background(), true)
 	if !account.isModelRateLimitedWithContext(ctx, "claude-sonnet-4-5") {
 		t.Errorf("expected model to be rate limited")
 	}

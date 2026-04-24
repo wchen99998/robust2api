@@ -14,7 +14,7 @@ func TestClaudeCodeValidator_ProbeBypass(t *testing.T) {
 	validator := NewClaudeCodeValidator()
 	req := httptest.NewRequest(http.MethodPost, "http://example.com/v1/messages", nil)
 	req.Header.Set("User-Agent", "claude-cli/1.2.3 (darwin; arm64)")
-	req = req.WithContext(requestmeta.WithIsMaxTokensOneHaikuRequest(req.Context(), true, false))
+	req = req.WithContext(requestmeta.WithIsMaxTokensOneHaikuRequest(req.Context(), true))
 
 	ok := validator.Validate(req, map[string]any{
 		"model":      "claude-haiku-4-5",
@@ -27,7 +27,7 @@ func TestClaudeCodeValidator_ProbeBypassRequiresUA(t *testing.T) {
 	validator := NewClaudeCodeValidator()
 	req := httptest.NewRequest(http.MethodPost, "http://example.com/v1/messages", nil)
 	req.Header.Set("User-Agent", "curl/8.0.0")
-	req = req.WithContext(requestmeta.WithIsMaxTokensOneHaikuRequest(req.Context(), true, false))
+	req = req.WithContext(requestmeta.WithIsMaxTokensOneHaikuRequest(req.Context(), true))
 
 	ok := validator.Validate(req, map[string]any{
 		"model":      "claude-haiku-4-5",

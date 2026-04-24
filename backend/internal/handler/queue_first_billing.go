@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
-	appelotel "github.com/Wei-Shaw/sub2api/internal/pkg/otel"
 	"github.com/gin-gonic/gin"
 )
 
@@ -33,10 +32,6 @@ func queueFirstNonStreamEnabled(cfg *config.Config, reqStream bool) bool {
 		return false
 	}
 	return cfg.Billing.QueueFirstNonStreamEnabled
-}
-
-func recordLegacyStreamingBilling(endpoint string) {
-	appelotel.M().RecordLegacyStreamingBilling(context.Background(), endpoint)
 }
 
 type bufferedResponseCapture struct {

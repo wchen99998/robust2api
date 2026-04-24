@@ -20,7 +20,7 @@ import (
 // ---------------------------------------------------------------------------
 
 func ctxWithSingleAccountRetry() context.Context {
-	return requestmeta.WithSingleAccountRetry(context.Background(), true, false)
+	return requestmeta.WithSingleAccountRetry(context.Background(), true)
 }
 
 // ---------------------------------------------------------------------------
@@ -28,7 +28,7 @@ func ctxWithSingleAccountRetry() context.Context {
 // ---------------------------------------------------------------------------
 
 func TestIsSingleAccountRetry_True(t *testing.T) {
-	ctx := requestmeta.WithSingleAccountRetry(context.Background(), true, false)
+	ctx := requestmeta.WithSingleAccountRetry(context.Background(), true)
 	require.True(t, isSingleAccountRetry(ctx))
 }
 
@@ -37,7 +37,7 @@ func TestIsSingleAccountRetry_False_NoValue(t *testing.T) {
 }
 
 func TestIsSingleAccountRetry_False_ExplicitFalse(t *testing.T) {
-	ctx := requestmeta.WithSingleAccountRetry(context.Background(), false, false)
+	ctx := requestmeta.WithSingleAccountRetry(context.Background(), false)
 	require.False(t, isSingleAccountRetry(ctx))
 }
 
@@ -600,7 +600,7 @@ func TestHandleSingleAccountRetryInPlace_ContextCanceled(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	ctx = requestmeta.WithSingleAccountRetry(ctx, true, false)
+	ctx = requestmeta.WithSingleAccountRetry(ctx, true)
 	cancel() // 立即取消
 
 	params := antigravityRetryLoopParams{
