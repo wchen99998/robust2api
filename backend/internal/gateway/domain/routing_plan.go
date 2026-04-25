@@ -108,8 +108,33 @@ func isSensitiveHeader(name string) bool {
 	}
 
 	switch normalized {
-	case "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key":
+	case "authorization",
+		"proxy-authorization",
+		"cookie",
+		"set-cookie",
+		"x-api-key",
+		"access-token",
+		"refresh-token",
+		"id-token",
+		"x-auth-token",
+		"x-client-secret",
+		"private-token",
+		"session-token":
 		return true
 	}
-	return strings.Contains(normalized, "api-key") || strings.Contains(normalized, "api_key")
+
+	sensitiveTerms := []string{
+		"api-key",
+		"api_key",
+		"token",
+		"secret",
+		"credential",
+		"password",
+	}
+	for _, term := range sensitiveTerms {
+		if strings.Contains(normalized, term) {
+			return true
+		}
+	}
+	return false
 }

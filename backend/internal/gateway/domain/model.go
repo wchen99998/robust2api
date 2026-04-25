@@ -8,7 +8,7 @@ import (
 type CanonicalRequest struct {
 	RequestedModel string          `json:"requested_model,omitempty"`
 	Headers        http.Header     `json:"headers,omitempty"`
-	Body           json.RawMessage `json:"body,omitempty"`
+	Body           json.RawMessage `json:"-"`
 	Model          ModelResolution `json:"model"`
 	Session        SessionInput    `json:"session"`
 	Mutation       RequestMutation `json:"mutation"`
@@ -18,7 +18,6 @@ func (r CanonicalRequest) MarshalJSON() ([]byte, error) {
 	type canonicalRequestJSON struct {
 		RequestedModel string          `json:"requested_model,omitempty"`
 		Headers        http.Header     `json:"headers,omitempty"`
-		Body           json.RawMessage `json:"body,omitempty"`
 		Model          ModelResolution `json:"model"`
 		Session        SessionInput    `json:"session"`
 		Mutation       RequestMutation `json:"mutation"`
@@ -27,7 +26,6 @@ func (r CanonicalRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(canonicalRequestJSON{
 		RequestedModel: r.RequestedModel,
 		Headers:        redactHeaders(r.Headers),
-		Body:           r.Body,
 		Model:          r.Model,
 		Session:        r.Session,
 		Mutation:       r.Mutation,

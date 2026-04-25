@@ -46,7 +46,6 @@ func TestRoutingPlanJSONRoundTrip(t *testing.T) {
 		Canonical: CanonicalRequest{
 			RequestedModel: "gpt-4.1",
 			Headers:        http.Header{"X-Trace": []string{"abc"}},
-			Body:           json.RawMessage(`{"model":"gpt-4.1","input":"hello"}`),
 			Model: ModelResolution{
 				Requested:     "gpt-4.1",
 				Canonical:     "gpt-4.1",
@@ -186,31 +185,45 @@ func TestExecutionReportJSONRoundTrip(t *testing.T) {
 }
 
 func TestRoutingPlanJSONRedactsSensitiveHeaders(t *testing.T) {
+	sensitiveHeaders := []string{
+		"Authorization",
+		"Cookie",
+		"X-Api-Key",
+		"OpenAI-API-Key",
+		"Anthropic-API-Key",
+		"X-Goog-Api-Key",
+		"Access-Token",
+		"Refresh-Token",
+		"ID-Token",
+		"X-Auth-Token",
+		"X-Client-Secret",
+		"Private-Token",
+		"Session-Token",
+		"X-Service-Credential",
+		"X-User-Password",
+	}
+	requestHeaders := make(http.Header, len(sensitiveHeaders)+1)
+	canonicalHeaders := make(http.Header, len(sensitiveHeaders)+1)
+	var secrets []string
+	for _, header := range sensitiveHeaders {
+		requestSecret := "request-secret-" + strings.ToLower(header)
+		canonicalSecret := "canonical-secret-" + strings.ToLower(header)
+		requestHeaders.Set(header, requestSecret)
+		canonicalHeaders.Set(header, canonicalSecret)
+		secrets = append(secrets, requestSecret, canonicalSecret)
+	}
+	requestHeaders.Set("Content-Type", "application/json")
+	canonicalHeaders.Set("Accept", "text/event-stream")
+
 	plan := RoutingPlan{
 		Request: IngressRequest{
 			RequestID: "req-secret",
 			Method:    http.MethodPost,
 			Path:      "/v1/responses/compact",
-			Header: http.Header{
-				"Authorization":     []string{"Bearer sk-live-request-secret"},
-				"Cookie":            []string{"session_id=cookie-secret"},
-				"X-Api-Key":         []string{"sub2api-key-secret"},
-				"OpenAI-API-Key":    []string{"openai-secret"},
-				"Anthropic-API-Key": []string{"anthropic-secret"},
-				"X-Goog-Api-Key":    []string{"gemini-secret"},
-				"Content-Type":      []string{"application/json"},
-			},
+			Header:    requestHeaders,
 		},
 		Canonical: CanonicalRequest{
-			Headers: http.Header{
-				"Authorization":     []string{"Bearer sk-live-canonical-secret"},
-				"Cookie":            []string{"canonical_cookie=secret"},
-				"X-Api-Key":         []string{"canonical-sub2api-secret"},
-				"OpenAI-API-Key":    []string{"canonical-openai-secret"},
-				"Anthropic-API-Key": []string{"canonical-anthropic-secret"},
-				"Gemini-API-Key":    []string{"canonical-gemini-secret"},
-				"Accept":            []string{"text/event-stream"},
-			},
+			Headers: canonicalHeaders,
 		},
 	}
 
@@ -220,20 +233,7 @@ func TestRoutingPlanJSONRedactsSensitiveHeaders(t *testing.T) {
 	}
 	jsonText := string(payload)
 
-	for _, secret := range []string{
-		"sk-live-request-secret",
-		"cookie-secret",
-		"sub2api-key-secret",
-		"openai-secret",
-		"anthropic-secret",
-		"gemini-secret",
-		"sk-live-canonical-secret",
-		"canonical_cookie=secret",
-		"canonical-sub2api-secret",
-		"canonical-openai-secret",
-		"canonical-anthropic-secret",
-		"canonical-gemini-secret",
-	} {
+	for _, secret := range secrets {
 		if strings.Contains(jsonText, secret) {
 			t.Fatalf("routing plan JSON leaked secret %q: %s", secret, jsonText)
 		}
@@ -242,6 +242,66 @@ func TestRoutingPlanJSONRedactsSensitiveHeaders(t *testing.T) {
 		if !strings.Contains(jsonText, expected) {
 			t.Fatalf("routing plan JSON missing expected value %q: %s", expected, jsonText)
 		}
+	}
+}
+
+func TestIsSensitiveHeader(t *testing.T) {
+	tests := []struct {
+		name      string
+		header    string
+		sensitive bool
+	}{
+		{name: "authorization", header: "Authorization", sensitive: true},
+		{name: "cookie", header: "Cookie", sensitive: true},
+		{name: "x api key", header: "X-Api-Key", sensitive: true},
+		{name: "provider api key", header: "OpenAI-API-Key", sensitive: true},
+		{name: "access token", header: "Access-Token", sensitive: true},
+		{name: "refresh token", header: "Refresh-Token", sensitive: true},
+		{name: "id token", header: "ID-Token", sensitive: true},
+		{name: "auth token", header: "X-Auth-Token", sensitive: true},
+		{name: "client secret", header: "X-Client-Secret", sensitive: true},
+		{name: "private token", header: "Private-Token", sensitive: true},
+		{name: "session token", header: "Session-Token", sensitive: true},
+		{name: "credential substring", header: "X-Service-Credential", sensitive: true},
+		{name: "password substring", header: "X-User-Password", sensitive: true},
+		{name: "content type", header: "Content-Type", sensitive: false},
+		{name: "accept", header: "Accept", sensitive: false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isSensitiveHeader(tt.header); got != tt.sensitive {
+				t.Fatalf("isSensitiveHeader(%q) = %t, want %t", tt.header, got, tt.sensitive)
+			}
+		})
+	}
+}
+
+func TestRoutingPlanJSONDoesNotSerializeCanonicalBody(t *testing.T) {
+	plan := RoutingPlan{
+		Canonical: CanonicalRequest{
+			Body: json.RawMessage(`{"input":"canonical-body-only-secret-9b8f6a5c"}`),
+		},
+	}
+
+	payload, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	jsonText := string(payload)
+
+	if strings.Contains(jsonText, "canonical-body-only-secret-9b8f6a5c") {
+		t.Fatalf("routing plan JSON leaked canonical body secret: %s", jsonText)
+	}
+
+	var decoded struct {
+		Canonical map[string]json.RawMessage `json:"canonical"`
+	}
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if _, ok := decoded.Canonical["body"]; ok {
+		t.Fatalf("routing plan JSON serialized canonical body field: %s", jsonText)
 	}
 }
 
