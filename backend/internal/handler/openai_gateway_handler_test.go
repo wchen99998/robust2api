@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	gatewaycore "github.com/Wei-Shaw/sub2api/internal/gateway/core"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -350,6 +351,59 @@ func TestOpenAIEnsureResponsesDependencies(t *testing.T) {
 		require.False(t, c.Writer.Written())
 		assert.Equal(t, "", w.Body.String())
 	})
+}
+
+func TestOpenAIBuildResponsesRoutingPlanStoresSerializableDecision(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", strings.NewReader(`{"model":"gpt-5.4","stream":true}`))
+	c.Request.Header.Set("Authorization", "Bearer secret")
+	c.Request.Header.Set("X-Request-ID", "req-test")
+	apiKey := &service.APIKey{ID: 7, UserID: 8}
+	h := &OpenAIGatewayHandler{gatewayService: &service.OpenAIGatewayService{}}
+
+	plan, mapping, err := h.buildOpenAIResponsesRoutingPlan(c, apiKey, []byte(`{"model":"gpt-5.4","stream":true}`), "gpt-5.4", true, "session-hash")
+	require.NoError(t, err)
+	require.Equal(t, "req-test", plan.RequestID)
+	require.Equal(t, "gpt-5.4", plan.Model.RequestedModel)
+	require.Equal(t, "gpt-5.4", plan.Model.BillingModel)
+	require.Equal(t, "session-hash", plan.Session.Key)
+	require.Equal(t, "Bearer [redacted]", plan.Debug.HeaderPreview["Authorization"])
+	require.False(t, mapping.Mapped)
+	require.Equal(t, "gpt-5.4", mapping.MappedModel)
+
+	setOpenAIResponsesRoutingPlan(c, plan)
+	stored, ok := getOpenAIResponsesRoutingPlan(c)
+	require.True(t, ok)
+	require.Equal(t, plan.RequestID, stored.RequestID)
+}
+
+func TestOpenAIAnnotateResponsesRoutingPlanSelection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	plan := &gatewaycore.RoutingPlan{}
+	setOpenAIResponsesRoutingPlan(c, plan)
+
+	annotateOpenAIResponsesRoutingPlanSelection(c, &service.AccountSelectionResult{
+		Account:  &service.Account{ID: 9, Name: "primary", Platform: service.PlatformOpenAI},
+		Acquired: true,
+	}, service.OpenAIAccountScheduleDecision{
+		Layer:             "load_balance",
+		CandidateCount:    3,
+		StickySessionHit:  true,
+		SelectedAccountID: 9,
+	})
+
+	stored, ok := getOpenAIResponsesRoutingPlan(c)
+	require.True(t, ok)
+	require.Equal(t, 3, stored.Candidates.Total)
+	require.Equal(t, int64(9), stored.Account.AccountID)
+	require.Equal(t, "primary", stored.Account.AccountName)
+	require.Equal(t, "load_balance", stored.Account.SelectionMode)
+	require.True(t, stored.Account.Acquired)
+	require.True(t, stored.Account.StickySelected)
 }
 
 func TestResolveOpenAIForwardDefaultMappedModel(t *testing.T) {

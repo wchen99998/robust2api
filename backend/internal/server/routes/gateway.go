@@ -121,6 +121,20 @@ func RegisterGatewayRoutes(
 		h.Gateway.ChatCompletions(c)
 	})
 
+	// OpenAI-native namespace. These routes intentionally bypass platform
+	// dispatch because the namespace itself is provider-specific.
+	openaiV1 := r.Group("/openai/v1")
+	openaiV1.Use(bodyLimit)
+	openaiV1.Use(clientRequestID)
+	openaiV1.Use(endpointNorm)
+	openaiV1.Use(gin.HandlerFunc(apiKeyAuth))
+	openaiV1.Use(requireGroupAnthropic)
+	{
+		openaiV1.POST("/responses", h.OpenAIGateway.Responses)
+		openaiV1.POST("/responses/*subpath", h.OpenAIGateway.Responses)
+		openaiV1.GET("/responses", h.OpenAIGateway.ResponsesWebSocket)
+	}
+
 	// Antigravity 模型列表
 	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.Gateway.AntigravityModels)
 

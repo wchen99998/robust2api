@@ -38,7 +38,7 @@ func newGatewayRoutesTestRouter() *gin.Engine {
 func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
 	router := newGatewayRoutesTestRouter()
 
-	for _, path := range []string{"/v1/responses/compact", "/responses/compact"} {
+	for _, path := range []string{"/v1/responses/compact", "/responses/compact", "/openai/v1/responses/compact"} {
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"gpt-5"}`))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
@@ -46,4 +46,17 @@ func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
 		router.ServeHTTP(w, req)
 		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s should hit OpenAI responses handler", path)
 	}
+}
+
+func TestGatewayRoutesOpenAINativeResponsesWebSocketIsRegistered(t *testing.T) {
+	router := newGatewayRoutesTestRouter()
+	req := httptest.NewRequest(http.MethodGet, "/openai/v1/responses", nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	req.Header.Set("Sec-WebSocket-Version", "13")
+	req.Header.Set("Sec-WebSocket-Key", "dGhlIHNhbXBsZSBub25jZQ==")
+	w := httptest.NewRecorder()
+
+	router.ServeHTTP(w, req)
+	require.NotEqual(t, http.StatusNotFound, w.Code)
 }

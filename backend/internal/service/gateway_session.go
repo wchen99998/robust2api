@@ -132,41 +132,40 @@ func (s *GatewayService) extractCacheableContent(parsed *ParsedRequest) string {
 	}
 
 	var builder strings.Builder
-
-	// 检查 system 中的 cacheable 内容
-	if system, ok := parsed.System.([]any); ok {
-		for _, part := range system {
-			if partMap, ok := part.(map[string]any); ok {
-				if cc, ok := partMap["cache_control"].(map[string]any); ok {
-					if cc["type"] == "ephemeral" {
-						if text, ok := partMap["text"].(string); ok {
-							_, _ = builder.WriteString(text)
-						}
-					}
-				}
-			}
-		}
-	}
-	systemText := builder.String()
-
-	// 检查 messages 中的 cacheable 内容
+	appendEphemeralTextParts(&builder, parsed.System)
 	for _, msg := range parsed.Messages {
 		if msgMap, ok := msg.(map[string]any); ok {
-			if msgContent, ok := msgMap["content"].([]any); ok {
-				for _, part := range msgContent {
-					if partMap, ok := part.(map[string]any); ok {
-						if cc, ok := partMap["cache_control"].(map[string]any); ok {
-							if cc["type"] == "ephemeral" {
-								return s.extractTextFromContent(msgMap["content"])
-							}
-						}
-					}
-				}
-			}
+			appendEphemeralTextParts(&builder, msgMap["content"])
 		}
 	}
 
-	return systemText
+	return builder.String()
+}
+
+func appendEphemeralTextParts(builder *strings.Builder, content any) {
+	parts, ok := content.([]any)
+	if !ok {
+		return
+	}
+	for _, part := range parts {
+		text, ok := ephemeralTextPart(part)
+		if ok {
+			_, _ = builder.WriteString(text)
+		}
+	}
+}
+
+func ephemeralTextPart(part any) (string, bool) {
+	partMap, ok := part.(map[string]any)
+	if !ok {
+		return "", false
+	}
+	cc, ok := partMap["cache_control"].(map[string]any)
+	if !ok || cc["type"] != "ephemeral" {
+		return "", false
+	}
+	text, ok := partMap["text"].(string)
+	return text, ok
 }
 
 func (s *GatewayService) extractTextFromSystem(system any) string {

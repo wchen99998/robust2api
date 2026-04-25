@@ -50,13 +50,33 @@ func redactAuthHeaderValue(v string) string {
 }
 
 func safeHeaderValueForLog(key string, v string) string {
+	if isSensitiveHeaderForLog(key) {
+		return redactAuthHeaderValue(v)
+	}
+	return strings.TrimSpace(v)
+}
+
+func isSensitiveHeaderForLog(key string) bool {
 	key = strings.ToLower(strings.TrimSpace(key))
 	switch key {
-	case "authorization", "x-api-key":
-		return redactAuthHeaderValue(v)
-	default:
-		return strings.TrimSpace(v)
+	case "authorization",
+		"proxy-authorization",
+		"cookie",
+		"set-cookie",
+		"x-api-key",
+		"x-goog-api-key",
+		"x-auth-token",
+		"x-csrf-token",
+		"x-xsrf-token",
+		"apikey",
+		"api-key":
+		return true
 	}
+
+	return strings.Contains(key, "token") ||
+		strings.Contains(key, "secret") ||
+		strings.Contains(key, "session") ||
+		strings.HasSuffix(key, "-api-key")
 }
 
 func extractSystemPreviewFromBody(body []byte) string {

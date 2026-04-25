@@ -797,6 +797,81 @@ func TestGenerateSessionHash_CacheControlOverridesSessionContext(t *testing.T) {
 	require.Equal(t, h1, h2, "cache_control ephemeral has higher priority, SessionContext should not affect result")
 }
 
+func TestGenerateSessionHash_CacheControlOnlyHashesEphemeralParts(t *testing.T) {
+	svc := &GatewayService{}
+
+	base := &ParsedRequest{
+		Messages: []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type":          "text",
+						"text":          "stable prompt prefix",
+						"cache_control": map[string]any{"type": "ephemeral"},
+					},
+					map[string]any{
+						"type": "text",
+						"text": "first turn user text",
+					},
+				},
+			},
+		},
+		SessionContext: &SessionContext{ClientIP: "1.1.1.1", UserAgent: "ua1", APIKeyID: 100},
+	}
+	nextTurn := &ParsedRequest{
+		Messages: []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{
+						"type":          "text",
+						"text":          "stable prompt prefix",
+						"cache_control": map[string]any{"type": "ephemeral"},
+					},
+					map[string]any{
+						"type": "text",
+						"text": "second turn user text",
+					},
+				},
+			},
+		},
+		SessionContext: &SessionContext{ClientIP: "2.2.2.2", UserAgent: "ua2", APIKeyID: 200},
+	}
+
+	require.Equal(t, svc.GenerateSessionHash(base), svc.GenerateSessionHash(nextTurn))
+}
+
+func TestExtractCacheableContentCollectsOnlyEphemeralText(t *testing.T) {
+	svc := &GatewayService{}
+
+	parsed := &ParsedRequest{
+		System: []any{
+			map[string]any{
+				"type":          "text",
+				"text":          "system-cache",
+				"cache_control": map[string]any{"type": "ephemeral"},
+			},
+			map[string]any{"type": "text", "text": "system-uncached"},
+		},
+		Messages: []any{
+			map[string]any{
+				"role": "user",
+				"content": []any{
+					map[string]any{"type": "text", "text": "message-uncached"},
+					map[string]any{
+						"type":          "text",
+						"text":          "message-cache",
+						"cache_control": map[string]any{"type": "ephemeral"},
+					},
+				},
+			},
+		},
+	}
+
+	require.Equal(t, "system-cachemessage-cache", svc.extractCacheableContent(parsed))
+}
+
 // ============ 边界情况 ============
 
 func TestGenerateSessionHash_EmptyMessages(t *testing.T) {
