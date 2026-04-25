@@ -14,6 +14,26 @@ type CanonicalRequest struct {
 	Mutation       RequestMutation `json:"mutation"`
 }
 
+func (r CanonicalRequest) MarshalJSON() ([]byte, error) {
+	type canonicalRequestJSON struct {
+		RequestedModel string          `json:"requested_model,omitempty"`
+		Headers        http.Header     `json:"headers,omitempty"`
+		Body           json.RawMessage `json:"body,omitempty"`
+		Model          ModelResolution `json:"model"`
+		Session        SessionInput    `json:"session"`
+		Mutation       RequestMutation `json:"mutation"`
+	}
+
+	return json.Marshal(canonicalRequestJSON{
+		RequestedModel: r.RequestedModel,
+		Headers:        redactHeaders(r.Headers),
+		Body:           r.Body,
+		Model:          r.Model,
+		Session:        r.Session,
+		Mutation:       r.Mutation,
+	})
+}
+
 type ModelResolution struct {
 	Requested     string             `json:"requested,omitempty"`
 	Canonical     string             `json:"canonical,omitempty"`
@@ -58,4 +78,20 @@ type RequestMutation struct {
 	Headers    http.Header `json:"headers,omitempty"`
 	Model      string      `json:"model,omitempty"`
 	Streaming  *bool       `json:"streaming,omitempty"`
+}
+
+func (m RequestMutation) MarshalJSON() ([]byte, error) {
+	type requestMutationJSON struct {
+		TargetPath string      `json:"target_path,omitempty"`
+		Headers    http.Header `json:"headers,omitempty"`
+		Model      string      `json:"model,omitempty"`
+		Streaming  *bool       `json:"streaming,omitempty"`
+	}
+
+	return json.Marshal(requestMutationJSON{
+		TargetPath: m.TargetPath,
+		Headers:    redactHeaders(m.Headers),
+		Model:      m.Model,
+		Streaming:  m.Streaming,
+	})
 }

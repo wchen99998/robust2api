@@ -1,8 +1,10 @@
 package domain
 
 import (
+	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -14,6 +16,28 @@ type IngressRequest struct {
 	Method    string        `json:"method"`
 	Path      string        `json:"path"`
 	Header    http.Header   `json:"header,omitempty"`
+}
+
+func (r IngressRequest) MarshalJSON() ([]byte, error) {
+	type ingressRequestJSON struct {
+		RequestID string        `json:"request_id"`
+		Endpoint  EndpointKind  `json:"endpoint"`
+		Platform  Platform      `json:"platform"`
+		Transport TransportKind `json:"transport"`
+		Method    string        `json:"method"`
+		Path      string        `json:"path"`
+		Header    http.Header   `json:"header,omitempty"`
+	}
+
+	return json.Marshal(ingressRequestJSON{
+		RequestID: r.RequestID,
+		Endpoint:  r.Endpoint,
+		Platform:  r.Platform,
+		Transport: r.Transport,
+		Method:    r.Method,
+		Path:      r.Path,
+		Header:    redactHeaders(r.Header),
+	})
 }
 
 type RoutingPlan struct {
@@ -59,4 +83,33 @@ type GatewayError struct {
 	Message    string `json:"message"`
 	StatusCode int    `json:"status_code,omitempty"`
 	Retryable  bool   `json:"retryable"`
+}
+
+func redactHeaders(headers http.Header) http.Header {
+	if len(headers) == 0 {
+		return nil
+	}
+
+	out := make(http.Header, len(headers))
+	for name, values := range headers {
+		if isSensitiveHeader(name) {
+			out[name] = []string{"[REDACTED]"}
+			continue
+		}
+		out[name] = append([]string(nil), values...)
+	}
+	return out
+}
+
+func isSensitiveHeader(name string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	if normalized == "" {
+		return false
+	}
+
+	switch normalized {
+	case "authorization", "proxy-authorization", "cookie", "set-cookie", "x-api-key":
+		return true
+	}
+	return strings.Contains(normalized, "api-key") || strings.Contains(normalized, "api_key")
 }

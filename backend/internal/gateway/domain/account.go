@@ -42,7 +42,7 @@ type AccountDecision struct {
 
 type AccountReservation struct {
 	AccountID int64     `json:"account_id"`
-	Token     string    `json:"token,omitempty"`
+	Token     string    `json:"-"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 

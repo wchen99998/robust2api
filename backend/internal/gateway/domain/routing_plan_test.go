@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -21,8 +22,7 @@ func TestRoutingPlanJSONRoundTrip(t *testing.T) {
 			Method:    http.MethodPost,
 			Path:      "/v1/responses/compact",
 			Header: http.Header{
-				"Content-Type":  []string{"application/json"},
-				"Authorization": []string{"Bearer redacted"},
+				"Content-Type": []string{"application/json"},
 			},
 		},
 		Subject: Subject{
@@ -92,7 +92,6 @@ func TestRoutingPlanJSONRoundTrip(t *testing.T) {
 			},
 			Reservation: AccountReservation{
 				AccountID: 99,
-				Token:     "reservation-token",
 				ExpiresAt: resetAt,
 			},
 			WaitPlan: AccountWaitPlan{
@@ -184,6 +183,91 @@ func TestExecutionReportJSONRoundTrip(t *testing.T) {
 	}
 
 	assertJSONRoundTrip(t, report)
+}
+
+func TestRoutingPlanJSONRedactsSensitiveHeaders(t *testing.T) {
+	plan := RoutingPlan{
+		Request: IngressRequest{
+			RequestID: "req-secret",
+			Method:    http.MethodPost,
+			Path:      "/v1/responses/compact",
+			Header: http.Header{
+				"Authorization":     []string{"Bearer sk-live-request-secret"},
+				"Cookie":            []string{"session_id=cookie-secret"},
+				"X-Api-Key":         []string{"sub2api-key-secret"},
+				"OpenAI-API-Key":    []string{"openai-secret"},
+				"Anthropic-API-Key": []string{"anthropic-secret"},
+				"X-Goog-Api-Key":    []string{"gemini-secret"},
+				"Content-Type":      []string{"application/json"},
+			},
+		},
+		Canonical: CanonicalRequest{
+			Headers: http.Header{
+				"Authorization":     []string{"Bearer sk-live-canonical-secret"},
+				"Cookie":            []string{"canonical_cookie=secret"},
+				"X-Api-Key":         []string{"canonical-sub2api-secret"},
+				"OpenAI-API-Key":    []string{"canonical-openai-secret"},
+				"Anthropic-API-Key": []string{"canonical-anthropic-secret"},
+				"Gemini-API-Key":    []string{"canonical-gemini-secret"},
+				"Accept":            []string{"text/event-stream"},
+			},
+		},
+	}
+
+	payload, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	jsonText := string(payload)
+
+	for _, secret := range []string{
+		"sk-live-request-secret",
+		"cookie-secret",
+		"sub2api-key-secret",
+		"openai-secret",
+		"anthropic-secret",
+		"gemini-secret",
+		"sk-live-canonical-secret",
+		"canonical_cookie=secret",
+		"canonical-sub2api-secret",
+		"canonical-openai-secret",
+		"canonical-anthropic-secret",
+		"canonical-gemini-secret",
+	} {
+		if strings.Contains(jsonText, secret) {
+			t.Fatalf("routing plan JSON leaked secret %q: %s", secret, jsonText)
+		}
+	}
+	for _, expected := range []string{"Content-Type", "application/json", "Accept", "text/event-stream", "[REDACTED]"} {
+		if !strings.Contains(jsonText, expected) {
+			t.Fatalf("routing plan JSON missing expected value %q: %s", expected, jsonText)
+		}
+	}
+}
+
+func TestRoutingPlanJSONDoesNotSerializeReservationToken(t *testing.T) {
+	plan := RoutingPlan{
+		Account: AccountDecision{
+			Reservation: AccountReservation{
+				AccountID: 99,
+				Token:     "reservation-token-secret",
+				ExpiresAt: time.Date(2026, 4, 25, 10, 35, 0, 0, time.UTC),
+			},
+		},
+	}
+
+	payload, err := json.Marshal(plan)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	jsonText := string(payload)
+
+	if strings.Contains(jsonText, "reservation-token-secret") || strings.Contains(jsonText, `"token"`) {
+		t.Fatalf("routing plan JSON leaked reservation token: %s", jsonText)
+	}
+	if !strings.Contains(jsonText, `"account_id":99`) {
+		t.Fatalf("routing plan JSON missing non-sensitive reservation metadata: %s", jsonText)
+	}
 }
 
 func assertJSONRoundTrip[T any](t *testing.T, value T) {
