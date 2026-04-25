@@ -11,10 +11,13 @@ import (
 
 func TestGatewayFoundationImportBoundaries(t *testing.T) {
 	forbiddenImports := []string{
+		"github.com/Wei-Shaw/sub2api/ent",
+		"github.com/Wei-Shaw/sub2api/internal/config",
 		"github.com/Wei-Shaw/sub2api/internal/domain",
 		"github.com/Wei-Shaw/sub2api/internal/service",
 		"github.com/Wei-Shaw/sub2api/internal/repository",
 		"github.com/Wei-Shaw/sub2api/internal/handler",
+		"github.com/Wei-Shaw/sub2api/internal/pkg",
 		"github.com/Wei-Shaw/sub2api/internal/server",
 		"github.com/gin-gonic/gin",
 	}
