@@ -374,36 +374,11 @@ func TestOpenAIBuildResponsesRoutingPlanStoresSerializableDecision(t *testing.T)
 	require.Equal(t, "gpt-5.4", mapping.MappedModel)
 
 	setOpenAIResponsesRoutingPlan(c, plan)
-	stored, ok := getOpenAIResponsesRoutingPlan(c)
+	value, ok := c.Get(openAIResponsesRoutingPlanContextKey)
+	require.True(t, ok)
+	stored, ok := value.(*gatewaycore.RoutingPlan)
 	require.True(t, ok)
 	require.Equal(t, plan.RequestID, stored.RequestID)
-}
-
-func TestOpenAIAnnotateResponsesRoutingPlanSelection(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	w := httptest.NewRecorder()
-	c, _ := gin.CreateTestContext(w)
-	plan := &gatewaycore.RoutingPlan{}
-	setOpenAIResponsesRoutingPlan(c, plan)
-
-	annotateOpenAIResponsesRoutingPlanSelection(c, &service.AccountSelectionResult{
-		Account:  &service.Account{ID: 9, Name: "primary", Platform: service.PlatformOpenAI},
-		Acquired: true,
-	}, service.OpenAIAccountScheduleDecision{
-		Layer:             "load_balance",
-		CandidateCount:    3,
-		StickySessionHit:  true,
-		SelectedAccountID: 9,
-	})
-
-	stored, ok := getOpenAIResponsesRoutingPlan(c)
-	require.True(t, ok)
-	require.Equal(t, 3, stored.Candidates.Total)
-	require.Equal(t, int64(9), stored.Account.AccountID)
-	require.Equal(t, "primary", stored.Account.AccountName)
-	require.Equal(t, "load_balance", stored.Account.SelectionMode)
-	require.True(t, stored.Account.Acquired)
-	require.True(t, stored.Account.StickySelected)
 }
 
 func TestResolveOpenAIForwardDefaultMappedModel(t *testing.T) {

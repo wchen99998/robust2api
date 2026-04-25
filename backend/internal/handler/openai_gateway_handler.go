@@ -809,44 +809,6 @@ func setOpenAIResponsesRoutingPlan(c *gin.Context, plan *gatewaycore.RoutingPlan
 	c.Set(openAIResponsesRoutingPlanContextKey, plan)
 }
 
-func getOpenAIResponsesRoutingPlan(c *gin.Context) (*gatewaycore.RoutingPlan, bool) {
-	if c == nil {
-		return nil, false
-	}
-	value, ok := c.Get(openAIResponsesRoutingPlanContextKey)
-	if !ok {
-		return nil, false
-	}
-	plan, ok := value.(*gatewaycore.RoutingPlan)
-	return plan, ok && plan != nil
-}
-
-func annotateOpenAIResponsesRoutingPlanSelection(c *gin.Context, selection *service.AccountSelectionResult, decision service.OpenAIAccountScheduleDecision) {
-	plan, ok := getOpenAIResponsesRoutingPlan(c)
-	if !ok {
-		return
-	}
-	plan.Candidates.Total = decision.CandidateCount
-	plan.Candidates.Eligible = decision.CandidateCount
-	plan.Candidates.TopK = decision.TopK
-	plan.Candidates.LatencyMs = decision.LatencyMs
-	plan.Candidates.LoadSkew = decision.LoadSkew
-	plan.Account.SelectionMode = decision.Layer
-	plan.Account.StickySelected = decision.StickyPreviousHit || decision.StickySessionHit
-	if selection != nil {
-		plan.Account.Acquired = selection.Acquired
-		plan.Account.WaitAllowed = selection.WaitPlan != nil
-		if selection.Account != nil {
-			plan.Account.AccountID = selection.Account.ID
-			plan.Account.AccountName = selection.Account.Name
-			plan.Account.Platform = selection.Account.Platform
-		}
-	}
-	if decision.SelectedAccountID > 0 && plan.Account.AccountID == 0 {
-		plan.Account.AccountID = decision.SelectedAccountID
-	}
-}
-
 func isOpenAIRemoteCompactPath(c *gin.Context) bool {
 	if c == nil || c.Request == nil || c.Request.URL == nil {
 		return false

@@ -3,6 +3,7 @@ package openai
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 )
 
 const defaultResponsesURL = "https://api.openai.com/v1/responses"
+const defaultChatGPTCodexResponsesURL = "https://chatgpt.com/backend-api/codex/responses"
 
 type Adapter struct{}
 
@@ -28,8 +30,20 @@ func (Adapter) Prepare(_ context.Context, plan core.RoutingPlan, account *servic
 		return nil, errors.New("account is required")
 	}
 	targetURL := defaultResponsesURL
-	if baseURL := strings.TrimRight(account.GetBaseURL(), "/"); baseURL != "" {
-		targetURL = baseURL + "/v1/responses"
+	switch account.Type {
+	case service.AccountTypeOAuth:
+		targetURL = defaultChatGPTCodexResponsesURL
+	case service.AccountTypeAPIKey:
+		targetURL = buildResponsesURL(account.GetOpenAIBaseURL())
+	default:
+		return nil, fmt.Errorf("unsupported OpenAI account type: %s", account.Type)
+	}
+	token := account.GetOpenAIApiKey()
+	if account.Type == service.AccountTypeOAuth {
+		token = account.GetOpenAIAccessToken()
+	}
+	if strings.TrimSpace(token) == "" {
+		return nil, errors.New("openai account token is required")
 	}
 	req := &core.UpstreamRequest{
 		Method:  http.MethodPost,
@@ -37,11 +51,36 @@ func (Adapter) Prepare(_ context.Context, plan core.RoutingPlan, account *servic
 		Headers: http.Header{},
 		Stream:  plan.Endpoint == core.EndpointResponsesWebSocket,
 	}
+	req.Headers.Set("authorization", "Bearer "+token)
 	req.Headers.Set("content-type", "application/json")
+	if account.Type == service.AccountTypeOAuth {
+		req.Headers.Set("accept", "text/event-stream")
+		req.Headers.Set("OpenAI-Beta", "responses=experimental")
+		if chatGPTAccountID := account.GetChatGPTAccountID(); strings.TrimSpace(chatGPTAccountID) != "" {
+			req.Headers.Set("chatgpt-account-id", chatGPTAccountID)
+		}
+	}
+	if customUA := account.GetOpenAIUserAgent(); strings.TrimSpace(customUA) != "" {
+		req.Headers.Set("user-agent", customUA)
+	}
 	if plan.Model.UpstreamModel != "" {
 		req.Headers.Set("x-sub2api-upstream-model", plan.Model.UpstreamModel)
 	}
 	return req, nil
+}
+
+func buildResponsesURL(baseURL string) string {
+	normalized := strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	if normalized == "" {
+		return defaultResponsesURL
+	}
+	if strings.HasSuffix(normalized, "/responses") {
+		return normalized
+	}
+	if strings.HasSuffix(normalized, "/v1") {
+		return normalized + "/responses"
+	}
+	return normalized + "/v1/responses"
 }
 
 func PrepareResponsesBody(plan core.RoutingPlan, body []byte) []byte {
