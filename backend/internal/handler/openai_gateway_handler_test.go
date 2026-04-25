@@ -531,6 +531,41 @@ func TestOpenAIResponses_MissingDependencies_ReturnsServiceUnavailable(t *testin
 	assert.Equal(t, "Service temporarily unavailable", errorObj["message"])
 }
 
+type fakeOpenAIResponsesExecutor struct {
+	httpCalled      bool
+	webSocketCalled bool
+}
+
+func (e *fakeOpenAIResponsesExecutor) HandleHTTP(c *gin.Context) {
+	e.httpCalled = true
+	c.Writer.WriteHeader(http.StatusAccepted)
+}
+
+func (e *fakeOpenAIResponsesExecutor) HandleWebSocket(c *gin.Context) {
+	e.webSocketCalled = true
+	c.Writer.WriteHeader(http.StatusNoContent)
+}
+
+func TestOpenAIResponsesRoutesDelegateToExecutor(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	executor := &fakeOpenAIResponsesExecutor{}
+	h := &OpenAIGatewayHandler{responsesExecutor: executor}
+
+	httpRecorder := httptest.NewRecorder()
+	httpCtx, _ := gin.CreateTestContext(httpRecorder)
+	httpCtx.Request = httptest.NewRequest(http.MethodPost, "/openai/v1/responses", strings.NewReader(`{"model":"gpt-5"}`))
+	h.Responses(httpCtx)
+
+	require.True(t, executor.httpCalled)
+
+	wsRecorder := httptest.NewRecorder()
+	wsCtx, _ := gin.CreateTestContext(wsRecorder)
+	wsCtx.Request = httptest.NewRequest(http.MethodGet, "/openai/v1/responses", nil)
+	h.ResponsesWebSocket(wsCtx)
+
+	require.True(t, executor.webSocketCalled)
+}
+
 func TestOpenAIResponses_SetsClientTransportHTTP(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

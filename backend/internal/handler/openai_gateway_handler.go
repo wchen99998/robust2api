@@ -45,8 +45,44 @@ type OpenAIGatewayHandler struct {
 	apiKeyService           *service.APIKeyService
 	errorPassthroughService *service.ErrorPassthroughService
 	concurrencyHelper       *ConcurrencyHelper
+	responsesExecutor       OpenAIResponsesExecutor
 	maxAccountSwitches      int
 	cfg                     *config.Config
+}
+
+type OpenAIResponsesExecutor interface {
+	HandleHTTP(c *gin.Context)
+	HandleWebSocket(c *gin.Context)
+}
+
+type openAIResponsesExecutor struct {
+	handler *OpenAIGatewayHandler
+}
+
+func (h *OpenAIGatewayHandler) getResponsesExecutor() OpenAIResponsesExecutor {
+	if h == nil {
+		return openAIResponsesExecutor{}
+	}
+	if h.responsesExecutor != nil {
+		return h.responsesExecutor
+	}
+	return openAIResponsesExecutor{handler: h}
+}
+
+func (e openAIResponsesExecutor) HandleHTTP(c *gin.Context) {
+	if e.handler == nil {
+		(&OpenAIGatewayHandler{}).handleResponsesHTTP(c)
+		return
+	}
+	e.handler.handleResponsesHTTP(c)
+}
+
+func (e openAIResponsesExecutor) HandleWebSocket(c *gin.Context) {
+	if e.handler == nil {
+		(&OpenAIGatewayHandler{}).handleResponsesWebSocket(c)
+		return
+	}
+	e.handler.handleResponsesWebSocket(c)
 }
 
 func resolveOpenAIForwardDefaultMappedModel(apiKey *service.APIKey, fallbackModel string) string {
@@ -101,7 +137,7 @@ func NewOpenAIGatewayHandler(
 			maxAccountSwitches = cfg.Gateway.MaxAccountSwitches
 		}
 	}
-	return &OpenAIGatewayHandler{
+	h := &OpenAIGatewayHandler{
 		gatewayService:          gatewayService,
 		billingCacheService:     billingCacheService,
 		apiKeyService:           apiKeyService,
@@ -110,11 +146,17 @@ func NewOpenAIGatewayHandler(
 		maxAccountSwitches:      maxAccountSwitches,
 		cfg:                     cfg,
 	}
+	h.responsesExecutor = openAIResponsesExecutor{handler: h}
+	return h
 }
 
 // Responses handles OpenAI Responses API endpoint
 // POST /openai/v1/responses
 func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
+	h.getResponsesExecutor().HandleHTTP(c)
+}
+
+func (h *OpenAIGatewayHandler) handleResponsesHTTP(c *gin.Context) {
 	// 局部兜底：确保该 handler 内部任何 panic 都不会击穿到进程级。
 	streamStarted := false
 	defer h.recoverResponsesPanic(c, &streamStarted)
@@ -1726,6 +1768,10 @@ func (h *OpenAIGatewayHandler) acquireResponsesAccountSlot(
 // ResponsesWebSocket handles OpenAI Responses API WebSocket ingress endpoint
 // GET /openai/v1/responses (Upgrade: websocket)
 func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
+	h.getResponsesExecutor().HandleWebSocket(c)
+}
+
+func (h *OpenAIGatewayHandler) handleResponsesWebSocket(c *gin.Context) {
 	if !isOpenAIWSUpgradeRequest(c.Request) {
 		h.errorResponse(c, http.StatusUpgradeRequired, "invalid_request_error", "WebSocket upgrade required (Upgrade: websocket)")
 		return
