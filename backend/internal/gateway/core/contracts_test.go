@@ -10,9 +10,11 @@ import (
 )
 
 var (
-	_ Core          = (*fakeCore)(nil)
-	_ ResponseSink  = (*fakeSink)(nil)
-	_ WebSocketConn = (*fakeWebSocketConn)(nil)
+	_ Core              = (*fakeCore)(nil)
+	_ HTTPExecutor      = (*fakeCore)(nil)
+	_ WebSocketExecutor = (*fakeCore)(nil)
+	_ ResponseSink      = (*fakeSink)(nil)
+	_ WebSocketConn     = (*fakeWebSocketConn)(nil)
 )
 
 type fakeCore struct {

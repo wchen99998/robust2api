@@ -8,7 +8,15 @@ import (
 )
 
 type Core interface {
+	HTTPExecutor
+	WebSocketExecutor
+}
+
+type HTTPExecutor interface {
 	ExecuteHTTP(ctx context.Context, req domain.IngressRequest, sink ResponseSink) (*domain.ExecutionReport, error)
+}
+
+type WebSocketExecutor interface {
 	ExecuteWebSocket(ctx context.Context, req domain.IngressRequest, conn WebSocketConn) (*domain.ExecutionReport, error)
 }
 
