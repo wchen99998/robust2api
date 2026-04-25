@@ -10,7 +10,6 @@ import (
 	"testing"
 	"time"
 
-	gatewaycore "github.com/Wei-Shaw/sub2api/internal/gateway/core"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -353,7 +352,7 @@ func TestOpenAIEnsureResponsesDependencies(t *testing.T) {
 	})
 }
 
-func TestOpenAIBuildResponsesRoutingPlanStoresSerializableDecision(t *testing.T) {
+func TestOpenAIBuildResponsesRoutingPlanReturnsSerializableDecision(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -372,13 +371,6 @@ func TestOpenAIBuildResponsesRoutingPlanStoresSerializableDecision(t *testing.T)
 	require.Equal(t, "Bearer [redacted]", plan.Debug.HeaderPreview["Authorization"])
 	require.False(t, mapping.Mapped)
 	require.Equal(t, "gpt-5.4", mapping.MappedModel)
-
-	setOpenAIResponsesRoutingPlan(c, plan)
-	value, ok := c.Get(openAIResponsesRoutingPlanContextKey)
-	require.True(t, ok)
-	stored, ok := value.(*gatewaycore.RoutingPlan)
-	require.True(t, ok)
-	require.Equal(t, plan.RequestID, stored.RequestID)
 }
 
 func TestResolveOpenAIForwardDefaultMappedModel(t *testing.T) {

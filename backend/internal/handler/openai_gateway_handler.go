@@ -36,8 +36,6 @@ import (
 	"go.uber.org/zap"
 )
 
-const openAIResponsesRoutingPlanContextKey = "openai_responses_routing_plan"
-
 // OpenAIGatewayHandler handles OpenAI API gateway requests
 type OpenAIGatewayHandler struct {
 	gatewayService          *service.OpenAIGatewayService
@@ -320,7 +318,6 @@ func (h *OpenAIGatewayHandler) handleResponsesHTTP(c *gin.Context) {
 		h.handleStreamingAwareError(c, http.StatusInternalServerError, "api_error", "Failed to build routing plan", streamStarted)
 		return
 	}
-	setOpenAIResponsesRoutingPlan(c, routingPlan)
 
 	maxAccountSwitches := h.maxAccountSwitches
 	routingPlan.Retry.MaxAttempts = maxAccountSwitches + 1
@@ -385,7 +382,6 @@ func (h *OpenAIGatewayHandler) handleResponsesHTTP(c *gin.Context) {
 			scheduleDecision = openAISelection.ScheduleDecision
 			if openAISelection.Plan != nil {
 				routingPlan = openAISelection.Plan
-				setOpenAIResponsesRoutingPlan(c, routingPlan)
 			}
 		}
 		if err != nil {
@@ -800,13 +796,6 @@ func (h *OpenAIGatewayHandler) buildOpenAIResponsesRoutingPlan(
 		channelMapping.MappedModel = reqModel
 	}
 	return plan, channelMapping, nil
-}
-
-func setOpenAIResponsesRoutingPlan(c *gin.Context, plan *gatewaycore.RoutingPlan) {
-	if c == nil || plan == nil {
-		return
-	}
-	c.Set(openAIResponsesRoutingPlanContextKey, plan)
 }
 
 func isOpenAIRemoteCompactPath(c *gin.Context) bool {
@@ -1900,7 +1889,6 @@ func (h *OpenAIGatewayHandler) handleResponsesWebSocket(c *gin.Context) {
 		closeOpenAIClientWS(wsConn, coderws.StatusInternalError, "failed to build routing plan")
 		return
 	}
-	setOpenAIResponsesRoutingPlan(c, routingPlan)
 	selectCtx, selectSpan := tracer.Start(ctx, "gateway.select_account")
 	openAISelection, err := gatewayscheduler.OpenAIResponsesSelector{
 		Service:            h.gatewayService,
@@ -1916,7 +1904,6 @@ func (h *OpenAIGatewayHandler) handleResponsesWebSocket(c *gin.Context) {
 		scheduleDecision = openAISelection.ScheduleDecision
 		if openAISelection.Plan != nil {
 			routingPlan = openAISelection.Plan
-			setOpenAIResponsesRoutingPlan(c, routingPlan)
 		}
 	}
 	if err != nil {
