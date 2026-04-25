@@ -60,8 +60,9 @@ func (p RoutingPlan) IsZero() bool {
 
 type ExecutionReport struct {
 	RequestID  string                 `json:"request_id"`
+	Plan       RoutingPlan            `json:"plan"`
 	Attempts   []AttemptTrace         `json:"attempts,omitempty"`
-	Usage      UsageEvent             `json:"usage"`
+	Usage      *UsageEvent            `json:"usage,omitempty"`
 	Billing    BillingExecutionReport `json:"billing"`
 	Error      *GatewayError          `json:"error,omitempty"`
 	StartedAt  time.Time              `json:"started_at"`
@@ -126,6 +127,7 @@ func isSensitiveHeader(name string) bool {
 	sensitiveTerms := []string{
 		"api-key",
 		"api_key",
+		"apikey",
 		"token",
 		"secret",
 		"credential",

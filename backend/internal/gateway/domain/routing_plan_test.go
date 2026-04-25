@@ -131,6 +131,45 @@ func TestExecutionReportJSONRoundTrip(t *testing.T) {
 
 	report := ExecutionReport{
 		RequestID: "req-123",
+		Plan: RoutingPlan{
+			Request: IngressRequest{
+				RequestID: "req-123",
+				Endpoint:  EndpointOpenAIResponses,
+				Platform:  PlatformOpenAI,
+				Transport: TransportHTTP,
+				Method:    http.MethodPost,
+				Path:      "/v1/responses",
+			},
+			Canonical: CanonicalRequest{
+				RequestedModel: "gpt-4.1",
+				Model: ModelResolution{
+					Requested: "gpt-4.1",
+					Canonical: "gpt-4.1",
+					Upstream:  "gpt-4.1-mini",
+					Billing:   "gpt-4.1",
+				},
+			},
+			GroupID: 13,
+			Account: AccountDecision{
+				Layer: AccountDecisionLoadBalance,
+				Account: AccountSnapshot{
+					ID:       100,
+					Name:     "openai-failover",
+					Platform: PlatformOpenAI,
+				},
+			},
+			Retry: RetryPlan{
+				MaxAttempts:        3,
+				RetrySameAccount:   true,
+				RetryOtherAccounts: true,
+			},
+			Billing: BillingLifecyclePlan{
+				Mode:   BillingModeStreaming,
+				Model:  "gpt-4.1",
+				Events: []BillingEventKind{BillingEventReserve, BillingEventFinalize},
+			},
+			CreatedAt: startedAt,
+		},
 		Attempts: []AttemptTrace{
 			{
 				Attempt:      1,
@@ -152,7 +191,7 @@ func TestExecutionReportJSONRoundTrip(t *testing.T) {
 				Duration:   1500 * time.Millisecond,
 			},
 		},
-		Usage: UsageEvent{
+		Usage: &UsageEvent{
 			Kind:             BillingEventFinalize,
 			APIKeyID:         41,
 			AccountID:        100,
@@ -184,6 +223,96 @@ func TestExecutionReportJSONRoundTrip(t *testing.T) {
 	assertJSONRoundTrip(t, report)
 }
 
+func TestExecutionReportJSONIncludesPlanAndOmitsNilUsage(t *testing.T) {
+	startedAt := time.Date(2026, 4, 25, 10, 30, 0, 0, time.UTC)
+	report := ExecutionReport{
+		RequestID: "req-no-account",
+		Plan: RoutingPlan{
+			Request: IngressRequest{
+				RequestID: "req-no-account",
+				Method:    http.MethodPost,
+				Path:      "/v1/responses",
+			},
+			Canonical: CanonicalRequest{
+				RequestedModel: "gpt-4.1",
+			},
+			Diagnostics: CandidateDiagnostics{
+				Total:       2,
+				Eligible:    0,
+				Rejected:    2,
+				RejectCount: map[RejectionReason]int{RejectionReasonModelUnsupported: 2},
+			},
+			Retry: RetryPlan{
+				MaxAttempts: 1,
+			},
+			Billing: BillingLifecyclePlan{
+				Mode: BillingModeNone,
+			},
+			CreatedAt: startedAt,
+		},
+		Error: &GatewayError{
+			Code:       "no_account",
+			Message:    "no eligible account",
+			StatusCode: http.StatusServiceUnavailable,
+			Retryable:  false,
+		},
+		StartedAt:  startedAt,
+		FinishedAt: startedAt,
+	}
+
+	payload, err := json.Marshal(report)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	var decoded map[string]json.RawMessage
+	if err := json.Unmarshal(payload, &decoded); err != nil {
+		t.Fatalf("unmarshal object: %v", err)
+	}
+	if _, ok := decoded["plan"]; !ok {
+		t.Fatalf("execution report JSON missing plan: %s", payload)
+	}
+	if _, ok := decoded["usage"]; ok {
+		t.Fatalf("execution report JSON should omit nil usage: %s", payload)
+	}
+
+	var got ExecutionReport
+	if err := json.Unmarshal(payload, &got); err != nil {
+		t.Fatalf("unmarshal report: %v", err)
+	}
+	if !reflect.DeepEqual(got.Plan, report.Plan) {
+		t.Fatalf("plan mismatch\n got: %#v\nwant: %#v\njson: %s", got.Plan, report.Plan, payload)
+	}
+	if got.Usage != nil {
+		t.Fatalf("usage = %#v, want nil", got.Usage)
+	}
+}
+
+func TestExecutionReportSucceeded(t *testing.T) {
+	if got := (ExecutionReport{
+		Attempts: []AttemptTrace{{Outcome: AttemptOutcomeSuccess}},
+	}).Succeeded(); !got {
+		t.Fatalf("Succeeded() = false, want true for successful final attempt")
+	}
+
+	if got := (ExecutionReport{
+		Attempts: []AttemptTrace{{Outcome: AttemptOutcomeSuccess}},
+		Error:    &GatewayError{Code: "failed"},
+	}).Succeeded(); got {
+		t.Fatalf("Succeeded() = true, want false when report has error")
+	}
+
+	if got := (ExecutionReport{
+		Attempts: []AttemptTrace{{Outcome: AttemptOutcomeRetryAccount}},
+	}).Succeeded(); got {
+		t.Fatalf("Succeeded() = true, want false for non-success final attempt")
+	}
+
+	if got := (ExecutionReport{}).Succeeded(); got {
+		t.Fatalf("Succeeded() = true, want false without attempts")
+	}
+}
+
 func TestRoutingPlanJSONRedactsSensitiveHeaders(t *testing.T) {
 	sensitiveHeaders := []string{
 		"Authorization",
@@ -192,6 +321,7 @@ func TestRoutingPlanJSONRedactsSensitiveHeaders(t *testing.T) {
 		"OpenAI-API-Key",
 		"Anthropic-API-Key",
 		"X-Goog-Api-Key",
+		"OpenAIApiKey",
 		"Access-Token",
 		"Refresh-Token",
 		"ID-Token",
@@ -255,6 +385,7 @@ func TestIsSensitiveHeader(t *testing.T) {
 		{name: "cookie", header: "Cookie", sensitive: true},
 		{name: "x api key", header: "X-Api-Key", sensitive: true},
 		{name: "provider api key", header: "OpenAI-API-Key", sensitive: true},
+		{name: "unseparated api key", header: "OpenAIApiKey", sensitive: true},
 		{name: "access token", header: "Access-Token", sensitive: true},
 		{name: "refresh token", header: "Refresh-Token", sensitive: true},
 		{name: "id token", header: "ID-Token", sensitive: true},
