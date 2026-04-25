@@ -1068,7 +1068,7 @@ func TestIsModelRestricted_CaseInsensitive(t *testing.T) {
 }
 
 // --- 4.5 ResolveChannelMappingAndRestrict ---
-// 注意：模型限制检查已移至调度阶段（GatewayService.checkChannelPricingRestriction），
+// 注意：模型限制检查已移至 gateway/scheduler 调度阶段，
 // ResolveChannelMappingAndRestrict 仅做映射，restricted 始终为 false。
 
 func TestResolveChannelMappingAndRestrict_NilGroupID(t *testing.T) {

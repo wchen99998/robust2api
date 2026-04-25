@@ -63,13 +63,11 @@ func ProvideSettingHandler(settingService *service.SettingService, buildInfo ser
 
 // ProvideGatewayHandlers creates the GatewayHandlers struct.
 func ProvideGatewayHandlers(
-	gatewayHandler *GatewayHandler,
-	openAIGatewayHandler *OpenAIGatewayHandler,
+	coreGatewayHandler *CoreGatewayHandler,
 	_ *service.GatewayCacheInvalidationSubscribers,
 ) *GatewayHandlers {
 	return &GatewayHandlers{
-		Gateway:       gatewayHandler,
-		OpenAIGateway: openAIGatewayHandler,
+		CoreGateway: coreGatewayHandler,
 	}
 }
 
@@ -106,8 +104,7 @@ func ProvideControlHandlers(
 // GatewayProviderSet is the Wire provider set for the gateway binary.
 var GatewayProviderSet = wire.NewSet(
 	service.ProvideGatewayCacheInvalidationSubscribers,
-	NewGatewayHandler,
-	NewOpenAIGatewayHandler,
+	NewCoreGatewayHandler,
 	ProvideGatewayHandlers,
 )
 

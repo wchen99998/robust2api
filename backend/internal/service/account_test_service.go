@@ -56,30 +56,30 @@ const (
 
 // AccountTestService handles account testing operations
 type AccountTestService struct {
-	accountRepo               AccountRepository
-	geminiTokenProvider       *GeminiTokenProvider
-	antigravityGatewayService *AntigravityGatewayService
-	httpUpstream              HTTPUpstream
-	cfg                       *config.Config
-	tlsFPProfileService       *TLSFingerprintProfileService
+	accountRepo         AccountRepository
+	geminiTokenProvider *GeminiTokenProvider
+	antigravityTester   *AntigravityConnectionTester
+	httpUpstream        HTTPUpstream
+	cfg                 *config.Config
+	tlsFPProfileService *TLSFingerprintProfileService
 }
 
 // NewAccountTestService creates a new AccountTestService
 func NewAccountTestService(
 	accountRepo AccountRepository,
 	geminiTokenProvider *GeminiTokenProvider,
-	antigravityGatewayService *AntigravityGatewayService,
+	antigravityTester *AntigravityConnectionTester,
 	httpUpstream HTTPUpstream,
 	cfg *config.Config,
 	tlsFPProfileService *TLSFingerprintProfileService,
 ) *AccountTestService {
 	return &AccountTestService{
-		accountRepo:               accountRepo,
-		geminiTokenProvider:       geminiTokenProvider,
-		antigravityGatewayService: antigravityGatewayService,
-		httpUpstream:              httpUpstream,
-		cfg:                       cfg,
-		tlsFPProfileService:       tlsFPProfileService,
+		accountRepo:         accountRepo,
+		geminiTokenProvider: geminiTokenProvider,
+		antigravityTester:   antigravityTester,
+		httpUpstream:        httpUpstream,
+		cfg:                 cfg,
+		tlsFPProfileService: tlsFPProfileService,
 	}
 }
 
@@ -637,8 +637,8 @@ func (s *AccountTestService) testAntigravityAccountConnection(c *gin.Context, ac
 		testModelID = "claude-sonnet-4-5"
 	}
 
-	if s.antigravityGatewayService == nil {
-		return s.sendErrorAndEnd(c, "Antigravity gateway service not configured")
+	if s.antigravityTester == nil {
+		return s.sendErrorAndEnd(c, "Antigravity connection tester not configured")
 	}
 
 	// Set SSE headers
@@ -651,8 +651,7 @@ func (s *AccountTestService) testAntigravityAccountConnection(c *gin.Context, ac
 	// Send test_start event
 	s.sendEvent(c, TestEvent{Type: "test_start", Model: testModelID})
 
-	// 调用 AntigravityGatewayService.TestConnection（复用协议转换逻辑）
-	result, err := s.antigravityGatewayService.TestConnection(ctx, account, testModelID)
+	result, err := s.antigravityTester.TestConnection(ctx, account, testModelID)
 	if err != nil {
 		return s.sendErrorAndEnd(c, err.Error())
 	}

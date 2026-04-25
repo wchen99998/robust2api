@@ -196,7 +196,7 @@ func (s *GatewayRoutingSuite) TestSchedulableFilter_ExcludesInactive() {
 }
 
 // TestPlatformRoutingDecision 验证平台路由决策
-// 这个测试模拟 Handler 层在选择账户后的路由决策逻辑
+// 这个测试模拟 gateway core 在选择账户后的 provider adapter 决策逻辑
 func (s *GatewayRoutingSuite) TestPlatformRoutingDecision() {
 	// 创建两种平台的账户
 	geminiAcc := mustCreateAccount(s.T(), s.client, &service.Account{
@@ -216,17 +216,17 @@ func (s *GatewayRoutingSuite) TestPlatformRoutingDecision() {
 	tests := []struct {
 		name            string
 		accountID       int64
-		expectedService string
+		expectedAdapter string
 	}{
 		{
-			name:            "Gemini账户路由到ForwardNative",
+			name:            "Gemini账户路由到Gemini adapter",
 			accountID:       geminiAcc.ID,
-			expectedService: "GeminiMessagesCompatService.ForwardNative",
+			expectedAdapter: "gateway/provider/gemini",
 		},
 		{
-			name:            "Antigravity账户路由到ForwardGemini",
+			name:            "Antigravity账户路由到Antigravity adapter",
 			accountID:       antigravityAcc.ID,
-			expectedService: "AntigravityGatewayService.ForwardGemini",
+			expectedAdapter: "gateway/provider/antigravity",
 		},
 	}
 
@@ -236,15 +236,15 @@ func (s *GatewayRoutingSuite) TestPlatformRoutingDecision() {
 			account, err := s.accountRepo.GetByID(s.ctx, tt.accountID)
 			s.Require().NoError(err)
 
-			// 模拟 Handler 层的路由决策
-			var routedService string
+			// 模拟 gateway core 的 provider adapter 决策
+			var routedAdapter string
 			if account.Platform == service.PlatformAntigravity {
-				routedService = "AntigravityGatewayService.ForwardGemini"
+				routedAdapter = "gateway/provider/antigravity"
 			} else {
-				routedService = "GeminiMessagesCompatService.ForwardNative"
+				routedAdapter = "gateway/provider/gemini"
 			}
 
-			s.Require().Equal(tt.expectedService, routedService)
+			s.Require().Equal(tt.expectedAdapter, routedAdapter)
 		})
 	}
 }

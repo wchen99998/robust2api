@@ -31,8 +31,7 @@ type AdminHandlers struct {
 
 // GatewayHandlers contains only gateway-facing HTTP handlers.
 type GatewayHandlers struct {
-	Gateway       *GatewayHandler
-	OpenAIGateway *OpenAIGatewayHandler
+	CoreGateway *CoreGatewayHandler
 }
 
 // ControlHandlers contains control-plane HTTP handlers.

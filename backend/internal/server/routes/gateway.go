@@ -1,8 +1,6 @@
 package routes
 
 import (
-	"net/http"
-
 	"github.com/Wei-Shaw/sub2api/internal/config"
 	"github.com/Wei-Shaw/sub2api/internal/handler"
 	"github.com/Wei-Shaw/sub2api/internal/server/middleware"
@@ -38,53 +36,16 @@ func RegisterGatewayRoutes(
 	gateway.Use(requireGroupAnthropic)
 	{
 		// /v1/messages: auto-route based on group platform
-		gateway.POST("/messages", func(c *gin.Context) {
-			if getGroupPlatform(c) == service.PlatformOpenAI {
-				h.OpenAIGateway.Messages(c)
-				return
-			}
-			h.Gateway.Messages(c)
-		})
-		// /v1/messages/count_tokens: OpenAI groups get 404
-		gateway.POST("/messages/count_tokens", func(c *gin.Context) {
-			if getGroupPlatform(c) == service.PlatformOpenAI {
-				c.JSON(http.StatusNotFound, gin.H{
-					"type": "error",
-					"error": gin.H{
-						"type":    "not_found_error",
-						"message": "Token counting is not supported for this platform",
-					},
-				})
-				return
-			}
-			h.Gateway.CountTokens(c)
-		})
-		gateway.GET("/models", h.Gateway.Models)
-		gateway.GET("/usage", h.Gateway.Usage)
+		gateway.POST("/messages", h.CoreGateway.Handle)
+		gateway.POST("/messages/count_tokens", h.CoreGateway.Handle)
+		gateway.GET("/models", h.CoreGateway.Handle)
+		gateway.GET("/usage", h.CoreGateway.Handle)
 		// OpenAI Responses API: auto-route based on group platform
-		gateway.POST("/responses", func(c *gin.Context) {
-			if getGroupPlatform(c) == service.PlatformOpenAI {
-				h.OpenAIGateway.Responses(c)
-				return
-			}
-			h.Gateway.Responses(c)
-		})
-		gateway.POST("/responses/*subpath", func(c *gin.Context) {
-			if getGroupPlatform(c) == service.PlatformOpenAI {
-				h.OpenAIGateway.Responses(c)
-				return
-			}
-			h.Gateway.Responses(c)
-		})
-		gateway.GET("/responses", h.OpenAIGateway.ResponsesWebSocket)
+		gateway.POST("/responses", h.CoreGateway.Handle)
+		gateway.POST("/responses/*subpath", h.CoreGateway.Handle)
+		gateway.GET("/responses", h.CoreGateway.HandleWebSocket)
 		// OpenAI Chat Completions API: auto-route based on group platform
-		gateway.POST("/chat/completions", func(c *gin.Context) {
-			if getGroupPlatform(c) == service.PlatformOpenAI {
-				h.OpenAIGateway.ChatCompletions(c)
-				return
-			}
-			h.Gateway.ChatCompletions(c)
-		})
+		gateway.POST("/chat/completions", h.CoreGateway.Handle)
 	}
 
 	// Gemini 原生 API 兼容层（Gemini SDK/CLI 直连）
@@ -95,34 +56,35 @@ func RegisterGatewayRoutes(
 	gemini.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
 	gemini.Use(requireGroupGoogle)
 	{
-		gemini.GET("/models", h.Gateway.GeminiV1BetaListModels)
-		gemini.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)
+		gemini.GET("/models", h.CoreGateway.Handle)
+		gemini.GET("/models/:model", h.CoreGateway.Handle)
 		// Gin treats ":" as a param marker, but Gemini uses "{model}:{action}" in the same segment.
-		gemini.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
+		gemini.POST("/models/*modelAction", h.CoreGateway.Handle)
 	}
 
 	// OpenAI Responses API（不带v1前缀的别名）— auto-route based on group platform
-	responsesHandler := func(c *gin.Context) {
-		if getGroupPlatform(c) == service.PlatformOpenAI {
-			h.OpenAIGateway.Responses(c)
-			return
-		}
-		h.Gateway.Responses(c)
-	}
+	responsesHandler := h.CoreGateway.Handle
 	r.POST("/responses", bodyLimit, clientRequestID, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, responsesHandler)
 	r.POST("/responses/*subpath", bodyLimit, clientRequestID, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, responsesHandler)
-	r.GET("/responses", bodyLimit, clientRequestID, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.OpenAIGateway.ResponsesWebSocket)
+	r.GET("/responses", bodyLimit, clientRequestID, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.CoreGateway.HandleWebSocket)
 	// OpenAI Chat Completions API（不带v1前缀的别名）— auto-route based on group platform
-	r.POST("/chat/completions", bodyLimit, clientRequestID, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, func(c *gin.Context) {
-		if getGroupPlatform(c) == service.PlatformOpenAI {
-			h.OpenAIGateway.ChatCompletions(c)
-			return
-		}
-		h.Gateway.ChatCompletions(c)
-	})
+	r.POST("/chat/completions", bodyLimit, clientRequestID, endpointNorm, gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.CoreGateway.Handle)
+
+	openaiV1 := r.Group("/openai/v1")
+	openaiV1.Use(bodyLimit)
+	openaiV1.Use(clientRequestID)
+	openaiV1.Use(endpointNorm)
+	openaiV1.Use(gin.HandlerFunc(apiKeyAuth))
+	openaiV1.Use(requireGroupAnthropic)
+	{
+		openaiV1.POST("/responses", h.CoreGateway.Handle)
+		openaiV1.POST("/responses/*subpath", h.CoreGateway.Handle)
+		openaiV1.GET("/responses", h.CoreGateway.HandleWebSocket)
+		openaiV1.POST("/chat/completions", h.CoreGateway.Handle)
+	}
 
 	// Antigravity 模型列表
-	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.Gateway.AntigravityModels)
+	r.GET("/antigravity/models", gin.HandlerFunc(apiKeyAuth), requireGroupAnthropic, h.CoreGateway.Handle)
 
 	// Antigravity 专用路由（仅使用 antigravity 账户，不混合调度）
 	antigravityV1 := r.Group("/antigravity/v1")
@@ -133,10 +95,10 @@ func RegisterGatewayRoutes(
 	antigravityV1.Use(gin.HandlerFunc(apiKeyAuth))
 	antigravityV1.Use(requireGroupAnthropic)
 	{
-		antigravityV1.POST("/messages", h.Gateway.Messages)
-		antigravityV1.POST("/messages/count_tokens", h.Gateway.CountTokens)
-		antigravityV1.GET("/models", h.Gateway.AntigravityModels)
-		antigravityV1.GET("/usage", h.Gateway.Usage)
+		antigravityV1.POST("/messages", h.CoreGateway.Handle)
+		antigravityV1.POST("/messages/count_tokens", h.CoreGateway.Handle)
+		antigravityV1.GET("/models", h.CoreGateway.Handle)
+		antigravityV1.GET("/usage", h.CoreGateway.Handle)
 	}
 
 	antigravityV1Beta := r.Group("/antigravity/v1beta")
@@ -147,18 +109,9 @@ func RegisterGatewayRoutes(
 	antigravityV1Beta.Use(middleware.APIKeyAuthWithSubscriptionGoogle(apiKeyService, subscriptionService, cfg))
 	antigravityV1Beta.Use(requireGroupGoogle)
 	{
-		antigravityV1Beta.GET("/models", h.Gateway.GeminiV1BetaListModels)
-		antigravityV1Beta.GET("/models/:model", h.Gateway.GeminiV1BetaGetModel)
-		antigravityV1Beta.POST("/models/*modelAction", h.Gateway.GeminiV1BetaModels)
+		antigravityV1Beta.GET("/models", h.CoreGateway.Handle)
+		antigravityV1Beta.GET("/models/:model", h.CoreGateway.Handle)
+		antigravityV1Beta.POST("/models/*modelAction", h.CoreGateway.Handle)
 	}
 
-}
-
-// getGroupPlatform extracts the group platform from the API Key stored in context.
-func getGroupPlatform(c *gin.Context) string {
-	apiKey, ok := middleware.GetAPIKeyFromContext(c)
-	if !ok || apiKey.Group == nil {
-		return ""
-	}
-	return apiKey.Group.Platform
 }

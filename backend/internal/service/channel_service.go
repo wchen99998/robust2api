@@ -102,7 +102,7 @@ type ChannelMappingResult struct {
 
 // BuildModelMappingChain 根据映射结果和上游实际模型构建映射链描述。
 // reqModel: 客户端请求的原始模型名。
-// upstreamModel: 上游实际使用的模型名（ForwardResult.UpstreamModel）。
+// upstreamModel: 上游实际使用的模型名（ModelResolution.UpstreamModel）。
 // 返回空字符串表示无映射。
 func (r ChannelMappingResult) BuildModelMappingChain(reqModel, upstreamModel string) string {
 	if !r.Mapped {
@@ -502,7 +502,7 @@ func (s *ChannelService) IsModelRestricted(ctx context.Context, groupID int64, m
 }
 
 // ResolveChannelMappingAndRestrict 解析渠道映射。
-// 返回映射结果。模型限制检查已移至调度阶段（GatewayService.checkChannelPricingRestriction），
+// 返回映射结果。模型限制检查已移至 gateway/scheduler 调度阶段，
 // restricted 始终返回 false，保留签名兼容性。
 func (s *ChannelService) ResolveChannelMappingAndRestrict(ctx context.Context, groupID *int64, model string) (ChannelMappingResult, bool) {
 	if groupID == nil {
