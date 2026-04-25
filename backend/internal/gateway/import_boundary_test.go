@@ -19,17 +19,14 @@ func TestGatewayFoundationImportBoundaries(t *testing.T) {
 	}
 
 	for _, packageDir := range []string{"domain", "core"} {
-		entries, err := os.ReadDir(packageDir)
-		if err != nil {
-			t.Fatalf("read package dir %s: %v", packageDir, err)
-		}
-
-		for _, entry := range entries {
+		err := filepath.WalkDir(packageDir, func(path string, entry os.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-				continue
+				return nil
 			}
 
-			path := filepath.Join(packageDir, entry.Name())
 			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
 			if err != nil {
 				t.Fatalf("parse imports for %s: %v", path, err)
@@ -43,6 +40,10 @@ func TestGatewayFoundationImportBoundaries(t *testing.T) {
 					}
 				}
 			}
+			return nil
+		})
+		if err != nil {
+			t.Fatalf("walk package dir %s: %v", packageDir, err)
 		}
 	}
 }
