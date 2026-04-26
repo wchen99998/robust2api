@@ -3,7 +3,6 @@ package domain
 import (
 	"encoding/json"
 	"net/http"
-	"reflect"
 	"strings"
 	"time"
 )
@@ -55,7 +54,10 @@ type RoutingPlan struct {
 }
 
 func (p RoutingPlan) IsZero() bool {
-	return reflect.DeepEqual(p, RoutingPlan{})
+	return p.Request.RequestID == "" &&
+		p.Request.Endpoint == "" &&
+		p.Request.Platform == "" &&
+		p.CreatedAt.IsZero()
 }
 
 type ExecutionReport struct {

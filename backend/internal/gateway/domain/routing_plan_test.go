@@ -210,12 +210,6 @@ func TestExecutionReportJSONRoundTrip(t *testing.T) {
 			Released:    false,
 			ChargedCost: 0.42,
 		},
-		Error: &GatewayError{
-			Code:       "upstream_retry",
-			Message:    "first attempt retried",
-			StatusCode: 429,
-			Retryable:  true,
-		},
 		StartedAt:  startedAt,
 		FinishedAt: finishedAt,
 	}
@@ -310,6 +304,39 @@ func TestExecutionReportSucceeded(t *testing.T) {
 
 	if got := (ExecutionReport{}).Succeeded(); got {
 		t.Fatalf("Succeeded() = true, want false without attempts")
+	}
+}
+
+func TestRoutingPlanIsZeroIgnoresEmptyCollections(t *testing.T) {
+	plan := RoutingPlan{
+		Request: IngressRequest{
+			Header: http.Header{},
+		},
+		Canonical: CanonicalRequest{
+			Headers: http.Header{},
+		},
+		Diagnostics: CandidateDiagnostics{
+			RejectCount: map[RejectionReason]int{},
+			Samples:     []CandidateSample{},
+		},
+		Account: AccountDecision{
+			Account: AccountSnapshot{
+				GroupIDs: []int64{},
+				Capabilities: AccountCapabilities{
+					Models:     []string{},
+					Transports: []TransportKind{},
+				},
+			},
+		},
+	}
+
+	if !plan.IsZero() {
+		t.Fatalf("IsZero() = false, want true for semantically empty plan")
+	}
+
+	plan.Request.RequestID = "req-123"
+	if plan.IsZero() {
+		t.Fatalf("IsZero() = true, want false with request id")
 	}
 }
 

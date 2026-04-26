@@ -78,6 +78,7 @@ func (s *fakeSink) WriteHeader(status int, header http.Header) error {
 
 func (s *fakeSink) WriteChunk(chunk []byte) error {
 	s.chunks = append(s.chunks, append([]byte(nil), chunk...))
+	s.committed = true
 	return nil
 }
 
@@ -164,6 +165,20 @@ func TestCoreContractsAreUsableWithoutGin(t *testing.T) {
 	}
 	if !sink.flushed {
 		t.Fatal("sink was not flushed")
+	}
+}
+
+func TestResponseSinkWriteChunkCommits(t *testing.T) {
+	sink := &fakeSink{}
+
+	if sink.Committed() {
+		t.Fatal("new sink was committed")
+	}
+	if err := sink.WriteChunk([]byte("hello")); err != nil {
+		t.Fatalf("WriteChunk() error = %v", err)
+	}
+	if !sink.Committed() {
+		t.Fatal("WriteChunk() did not mark sink committed")
 	}
 }
 
