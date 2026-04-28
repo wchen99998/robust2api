@@ -203,11 +203,27 @@ func openAIPlanningResultToLegacySelection(result *openAIResponsesPlanningResult
 	selection.Acquired = result.ScheduleResult.Reservation.Acquired
 	selection.ReleaseFunc = result.ScheduleResult.Reservation.Release
 	if result.ScheduleResult.WaitPlan.Required {
+		waitPlan := result.ScheduleResult.WaitPlan
+		accountID := waitPlan.AccountID
+		if accountID == 0 {
+			accountID = result.Account.ID
+		}
+		maxConcurrency := waitPlan.MaxConcurrency
+		if maxConcurrency <= 0 {
+			maxConcurrency = result.ScheduleResult.Account.Snapshot.Concurrency
+		}
+		if maxConcurrency <= 0 {
+			maxConcurrency = result.Account.Concurrency
+		}
+		maxWaiting := waitPlan.MaxWaiting
+		if maxWaiting <= 0 {
+			maxWaiting = 1
+		}
 		selection.WaitPlan = &service.AccountWaitPlan{
-			AccountID:      result.Account.ID,
-			MaxConcurrency: result.Account.Concurrency,
-			Timeout:        result.ScheduleResult.WaitPlan.Timeout,
-			MaxWaiting:     1,
+			AccountID:      accountID,
+			MaxConcurrency: maxConcurrency,
+			Timeout:        waitPlan.Timeout,
+			MaxWaiting:     maxWaiting,
 		}
 	}
 

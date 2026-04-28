@@ -153,6 +153,35 @@ func TestOpenAISchedulerWaitPlanWhenReservationBusy(t *testing.T) {
 	if !result.WaitPlan.Required {
 		t.Fatalf("wait plan required = false, want true")
 	}
+	if ports.waitPlanLayer != domain.AccountDecisionLoadBalance {
+		t.Fatalf("wait plan layer = %q, want %q", ports.waitPlanLayer, domain.AccountDecisionLoadBalance)
+	}
+	if result.WaitPlan.MaxWaiting != 11 {
+		t.Fatalf("wait plan max waiting = %d, want 11", result.WaitPlan.MaxWaiting)
+	}
+}
+
+func TestOpenAISchedulerStickyWaitPlanReceivesDecisionLayer(t *testing.T) {
+	ports := newFakePorts()
+	ports.sticky[stickyKey(1, "session_1")] = 10
+	ports.accounts[10] = testAccount(10, string(domain.AccountTypeAPIKey), "gpt-5.1")
+	ports.busy[10] = true
+
+	result, err := NewOpenAIScheduler(ports).Select(context.Background(), ScheduleRequest{
+		GroupID:        1,
+		SessionKey:     "session_1",
+		RequestedModel: "gpt-5.1",
+	})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+
+	if result.Layer != domain.AccountDecisionSessionHash {
+		t.Fatalf("layer = %q, want %q", result.Layer, domain.AccountDecisionSessionHash)
+	}
+	if ports.waitPlanLayer != domain.AccountDecisionSessionHash {
+		t.Fatalf("wait plan layer = %q, want %q", ports.waitPlanLayer, domain.AccountDecisionSessionHash)
+	}
 }
 
 func TestOpenAISchedulerLoadBalanceContinuesPastBusyAccount(t *testing.T) {
@@ -348,6 +377,7 @@ type fakePorts struct {
 	deletedSticky map[string]bool
 	busy          map[int64]bool
 	missingOnGet  map[int64]bool
+	waitPlanLayer domain.AccountDecisionLayer
 }
 
 func newFakePorts() *fakePorts {
@@ -441,11 +471,14 @@ func (f *fakePorts) AcquireAccountSlot(_ context.Context, account Account) (Rese
 	return reservation, nil
 }
 
-func (f *fakePorts) WaitPlan(_ context.Context, account Account) domain.AccountWaitPlan {
+func (f *fakePorts) WaitPlan(_ context.Context, account Account, layer domain.AccountDecisionLayer) domain.AccountWaitPlan {
+	f.waitPlanLayer = layer
 	return domain.AccountWaitPlan{
-		Required: true,
-		Reason:   "account_busy",
-		Timeout:  time.Second,
+		Required:       true,
+		Reason:         "account_busy",
+		Timeout:        time.Second,
+		MaxConcurrency: account.Snapshot.Concurrency,
+		MaxWaiting:     11,
 	}
 }
 

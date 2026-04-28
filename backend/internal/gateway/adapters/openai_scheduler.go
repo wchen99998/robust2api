@@ -19,7 +19,7 @@ type OpenAISchedulerBridge interface {
 	GatewayGetSchedulableOpenAIAccount(ctx context.Context, accountID int64, requestedModel string) (*service.Account, error)
 	GatewayResolveOpenAITransports(account *service.Account) []domain.TransportKind
 	GatewayAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*service.AcquireResult, error)
-	GatewayDefaultAccountWaitPlan(ctx context.Context, account *service.Account) domain.AccountWaitPlan
+	GatewayAccountWaitPlan(ctx context.Context, account *service.Account, layer domain.AccountDecisionLayer) domain.AccountWaitPlan
 	ReportOpenAIAccountScheduleResult(accountID int64, success bool, firstTokenMs *int)
 }
 
@@ -138,12 +138,12 @@ func (p OpenAISchedulerPorts) AcquireAccountSlot(ctx context.Context, account sc
 	}, nil
 }
 
-func (p OpenAISchedulerPorts) WaitPlan(ctx context.Context, account scheduler.Account) domain.AccountWaitPlan {
+func (p OpenAISchedulerPorts) WaitPlan(ctx context.Context, account scheduler.Account, layer domain.AccountDecisionLayer) domain.AccountWaitPlan {
 	if p.Bridge == nil {
 		return domain.AccountWaitPlan{}
 	}
 	legacy, _ := account.Legacy.(*service.Account)
-	waitPlan := p.Bridge.GatewayDefaultAccountWaitPlan(ctx, legacy)
+	waitPlan := p.Bridge.GatewayAccountWaitPlan(ctx, legacy, layer)
 	if waitPlan.Required && waitPlan.Reason == "" {
 		waitPlan.Reason = "account_busy"
 	}

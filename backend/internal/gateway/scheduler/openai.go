@@ -55,7 +55,7 @@ type Ports interface {
 	ListSchedulableOpenAIAccounts(ctx context.Context, groupID int64) ([]Account, error)
 	GetAccount(ctx context.Context, accountID int64) (Account, bool, error)
 	AcquireAccountSlot(ctx context.Context, account Account) (Reservation, error)
-	WaitPlan(ctx context.Context, account Account) domain.AccountWaitPlan
+	WaitPlan(ctx context.Context, account Account, layer domain.AccountDecisionLayer) domain.AccountWaitPlan
 	ReportResult(ctx context.Context, accountID int64, outcome ScheduleOutcome)
 }
 
@@ -257,7 +257,7 @@ func (s *OpenAIScheduler) reserve(
 			}
 		}
 	} else {
-		waitPlan = s.ports.WaitPlan(ctx, account)
+		waitPlan = s.ports.WaitPlan(ctx, account, layer)
 		if !waitPlan.Required {
 			waitPlan = domain.AccountWaitPlan{
 				Required: true,

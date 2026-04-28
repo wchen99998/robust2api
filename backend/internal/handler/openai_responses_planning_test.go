@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/gateway/domain"
 	openai "github.com/Wei-Shaw/sub2api/internal/gateway/provider/openai"
@@ -89,6 +90,43 @@ func TestOpenAIResponsesPlanningResultConvertsSchedulerSelectionToLegacySelectio
 	require.Same(t, account, selection.Account)
 	require.True(t, selection.Acquired)
 	require.NotNil(t, selection.ReleaseFunc)
+}
+
+func TestOpenAIResponsesPlanningResultConvertsWaitPlanLimitsToLegacySelection(t *testing.T) {
+	account := &service.Account{
+		ID:          22,
+		Platform:    service.PlatformOpenAI,
+		Type:        service.AccountTypeOAuth,
+		Concurrency: 5,
+	}
+
+	selection := openAIPlanningResultToLegacySelection(&openAIResponsesPlanningResult{
+		Account: account,
+		ScheduleResult: &scheduler.ScheduleResult{
+			Account: scheduler.Account{
+				Snapshot: domain.AccountSnapshot{ID: 22, Concurrency: 7},
+			},
+			Layer: domain.AccountDecisionLoadBalance,
+			Reservation: scheduler.Reservation{
+				AccountID: 22,
+				Acquired:  false,
+			},
+			WaitPlan: domain.AccountWaitPlan{
+				Required:       true,
+				Reason:         "account_busy",
+				Timeout:        12 * time.Second,
+				MaxConcurrency: 7,
+				MaxWaiting:     42,
+			},
+		},
+	})
+
+	require.NotNil(t, selection)
+	require.NotNil(t, selection.WaitPlan)
+	require.Equal(t, int64(22), selection.WaitPlan.AccountID)
+	require.Equal(t, 7, selection.WaitPlan.MaxConcurrency)
+	require.Equal(t, 12*time.Second, selection.WaitPlan.Timeout)
+	require.Equal(t, 42, selection.WaitPlan.MaxWaiting)
 }
 
 func TestOpenAIResponsesPlanningHelperAppliesRequestedModelOverrideToNormalizedBodies(t *testing.T) {

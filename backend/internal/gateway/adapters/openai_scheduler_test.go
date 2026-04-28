@@ -84,7 +84,7 @@ func TestOpenAIAccountToSchedulerAccountExposesWildcardModelMappingKeys(t *testi
 	}
 }
 
-func TestOpenAISchedulerPortsDelegatesAndMapsBridgeBehavior(t *testing.T) {
+func TestOpenAISchedulerPortsWaitPlanDelegatesAndMapsBridgeBehavior(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(7)
 	releaseCalled := false
@@ -123,9 +123,11 @@ func TestOpenAISchedulerPortsDelegatesAndMapsBridgeBehavior(t *testing.T) {
 			},
 		},
 		waitPlan: domain.AccountWaitPlan{
-			Required: true,
-			Reason:   "account_busy",
-			Timeout:  12 * time.Second,
+			Required:       true,
+			Reason:         "account_busy",
+			Timeout:        12 * time.Second,
+			MaxConcurrency: 3,
+			MaxWaiting:     17,
 		},
 	}
 	excluded := map[int64]struct{}{99: {}}
@@ -190,9 +192,12 @@ func TestOpenAISchedulerPortsDelegatesAndMapsBridgeBehavior(t *testing.T) {
 		t.Fatal("reservation release did not delegate")
 	}
 
-	waitPlan := ports.WaitPlan(ctx, account)
-	if waitPlan.Reason != "account_busy" || waitPlan.Timeout != 12*time.Second {
-		t.Fatalf("wait plan = %#v, want account_busy/12s", waitPlan)
+	waitPlan := ports.WaitPlan(ctx, account, domain.AccountDecisionSessionHash)
+	if waitPlan.Reason != "account_busy" || waitPlan.Timeout != 12*time.Second || waitPlan.MaxConcurrency != 3 || waitPlan.MaxWaiting != 17 {
+		t.Fatalf("wait plan = %#v, want account_busy/12s/max concurrency 3/max waiting 17", waitPlan)
+	}
+	if bridge.waitPlanLayer != domain.AccountDecisionSessionHash {
+		t.Fatalf("wait plan layer = %q, want %q", bridge.waitPlanLayer, domain.AccountDecisionSessionHash)
 	}
 
 	firstTokenMs := 321
@@ -213,6 +218,7 @@ type fakeOpenAISchedulerBridge struct {
 	transportsByID map[int64][]domain.TransportKind
 	acquireResult  *service.AcquireResult
 	waitPlan       domain.AccountWaitPlan
+	waitPlanLayer  domain.AccountDecisionLayer
 
 	acquireAccountID      int64
 	acquireMaxConcurrency int
@@ -264,7 +270,8 @@ func (f *fakeOpenAISchedulerBridge) GatewayAcquireAccountSlot(_ context.Context,
 	return f.acquireResult, nil
 }
 
-func (f *fakeOpenAISchedulerBridge) GatewayDefaultAccountWaitPlan(context.Context, *service.Account) domain.AccountWaitPlan {
+func (f *fakeOpenAISchedulerBridge) GatewayAccountWaitPlan(_ context.Context, _ *service.Account, layer domain.AccountDecisionLayer) domain.AccountWaitPlan {
+	f.waitPlanLayer = layer
 	return f.waitPlan
 }
 

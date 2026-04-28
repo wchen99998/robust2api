@@ -935,12 +935,27 @@ func (s *OpenAIGatewayService) GatewayAcquireAccountSlot(ctx context.Context, ac
 	return s.tryAcquireAccountSlot(ctx, accountID, maxConcurrency)
 }
 
-func (s *OpenAIGatewayService) GatewayDefaultAccountWaitPlan(context.Context, *Account) gatewaydomain.AccountWaitPlan {
+func (s *OpenAIGatewayService) GatewayAccountWaitPlan(_ context.Context, account *Account, layer gatewaydomain.AccountDecisionLayer) gatewaydomain.AccountWaitPlan {
 	cfg := s.schedulingConfig()
+	accountID := int64(0)
+	maxConcurrency := 0
+	if account != nil {
+		accountID = account.ID
+		maxConcurrency = account.Concurrency
+	}
+	timeout := cfg.FallbackWaitTimeout
+	maxWaiting := cfg.FallbackMaxWaiting
+	if layer == gatewaydomain.AccountDecisionPreviousResponseID || layer == gatewaydomain.AccountDecisionSessionHash {
+		timeout = cfg.StickySessionWaitTimeout
+		maxWaiting = cfg.StickySessionMaxWaiting
+	}
 	return gatewaydomain.AccountWaitPlan{
-		Required: true,
-		Reason:   "account_busy",
-		Timeout:  cfg.FallbackWaitTimeout,
+		AccountID:      accountID,
+		Required:       true,
+		Reason:         "account_busy",
+		Timeout:        timeout,
+		MaxConcurrency: maxConcurrency,
+		MaxWaiting:     maxWaiting,
 	}
 }
 

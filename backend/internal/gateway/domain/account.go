@@ -47,7 +47,10 @@ type AccountReservation struct {
 }
 
 type AccountWaitPlan struct {
-	Required bool          `json:"required"`
-	Reason   string        `json:"reason,omitempty"`
-	Timeout  time.Duration `json:"timeout"`
+	AccountID      int64         `json:"account_id,omitempty"`
+	Required       bool          `json:"required"`
+	Reason         string        `json:"reason,omitempty"`
+	Timeout        time.Duration `json:"timeout"`
+	MaxConcurrency int           `json:"max_concurrency,omitempty"`
+	MaxWaiting     int           `json:"max_waiting,omitempty"`
 }
