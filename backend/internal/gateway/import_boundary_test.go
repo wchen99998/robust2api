@@ -9,14 +9,7 @@ import (
 	"testing"
 )
 
-func TestGatewayFoundationImportBoundaries(t *testing.T) {
-	strictPackageDirs := []string{
-		"domain",
-		"core",
-		"provider",
-		"planning",
-		"scheduler",
-	}
+func TestGatewayImportBoundaries(t *testing.T) {
 	forbiddenImports := []string{
 		"github.com/Wei-Shaw/sub2api/ent",
 		"github.com/Wei-Shaw/sub2api/internal/config",
@@ -29,14 +22,9 @@ func TestGatewayFoundationImportBoundaries(t *testing.T) {
 		"github.com/gin-gonic/gin",
 	}
 
-	for _, packageDir := range strictPackageDirs {
-		packageDir := packageDir
-		t.Run(packageDir, func(t *testing.T) {
-			if !directoryExists(t, packageDir) {
-				t.Skipf("package directory %s does not exist yet", packageDir)
-			}
-			assertNoForbiddenImports(t, packageDir, forbiddenImports)
-		})
+	strictPackages := []string{"domain", "core", "provider", "planning", "scheduler"}
+	for _, packageDir := range strictPackages {
+		assertPackageAvoidsImports(t, packageDir, forbiddenImports)
 	}
 }
 
@@ -52,10 +40,23 @@ func TestGatewayEdgePackageSmoke(t *testing.T) {
 	}
 }
 
-func assertNoForbiddenImports(t *testing.T, packageDir string, forbiddenImports []string) {
+func assertPackageAvoidsImports(t *testing.T, packageDir string, forbiddenImports []string) {
 	t.Helper()
 
-	forEachGoSourceFile(t, packageDir, func(path string) {
+	if _, err := os.Stat(packageDir); err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		t.Fatalf("stat package dir %s: %v", packageDir, err)
+	}
+
+	err := filepath.WalkDir(packageDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			return nil
+		}
 		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
 		if err != nil {
 			t.Fatalf("parse imports for %s: %v", path, err)
@@ -69,7 +70,11 @@ func assertNoForbiddenImports(t *testing.T, packageDir string, forbiddenImports 
 				}
 			}
 		}
+		return nil
 	})
+	if err != nil {
+		t.Fatalf("walk package dir %s: %v", packageDir, err)
+	}
 }
 
 func assertGoFilesParse(t *testing.T, packageDir string) {
