@@ -2,11 +2,14 @@ package handler
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/Wei-Shaw/sub2api/internal/gateway/domain"
+	openai "github.com/Wei-Shaw/sub2api/internal/gateway/provider/openai"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -55,4 +58,28 @@ func TestOpenAIResponsesPlanningHelperReturnsNormalizedBodyAndLegacyAccount(t *t
 	require.NotNil(t, result)
 	require.Same(t, account, result.Account)
 	require.JSONEq(t, `{"model":"gpt-5.1"}`, string(result.NormalizedBody))
+}
+
+func TestOpenAIResponsesPlanningHelperAppliesRequestedModelOverrideToNormalizedBodies(t *testing.T) {
+	parsed, err := openai.ParseResponses(domain.IngressRequest{
+		Subpath: "/compact",
+		Body:    []byte(`{"model":{"value":"gpt-5.1"},"input":{"value":"hello"}}`),
+	})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"model":"gpt-5.1","input":"hello"}`, string(parsed.NormalizedBody))
+
+	requestedModel := applyOpenAIResponsesRequestedModelOverride(&parsed, " gpt-5.1-mini ")
+
+	require.Equal(t, "gpt-5.1-mini", requestedModel)
+	require.Equal(t, "gpt-5.1-mini", parsed.Canonical.RequestedModel)
+	require.Equal(t, "gpt-5.1-mini", parsed.Canonical.Model.Requested)
+	require.Equal(t, "gpt-5.1-mini", parsed.Canonical.Model.Canonical)
+	require.JSONEq(t, `{"model":"gpt-5.1-mini","input":"hello"}`, string(parsed.NormalizedBody))
+	require.JSONEq(t, string(parsed.NormalizedBody), string(parsed.Canonical.Body))
+	require.Equal(t, openAIResponsesPlanningTestSHA256(parsed.NormalizedBody), parsed.BodySHA256)
+}
+
+func openAIResponsesPlanningTestSHA256(body []byte) string {
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])
 }

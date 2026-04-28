@@ -2,6 +2,8 @@ package handler
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"time"
@@ -82,13 +84,7 @@ func (h openAIResponsesPlanningHelper) planAndSelect(
 		return nil, err
 	}
 
-	requestedModel := strings.TrimSpace(parsed.Canonical.RequestedModel)
-	if override := strings.TrimSpace(input.requestedModelOverride); override != "" {
-		requestedModel = override
-		parsed.Canonical.RequestedModel = override
-		parsed.Canonical.Model.Requested = override
-		parsed.Canonical.Model.Canonical = override
-	}
+	requestedModel := applyOpenAIResponsesRequestedModelOverride(&parsed, input.requestedModelOverride)
 
 	plan := planning.BuildOpenAIResponsesPlan(planning.OpenAIResponsesPlanInput{
 		Ingress:            ingressRequest,
@@ -187,6 +183,35 @@ func openAIPlanningSubjectFromService(apiKey *service.APIKey, userID int64) open
 		subject.groupID = apiKey.Group.ID
 	}
 	return subject
+}
+
+func applyOpenAIResponsesRequestedModelOverride(parsed *openai.ResponsesParseResult, override string) string {
+	trimmedOverride := strings.TrimSpace(override)
+	if parsed == nil {
+		return trimmedOverride
+	}
+
+	requestedModel := strings.TrimSpace(parsed.Canonical.RequestedModel)
+	if trimmedOverride == "" {
+		return requestedModel
+	}
+
+	requestedModel = trimmedOverride
+	parsed.Canonical.RequestedModel = requestedModel
+	parsed.Canonical.Model.Requested = requestedModel
+	parsed.Canonical.Model.Canonical = requestedModel
+
+	normalizedBody := service.ReplaceModelInBody(parsed.NormalizedBody, requestedModel)
+	parsed.NormalizedBody = append([]byte(nil), normalizedBody...)
+	parsed.Canonical.Body = append([]byte(nil), normalizedBody...)
+	parsed.BodySHA256 = openAIResponsesBodySHA256(parsed.NormalizedBody)
+
+	return requestedModel
+}
+
+func openAIResponsesBodySHA256(body []byte) string {
+	sum := sha256.Sum256(body)
+	return hex.EncodeToString(sum[:])
 }
 
 func openAIRequiredTransportForScheduler(transport domain.TransportKind) domain.TransportKind {
