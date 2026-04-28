@@ -53,11 +53,15 @@ func BuildOpenAIResponsesPlan(input OpenAIResponsesPlanInput) domain.RoutingPlan
 }
 
 func buildOpenAIResponsesSession(sessionInput domain.SessionInput) domain.SessionDecision {
+	if sessionInput.Key == "" || sessionInput.Source == "" || sessionInput.Source == domain.SessionSourceNone {
+		return domain.SessionDecision{Source: domain.SessionSourceNone}
+	}
+
 	return domain.SessionDecision{
-		Enabled: sessionInput.Source != domain.SessionSourceNone,
+		Enabled: true,
 		Key:     sessionInput.Key,
 		Source:  sessionInput.Source,
-		Sticky:  sessionInput.Key != "",
+		Sticky:  true,
 	}
 }
 

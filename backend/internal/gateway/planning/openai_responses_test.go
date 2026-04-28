@@ -203,4 +203,8 @@ func TestBuildOpenAIResponsesPlanWebSocketUsesStreamingBilling(t *testing.T) {
 		domain.BillingEventFinalize,
 		domain.BillingEventRelease,
 	}, plan.Billing.Events)
+	require.False(t, plan.Session.Enabled)
+	require.Empty(t, plan.Session.Key)
+	require.Equal(t, domain.SessionSourceNone, plan.Session.Source)
+	require.False(t, plan.Session.Sticky)
 }
