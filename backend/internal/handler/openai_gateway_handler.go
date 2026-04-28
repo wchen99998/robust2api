@@ -1784,15 +1784,21 @@ func (h *OpenAIGatewayHandler) ResponsesWebSocket(c *gin.Context) {
 		openAIWSIngressFallbackSessionSeed(subject.UserID, apiKey.ID, apiKey.GroupID),
 	)
 	selectCtx, selectSpan := tracer.Start(ctx, "gateway.select_account")
-	selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-		selectCtx,
-		apiKey.GroupID,
-		previousResponseID,
-		sessionHash,
-		reqModel,
-		nil,
-		service.OpenAIUpstreamTransportResponsesWebsocketV2,
-	)
+	planningHelper := openAIResponsesPlanningHelper{
+		gatewayService:     h.gatewayService,
+		maxAccountSwitches: h.maxAccountSwitches,
+	}
+	planningContext := *c
+	planningContext.Request = c.Request.WithContext(selectCtx)
+	planningResult, err := planningHelper.planAndSelect(&planningContext, openAIResponsesPlanningInput{
+		body:               firstMessage,
+		subject:            openAIPlanningSubjectFromService(apiKey, subject.UserID),
+		transport:          domain.TransportWebSocket,
+		previousResponseID: previousResponseID,
+		sessionKey:         sessionHash,
+	})
+	selection := openAIPlanningResultToLegacySelection(planningResult)
+	scheduleDecision := openAIPlanningResultToLogDecision(planningResult)
 	if err != nil {
 		appelotel.RecordSpanError(selectSpan, err, err.Error())
 		selectSpan.End()

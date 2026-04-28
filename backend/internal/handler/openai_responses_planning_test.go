@@ -148,6 +148,12 @@ func TestOpenAIResponsesPlanningHelperAppliesRequestedModelOverrideToNormalizedB
 	require.Equal(t, openAIResponsesPlanningTestSHA256(parsed.NormalizedBody), parsed.BodySHA256)
 }
 
+func TestOpenAIRequiredTransportForSchedulerWebSocket(t *testing.T) {
+	require.Equal(t, domain.TransportWebSocket, openAIRequiredTransportForScheduler(domain.TransportWebSocket))
+	require.Equal(t, domain.TransportHTTP, openAIRequiredTransportForScheduler(domain.TransportHTTP))
+	require.Equal(t, domain.TransportHTTP, openAIRequiredTransportForScheduler(domain.TransportUnknown))
+}
+
 func openAIResponsesPlanningTestSHA256(body []byte) string {
 	sum := sha256.Sum256(body)
 	return hex.EncodeToString(sum[:])
