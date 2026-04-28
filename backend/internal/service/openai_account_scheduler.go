@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	gatewaydomain "github.com/Wei-Shaw/sub2api/internal/gateway/domain"
 )
 
 const (
@@ -861,6 +863,68 @@ func (s *OpenAIGatewayService) ReportOpenAIAccountScheduleResult(accountID int64
 		return
 	}
 	scheduler.ReportResult(accountID, success, firstTokenMs)
+}
+
+func (s *OpenAIGatewayService) GatewayLookupPreviousResponseAccount(
+	ctx context.Context,
+	groupID *int64,
+	previousResponseID string,
+	requestedModel string,
+	excludedIDs map[int64]struct{},
+) (int64, bool, error) {
+	selection, err := s.SelectAccountByPreviousResponseID(ctx, groupID, previousResponseID, requestedModel, excludedIDs)
+	if err != nil || selection == nil || selection.Account == nil {
+		return 0, false, err
+	}
+	return selection.Account.ID, true, nil
+}
+
+func (s *OpenAIGatewayService) GatewayGetStickySessionAccountID(ctx context.Context, groupID *int64, sessionHash string) (int64, bool, error) {
+	accountID, err := s.getStickySessionAccountID(ctx, groupID, sessionHash)
+	if err != nil || accountID <= 0 {
+		return 0, false, err
+	}
+	return accountID, true, nil
+}
+
+func (s *OpenAIGatewayService) GatewayDeleteStickySessionAccountID(ctx context.Context, groupID *int64, sessionHash string) error {
+	return s.deleteStickySessionAccountID(ctx, groupID, sessionHash)
+}
+
+func (s *OpenAIGatewayService) GatewayRefreshStickySessionTTL(ctx context.Context, groupID *int64, sessionHash string) error {
+	return s.refreshStickySessionTTL(ctx, groupID, sessionHash, s.openAIWSSessionStickyTTL())
+}
+
+func (s *OpenAIGatewayService) GatewayListSchedulableOpenAIAccounts(ctx context.Context, groupID *int64) ([]Account, error) {
+	return s.listSchedulableAccounts(ctx, groupID)
+}
+
+func (s *OpenAIGatewayService) GatewayGetSchedulableOpenAIAccount(ctx context.Context, accountID int64) (*Account, error) {
+	return s.getSchedulableAccount(ctx, accountID)
+}
+
+func (s *OpenAIGatewayService) GatewayResolveOpenAITransports(account *Account) []gatewaydomain.TransportKind {
+	transports := []gatewaydomain.TransportKind{gatewaydomain.TransportHTTP}
+	if s == nil || account == nil {
+		return transports
+	}
+	if s.getOpenAIWSProtocolResolver().Resolve(account).Transport == OpenAIUpstreamTransportResponsesWebsocketV2 {
+		transports = append(transports, gatewaydomain.TransportWebSocket)
+	}
+	return transports
+}
+
+func (s *OpenAIGatewayService) GatewayAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*AcquireResult, error) {
+	return s.tryAcquireAccountSlot(ctx, accountID, maxConcurrency)
+}
+
+func (s *OpenAIGatewayService) GatewayDefaultAccountWaitPlan(context.Context, *Account) gatewaydomain.AccountWaitPlan {
+	cfg := s.schedulingConfig()
+	return gatewaydomain.AccountWaitPlan{
+		Required: true,
+		Reason:   "account_busy",
+		Timeout:  cfg.FallbackWaitTimeout,
+	}
 }
 
 func (s *OpenAIGatewayService) RecordOpenAIAccountSwitch() {
