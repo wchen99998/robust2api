@@ -25,8 +25,10 @@ type UserSnapshot struct {
 }
 
 type GroupSnapshot struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name,omitempty"`
+	ID                 int64    `json:"id"`
+	Name               string   `json:"name,omitempty"`
+	Platform           Platform `json:"platform,omitempty"`
+	DefaultMappedModel string   `json:"default_mapped_model,omitempty"`
 }
 
 type RateLimitConfig struct {
