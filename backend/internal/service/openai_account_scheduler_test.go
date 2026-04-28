@@ -45,6 +45,90 @@ func (s *openAISnapshotCacheStub) GetAccount(ctx context.Context, accountID int6
 	return &cloned, nil
 }
 
+func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountFiltersUnschedulableAccounts(t *testing.T) {
+	ctx := context.Background()
+	future := time.Now().Add(time.Hour)
+	tests := []struct {
+		name    string
+		account Account
+		wantNil bool
+	}{
+		{
+			name: "active OpenAI account",
+			account: Account{
+				ID:          91001,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+			},
+			wantNil: false,
+		},
+		{
+			name: "non OpenAI account",
+			account: Account{
+				ID:          91002,
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+			},
+			wantNil: true,
+		},
+		{
+			name: "inactive OpenAI account",
+			account: Account{
+				ID:          91003,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusDisabled,
+				Schedulable: true,
+			},
+			wantNil: true,
+		},
+		{
+			name: "unschedulable OpenAI account",
+			account: Account{
+				ID:          91004,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: false,
+			},
+			wantNil: true,
+		},
+		{
+			name: "temporarily unschedulable OpenAI account",
+			account: Account{
+				ID:                     91005,
+				Platform:               PlatformOpenAI,
+				Type:                   AccountTypeOAuth,
+				Status:                 StatusActive,
+				Schedulable:            true,
+				TempUnschedulableUntil: &future,
+			},
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &OpenAIGatewayService{
+				accountRepo: stubOpenAIAccountRepo{accounts: []Account{tt.account}},
+			}
+
+			account, err := svc.GatewayGetSchedulableOpenAIAccount(ctx, tt.account.ID)
+			require.NoError(t, err)
+			if tt.wantNil {
+				require.Nil(t, account)
+				return
+			}
+			require.NotNil(t, account)
+			require.Equal(t, tt.account.ID, account.ID)
+		})
+	}
+}
+
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimitedAccountFallsBackToFreshCandidate(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(10101)
