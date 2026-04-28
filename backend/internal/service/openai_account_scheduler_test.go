@@ -145,6 +145,40 @@ func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountFiltersUnschedul
 	}
 }
 
+func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountRechecksDBModelRateLimit(t *testing.T) {
+	ctx := context.Background()
+	requestedModel := "gpt-5.1"
+	snapshotAccount := &Account{
+		ID:          91007,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{requestedModel: requestedModel},
+		},
+	}
+	dbAccount := *snapshotAccount
+	dbAccount.Extra = map[string]any{
+		modelRateLimitsKey: map[string]any{
+			requestedModel: map[string]any{
+				"rate_limit_reset_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			},
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		accountsByID: map[int64]*Account{snapshotAccount.ID: snapshotAccount},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:       stubOpenAIAccountRepo{accounts: []Account{dbAccount}},
+		schedulerSnapshot: &SchedulerSnapshotService{cache: snapshotCache},
+	}
+
+	account, err := svc.GatewayGetSchedulableOpenAIAccount(ctx, snapshotAccount.ID, requestedModel)
+	require.NoError(t, err)
+	require.Nil(t, account)
+}
+
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimitedAccountFallsBackToFreshCandidate(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(10101)

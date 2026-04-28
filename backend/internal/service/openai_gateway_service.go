@@ -1602,6 +1602,9 @@ func (s *OpenAIGatewayService) recheckSelectedOpenAIAccountFromDB(ctx context.Co
 	if !latest.IsSchedulable() || !latest.IsOpenAI() {
 		return nil
 	}
+	if shouldClearStickySession(latest, requestedModel) {
+		return nil
+	}
 	if requestedModel != "" && !latest.IsModelSupported(requestedModel) {
 		return nil
 	}
