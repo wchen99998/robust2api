@@ -129,6 +129,25 @@ func TestOpenAIResponsesPlanningResultConvertsWaitPlanLimitsToLegacySelection(t 
 	require.Equal(t, 42, selection.WaitPlan.MaxWaiting)
 }
 
+func TestOpenAIPlanningResultToLogDecisionMarksStickyLayers(t *testing.T) {
+	for _, tt := range []struct {
+		layer              domain.AccountDecisionLayer
+		wantPreviousSticky bool
+		wantSessionSticky  bool
+	}{
+		{domain.AccountDecisionPreviousResponseID, true, false},
+		{domain.AccountDecisionSessionHash, false, true},
+		{domain.AccountDecisionLoadBalance, false, false},
+	} {
+		got := openAIPlanningResultToLogDecision(&openAIResponsesPlanningResult{
+			ScheduleResult: &scheduler.ScheduleResult{Layer: tt.layer},
+		})
+		require.Equal(t, string(tt.layer), got.Layer)
+		require.Equal(t, tt.wantPreviousSticky, got.StickyPreviousHit)
+		require.Equal(t, tt.wantSessionSticky, got.StickySessionHit)
+	}
+}
+
 func TestOpenAIResponsesPlanningHelperAppliesRequestedModelOverrideToNormalizedBodies(t *testing.T) {
 	parsed, err := openai.ParseResponses(domain.IngressRequest{
 		Subpath: "/compact",
