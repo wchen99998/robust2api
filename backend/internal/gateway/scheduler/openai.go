@@ -134,7 +134,6 @@ func (s *OpenAIScheduler) Select(ctx context.Context, req ScheduleRequest) (*Sch
 	if err != nil {
 		return nil, err
 	}
-	diagnostics.Total += len(accounts)
 	sort.SliceStable(accounts, func(i, j int) bool {
 		left := accounts[i].Snapshot
 		right := accounts[j].Snapshot
@@ -144,16 +143,31 @@ func (s *OpenAIScheduler) Select(ctx context.Context, req ScheduleRequest) (*Sch
 		return left.ID < right.ID
 	})
 
+	var firstWaitResult *ScheduleResult
 	for _, account := range accounts {
-		if _, ok := evaluated[account.Snapshot.ID]; ok {
+		if !markEvaluated(&diagnostics, evaluated, account.Snapshot.ID) {
 			continue
 		}
-		evaluated[account.Snapshot.ID] = struct{}{}
 		if reason, ok := eligible(account, req); !ok {
 			reject(&diagnostics, account.Snapshot.ID, reason)
 			continue
 		}
-		return s.reserve(ctx, req, account, domain.AccountDecisionLoadBalance, diagnostics)
+		result, err := s.reserve(ctx, req, account, domain.AccountDecisionLoadBalance, &diagnostics)
+		if err != nil {
+			return nil, err
+		}
+		if result.Reservation.Acquired {
+			return result, nil
+		}
+		if firstWaitResult == nil {
+			firstWaitResult = result
+		}
+	}
+
+	if firstWaitResult != nil {
+		diagnostics.Rejected = sumRejects(diagnostics.RejectCount)
+		firstWaitResult.Diagnostics = diagnostics
+		return firstWaitResult, nil
 	}
 
 	diagnostics.Rejected = sumRejects(diagnostics.RejectCount)
@@ -175,10 +189,9 @@ func (s *OpenAIScheduler) tryAccount(
 	diagnostics *domain.CandidateDiagnostics,
 	evaluated map[int64]struct{},
 ) (*ScheduleResult, bool, error) {
-	if _, ok := evaluated[accountID]; ok {
+	if !markEvaluated(diagnostics, evaluated, accountID) {
 		return nil, false, nil
 	}
-	evaluated[accountID] = struct{}{}
 
 	account, ok, err := s.ports.GetAccount(ctx, accountID)
 	if err != nil {
@@ -193,7 +206,7 @@ func (s *OpenAIScheduler) tryAccount(
 		return nil, false, nil
 	}
 
-	returnResult, err := s.reserve(ctx, req, account, layer, *diagnostics)
+	returnResult, err := s.reserve(ctx, req, account, layer, diagnostics)
 	if err != nil {
 		return nil, false, err
 	}
@@ -205,7 +218,7 @@ func (s *OpenAIScheduler) reserve(
 	req ScheduleRequest,
 	account Account,
 	layer domain.AccountDecisionLayer,
-	diagnostics domain.CandidateDiagnostics,
+	diagnostics *domain.CandidateDiagnostics,
 ) (*ScheduleResult, error) {
 	diagnostics.Eligible++
 	diagnostics.Rejected = sumRejects(diagnostics.RejectCount)
@@ -245,8 +258,17 @@ func (s *OpenAIScheduler) reserve(
 		Layer:       layer,
 		Reservation: reservation,
 		WaitPlan:    waitPlan,
-		Diagnostics: diagnostics,
+		Diagnostics: *diagnostics,
 	}, nil
+}
+
+func markEvaluated(diagnostics *domain.CandidateDiagnostics, evaluated map[int64]struct{}, accountID int64) bool {
+	if _, ok := evaluated[accountID]; ok {
+		return false
+	}
+	evaluated[accountID] = struct{}{}
+	diagnostics.Total++
+	return true
 }
 
 func eligible(account Account, req ScheduleRequest) (domain.RejectionReason, bool) {
