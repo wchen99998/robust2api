@@ -179,6 +179,53 @@ func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountRechecksDBModelR
 	require.Nil(t, account)
 }
 
+func TestOpenAIGatewayService_SelectAccountWithScheduler_WaitPlanSkipsStaleDBModelRateLimit(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10108)
+	requestedModel := "gpt-5.1"
+	snapshotAccount := &Account{
+		ID:          91008,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{requestedModel: requestedModel},
+		},
+	}
+	dbAccount := *snapshotAccount
+	dbAccount.Extra = map[string]any{
+		modelRateLimitsKey: map[string]any{
+			requestedModel: map[string]any{
+				"rate_limit_reset_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			},
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: []*Account{snapshotAccount},
+		accountsByID:     map[int64]*Account{snapshotAccount.ID: snapshotAccount},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		acquireResults: map[int64]bool{snapshotAccount.ID: false},
+		loadMap: map[int64]*AccountLoadInfo{
+			snapshotAccount.ID: {AccountID: snapshotAccount.ID, LoadRate: 100},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{dbAccount}},
+		cache:              &stubGatewayCache{},
+		cfg:                &config.Config{},
+		schedulerSnapshot:  &SchedulerSnapshotService{cache: snapshotCache},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, _, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "", requestedModel, nil, OpenAIUpstreamTransportAny)
+	require.Error(t, err)
+	require.Nil(t, selection)
+}
+
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimitedAccountFallsBackToFreshCandidate(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(10101)

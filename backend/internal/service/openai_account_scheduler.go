@@ -738,6 +738,10 @@ func (s *defaultOpenAIAccountScheduler) selectByLoadBalance(
 		if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
 			continue
 		}
+		fresh = s.service.recheckSelectedOpenAIAccountFromDB(ctx, fresh, req.RequestedModel)
+		if fresh == nil || !s.isAccountTransportCompatible(fresh, req.RequiredTransport) {
+			continue
+		}
 		return &AccountSelectionResult{
 			Account: fresh,
 			WaitPlan: &AccountWaitPlan{
