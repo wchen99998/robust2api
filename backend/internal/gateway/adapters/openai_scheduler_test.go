@@ -67,6 +67,23 @@ func TestOpenAIAccountToSchedulerAccountNilReturnsZero(t *testing.T) {
 	}
 }
 
+func TestOpenAIAccountToSchedulerAccountExposesWildcardModelMappingKeys(t *testing.T) {
+	legacy := &service.Account{
+		ID:       42,
+		Platform: service.PlatformOpenAI,
+		Type:     service.AccountTypeOAuth,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{"claude-*": "claude-sonnet-4-5"},
+		},
+	}
+
+	account := OpenAIAccountToSchedulerAccount(legacy, []domain.TransportKind{domain.TransportHTTP})
+
+	if !reflect.DeepEqual(account.Snapshot.Capabilities.Models, []string{"claude-*"}) {
+		t.Fatalf("Models = %#v, want [claude-*]", account.Snapshot.Capabilities.Models)
+	}
+}
+
 func TestOpenAISchedulerPortsDelegatesAndMapsBridgeBehavior(t *testing.T) {
 	ctx := context.Background()
 	groupID := int64(7)

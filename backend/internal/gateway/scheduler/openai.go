@@ -278,7 +278,7 @@ func eligible(account Account, req ScheduleRequest) (domain.RejectionReason, boo
 	if account.Snapshot.Platform != domain.PlatformOpenAI {
 		return domain.RejectionReasonPlatformMismatch, false
 	}
-	if !supportsModel(account.Snapshot.Capabilities.Models, req.RequestedModel) {
+	if !supportsModel(account.Snapshot.Platform, account.Snapshot.Capabilities.Models, req.RequestedModel) {
 		return domain.RejectionReasonModelUnsupported, false
 	}
 	if !supportsTransport(account.Snapshot.Capabilities.Transports, req.RequiredTransport) {
@@ -287,17 +287,51 @@ func eligible(account Account, req ScheduleRequest) (domain.RejectionReason, boo
 	return "", true
 }
 
-func supportsModel(models []string, requestedModel string) bool {
+func supportsModel(platform domain.Platform, models []string, requestedModel string) bool {
 	requestedModel = strings.TrimSpace(requestedModel)
 	if requestedModel == "" || len(models) == 0 {
 		return true
 	}
+	if supportsModelName(models, requestedModel) {
+		return true
+	}
+	normalized := normalizeRequestedModelForLookup(platform, requestedModel)
+	return normalized != requestedModel && supportsModelName(models, normalized)
+}
+
+func supportsModelName(models []string, requestedModel string) bool {
 	for _, model := range models {
-		if strings.EqualFold(strings.TrimSpace(model), requestedModel) {
+		model = strings.TrimSpace(model)
+		if strings.EqualFold(model, requestedModel) {
+			return true
+		}
+		if supportsModelWildcard(model, requestedModel) {
 			return true
 		}
 	}
 	return false
+}
+
+func supportsModelWildcard(pattern string, requestedModel string) bool {
+	if !strings.HasSuffix(pattern, "*") {
+		return false
+	}
+	prefix := strings.TrimSuffix(pattern, "*")
+	if prefix == "" {
+		return false
+	}
+	return strings.HasPrefix(strings.ToLower(requestedModel), strings.ToLower(prefix))
+}
+
+func normalizeRequestedModelForLookup(platform domain.Platform, requestedModel string) string {
+	requestedModel = strings.TrimSpace(requestedModel)
+	if platform != domain.PlatformGemini && platform != domain.PlatformAntigravity {
+		return requestedModel
+	}
+	if requestedModel == "gemini-3.1-pro-preview-customtools" {
+		return "gemini-3.1-pro-preview"
+	}
+	return requestedModel
 }
 
 func supportsTransport(transports []domain.TransportKind, requiredTransport domain.TransportKind) bool {

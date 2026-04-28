@@ -228,6 +228,56 @@ func TestOpenAISchedulerDefaultHTTPTransport(t *testing.T) {
 	}
 }
 
+func TestOpenAISchedulerModelWildcardSupportsPrefixMatch(t *testing.T) {
+	ports := newFakePorts()
+	ports.accounts[10] = testAccount(10, string(domain.AccountTypeAPIKey), "claude-*")
+
+	result, err := NewOpenAIScheduler(ports).Select(context.Background(), ScheduleRequest{
+		GroupID:        1,
+		RequestedModel: "claude-sonnet-4-5",
+	})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+
+	if result.Account.Snapshot.ID != 10 {
+		t.Fatalf("account ID = %d, want 10", result.Account.Snapshot.ID)
+	}
+}
+
+func TestOpenAISchedulerModelWildcardRejectsUnrelatedModel(t *testing.T) {
+	ports := newFakePorts()
+	ports.accounts[10] = testAccount(10, string(domain.AccountTypeAPIKey), "claude-*")
+	ports.accounts[20] = testAccount(20, string(domain.AccountTypeAPIKey), "gemini-*")
+
+	result, err := NewOpenAIScheduler(ports).Select(context.Background(), ScheduleRequest{
+		GroupID:        1,
+		RequestedModel: "gemini-3.1-pro-preview",
+	})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+
+	if result.Account.Snapshot.ID != 20 {
+		t.Fatalf("account ID = %d, want 20", result.Account.Snapshot.ID)
+	}
+	if got := result.Diagnostics.RejectCount[domain.RejectionReasonModelUnsupported]; got != 1 {
+		t.Fatalf("model unsupported rejections = %d, want 1", got)
+	}
+}
+
+func TestOpenAISchedulerGeminiCustomToolsAliasUsesNormalizedModel(t *testing.T) {
+	if !supportsModel(domain.PlatformGemini, []string{"gemini-3.1-pro-preview"}, "gemini-3.1-pro-preview-customtools") {
+		t.Fatal("Gemini customtools alias was not normalized")
+	}
+}
+
+func TestOpenAISchedulerAntigravityCustomToolsAliasUsesNormalizedModel(t *testing.T) {
+	if !supportsModel(domain.PlatformAntigravity, []string{"gemini-3.1-pro-preview"}, "gemini-3.1-pro-preview-customtools") {
+		t.Fatal("Antigravity customtools alias was not normalized")
+	}
+}
+
 type fakePorts struct {
 	accounts      map[int64]Account
 	previous      map[string]int64
