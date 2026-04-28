@@ -302,7 +302,7 @@ func supportsModel(platform domain.Platform, models []string, requestedModel str
 func supportsModelName(models []string, requestedModel string) bool {
 	for _, model := range models {
 		model = strings.TrimSpace(model)
-		if strings.EqualFold(model, requestedModel) {
+		if model == requestedModel {
 			return true
 		}
 		if supportsModelWildcard(model, requestedModel) {

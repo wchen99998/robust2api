@@ -266,6 +266,29 @@ func TestOpenAISchedulerModelWildcardRejectsUnrelatedModel(t *testing.T) {
 	}
 }
 
+func TestOpenAISchedulerExactModelMatchIsCaseSensitive(t *testing.T) {
+	ports := newFakePorts()
+	ports.accounts[10] = testAccount(10, string(domain.AccountTypeAPIKey), "GPT-4o")
+
+	_, err := NewOpenAIScheduler(ports).Select(context.Background(), ScheduleRequest{
+		GroupID:        1,
+		RequestedModel: "gpt-4o",
+	})
+	if err == nil {
+		t.Fatal("Select() error = nil, want no available accounts error")
+	}
+	if !errors.Is(err, ErrNoAvailableAccounts) {
+		t.Fatalf("errors.Is(err, ErrNoAvailableAccounts) = false for %v", err)
+	}
+	var noAvailable *NoAvailableAccountsError
+	if !errors.As(err, &noAvailable) {
+		t.Fatalf("errors.As(err, *NoAvailableAccountsError) = false for %T", err)
+	}
+	if got := noAvailable.Diagnostics.RejectCount[domain.RejectionReasonModelUnsupported]; got != 1 {
+		t.Fatalf("model unsupported rejections = %d, want 1", got)
+	}
+}
+
 func TestOpenAISchedulerModelWildcardStarMatchesAnyModel(t *testing.T) {
 	if !supportsModel(domain.PlatformOpenAI, []string{"*"}, "any-model") {
 		t.Fatal("star wildcard did not match arbitrary model")
