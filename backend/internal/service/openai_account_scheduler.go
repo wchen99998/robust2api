@@ -899,7 +899,7 @@ func (s *OpenAIGatewayService) GatewayListSchedulableOpenAIAccounts(ctx context.
 	return s.listSchedulableAccounts(ctx, groupID)
 }
 
-func (s *OpenAIGatewayService) GatewayGetSchedulableOpenAIAccount(ctx context.Context, accountID int64) (*Account, error) {
+func (s *OpenAIGatewayService) GatewayGetSchedulableOpenAIAccount(ctx context.Context, accountID int64, requestedModel string) (*Account, error) {
 	account, err := s.getSchedulableAccount(ctx, accountID)
 	if err != nil || account == nil {
 		return account, err
@@ -907,7 +907,13 @@ func (s *OpenAIGatewayService) GatewayGetSchedulableOpenAIAccount(ctx context.Co
 	if !account.IsOpenAI() || !account.IsSchedulable() {
 		return nil, nil
 	}
-	return account, nil
+	if shouldClearStickySession(account, requestedModel) {
+		return nil, nil
+	}
+	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+		return nil, nil
+	}
+	return s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel), nil
 }
 
 func (s *OpenAIGatewayService) GatewayResolveOpenAITransports(account *Account) []gatewaydomain.TransportKind {

@@ -16,7 +16,7 @@ type OpenAISchedulerBridge interface {
 	GatewayDeleteStickySessionAccountID(ctx context.Context, groupID *int64, sessionHash string) error
 	GatewayRefreshStickySessionTTL(ctx context.Context, groupID *int64, sessionHash string) error
 	GatewayListSchedulableOpenAIAccounts(ctx context.Context, groupID *int64) ([]service.Account, error)
-	GatewayGetSchedulableOpenAIAccount(ctx context.Context, accountID int64) (*service.Account, error)
+	GatewayGetSchedulableOpenAIAccount(ctx context.Context, accountID int64, requestedModel string) (*service.Account, error)
 	GatewayResolveOpenAITransports(account *service.Account) []domain.TransportKind
 	GatewayAcquireAccountSlot(ctx context.Context, accountID int64, maxConcurrency int) (*service.AcquireResult, error)
 	GatewayDefaultAccountWaitPlan(ctx context.Context, account *service.Account) domain.AccountWaitPlan
@@ -109,7 +109,7 @@ func (p OpenAISchedulerPorts) GetAccount(ctx context.Context, accountID int64) (
 	if p.Bridge == nil {
 		return scheduler.Account{}, false, nil
 	}
-	account, err := p.Bridge.GatewayGetSchedulableOpenAIAccount(ctx, accountID)
+	account, err := p.Bridge.GatewayGetSchedulableOpenAIAccount(ctx, accountID, p.RequestedModel)
 	if err != nil {
 		return scheduler.Account{}, false, err
 	}

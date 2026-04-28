@@ -171,6 +171,9 @@ func TestOpenAISchedulerPortsDelegatesAndMapsBridgeBehavior(t *testing.T) {
 	if !ok || account.Snapshot.ID != 42 {
 		t.Fatalf("GetAccount() = (%#v, %v), want account 42", account, ok)
 	}
+	if bridge.getRequestedModel != "gpt-5.1" {
+		t.Fatalf("GetAccount requested model = %q, want gpt-5.1", bridge.getRequestedModel)
+	}
 
 	reservation, err := ports.AcquireAccountSlot(ctx, account)
 	if err != nil {
@@ -216,6 +219,7 @@ type fakeOpenAISchedulerBridge struct {
 	reportAccountID       int64
 	reportSuccess         bool
 	reportFirstTokenMs    *int
+	getRequestedModel     string
 }
 
 func (f *fakeOpenAISchedulerBridge) GatewayLookupPreviousResponseAccount(_ context.Context, groupID *int64, _ string, requestedModel string, excluded map[int64]struct{}) (int64, bool, error) {
@@ -245,7 +249,8 @@ func (f *fakeOpenAISchedulerBridge) GatewayListSchedulableOpenAIAccounts(context
 	return f.accounts, nil
 }
 
-func (f *fakeOpenAISchedulerBridge) GatewayGetSchedulableOpenAIAccount(_ context.Context, accountID int64) (*service.Account, error) {
+func (f *fakeOpenAISchedulerBridge) GatewayGetSchedulableOpenAIAccount(_ context.Context, accountID int64, requestedModel string) (*service.Account, error) {
+	f.getRequestedModel = requestedModel
 	return f.accountByID[accountID], nil
 }
 

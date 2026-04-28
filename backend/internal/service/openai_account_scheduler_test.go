@@ -49,9 +49,10 @@ func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountFiltersUnschedul
 	ctx := context.Background()
 	future := time.Now().Add(time.Hour)
 	tests := []struct {
-		name    string
-		account Account
-		wantNil bool
+		name           string
+		account        Account
+		requestedModel string
+		wantNil        bool
 	}{
 		{
 			name: "active OpenAI account",
@@ -109,6 +110,21 @@ func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountFiltersUnschedul
 			},
 			wantNil: true,
 		},
+		{
+			name: "requested model unsupported",
+			account: Account{
+				ID:          91006,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-4o": "gpt-4o"},
+				},
+			},
+			requestedModel: "gpt-5.1",
+			wantNil:        true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -117,7 +133,7 @@ func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountFiltersUnschedul
 				accountRepo: stubOpenAIAccountRepo{accounts: []Account{tt.account}},
 			}
 
-			account, err := svc.GatewayGetSchedulableOpenAIAccount(ctx, tt.account.ID)
+			account, err := svc.GatewayGetSchedulableOpenAIAccount(ctx, tt.account.ID, tt.requestedModel)
 			require.NoError(t, err)
 			if tt.wantNil {
 				require.Nil(t, account)
