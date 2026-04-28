@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/tidwall/gjson"
@@ -22,6 +23,11 @@ const (
 	PreviousResponseKindResponse PreviousResponseKind = "response"
 	PreviousResponseKindMessage  PreviousResponseKind = "message"
 	PreviousResponseKindOther    PreviousResponseKind = "other"
+)
+
+var (
+	responseIDPattern = regexp.MustCompile(`^resp_[A-Za-z0-9_-]{1,256}$`)
+	messageIDPattern  = regexp.MustCompile(`^(msg|message|item|chatcmpl)_[A-Za-z0-9_-]{1,256}$`)
 )
 
 type ResponsesParseResult struct {
@@ -158,12 +164,13 @@ func compactValue(raw json.RawMessage) (json.RawMessage, bool, error) {
 }
 
 func classifyPreviousResponseID(previousResponseID string) PreviousResponseKind {
+	trimmed := strings.TrimSpace(previousResponseID)
 	switch {
-	case previousResponseID == "":
+	case trimmed == "":
 		return PreviousResponseKindNone
-	case strings.HasPrefix(previousResponseID, "resp_"):
+	case responseIDPattern.MatchString(trimmed):
 		return PreviousResponseKindResponse
-	case strings.HasPrefix(previousResponseID, "msg_"):
+	case messageIDPattern.MatchString(strings.ToLower(trimmed)):
 		return PreviousResponseKindMessage
 	default:
 		return PreviousResponseKindOther

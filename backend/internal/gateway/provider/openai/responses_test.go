@@ -145,6 +145,70 @@ func TestParseResponsesRejectsInvalidInputs(t *testing.T) {
 	}
 }
 
+func TestClassifyPreviousResponseID(t *testing.T) {
+	tests := []struct {
+		name string
+		id   string
+		want PreviousResponseKind
+	}{
+		{
+			name: "valid response",
+			id:   "resp_abc",
+			want: PreviousResponseKindResponse,
+		},
+		{
+			name: "malformed response prefix",
+			id:   "resp_",
+			want: PreviousResponseKindOther,
+		},
+		{
+			name: "message prefix",
+			id:   "message_abc",
+			want: PreviousResponseKindMessage,
+		},
+		{
+			name: "item prefix",
+			id:   "item_abc",
+			want: PreviousResponseKindMessage,
+		},
+		{
+			name: "chat completion prefix",
+			id:   "chatcmpl_abc",
+			want: PreviousResponseKindMessage,
+		},
+		{
+			name: "uppercase message prefix",
+			id:   "MSG_abc",
+			want: PreviousResponseKindMessage,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, classifyPreviousResponseID(tt.id))
+		})
+	}
+}
+
+func TestParseResponsesPreviousResponseIDClassification(t *testing.T) {
+	got, err := ParseResponses(domain.IngressRequest{
+		Body: []byte(`{"model":"gpt-5.1","previous_response_id":"resp_"}`),
+	})
+	require.NoError(t, err)
+	require.Equal(t, "resp_", got.PreviousResponseID)
+	require.Equal(t, PreviousResponseKindOther, got.PreviousResponseKind)
+
+	for _, previousID := range []string{"message_abc", "item_abc", "chatcmpl_abc", "MSG_abc"} {
+		t.Run(previousID, func(t *testing.T) {
+			_, err := ParseResponses(domain.IngressRequest{
+				Body: []byte(`{"model":"gpt-5.1","previous_response_id":"` + previousID + `"}`),
+			})
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "previous_response_id must be a response.id (resp_*), not a message id")
+		})
+	}
+}
+
 func TestParseResponsesSessionPriority(t *testing.T) {
 	tests := []struct {
 		name       string
