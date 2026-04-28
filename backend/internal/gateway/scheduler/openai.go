@@ -152,7 +152,21 @@ func (s *OpenAIScheduler) Select(ctx context.Context, req ScheduleRequest) (*Sch
 			reject(&diagnostics, account.Snapshot.ID, reason)
 			continue
 		}
-		result, err := s.reserve(ctx, req, account, domain.AccountDecisionLoadBalance, &diagnostics)
+
+		fresh, ok, err := s.ports.GetAccount(ctx, account.Snapshot.ID)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			reject(&diagnostics, account.Snapshot.ID, domain.RejectionReasonUnschedulable)
+			continue
+		}
+		if reason, ok := eligible(fresh, req); !ok {
+			reject(&diagnostics, account.Snapshot.ID, reason)
+			continue
+		}
+
+		result, err := s.reserve(ctx, req, fresh, domain.AccountDecisionLoadBalance, &diagnostics)
 		if err != nil {
 			return nil, err
 		}

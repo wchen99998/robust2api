@@ -186,6 +186,34 @@ func TestOpenAISchedulerLoadBalanceContinuesPastBusyAccount(t *testing.T) {
 	}
 }
 
+func TestOpenAISchedulerLoadBalanceRechecksListedAccountFreshness(t *testing.T) {
+	ports := newFakePorts()
+	ports.accounts[10] = testAccount(10, string(domain.AccountTypeAPIKey), "gpt-5.1")
+	ports.accounts[20] = testAccount(20, string(domain.AccountTypeAPIKey), "gpt-5.1")
+	ports.missingOnGet[10] = true
+
+	result, err := NewOpenAIScheduler(ports).Select(context.Background(), ScheduleRequest{
+		GroupID:        1,
+		RequestedModel: "gpt-5.1",
+	})
+	if err != nil {
+		t.Fatalf("Select() error = %v", err)
+	}
+
+	if result.Account.Snapshot.ID != 20 {
+		t.Fatalf("account ID = %d, want 20", result.Account.Snapshot.ID)
+	}
+	if got := result.Diagnostics.RejectCount[domain.RejectionReasonUnschedulable]; got != 1 {
+		t.Fatalf("unschedulable rejections = %d, want 1", got)
+	}
+	if result.Diagnostics.Total != 2 {
+		t.Fatalf("diagnostics total = %d, want 2", result.Diagnostics.Total)
+	}
+	if result.Diagnostics.Eligible != 1 {
+		t.Fatalf("diagnostics eligible = %d, want 1", result.Diagnostics.Eligible)
+	}
+}
+
 func TestOpenAISchedulerLoadBalanceSortsByPriorityThenID(t *testing.T) {
 	ports := newFakePorts()
 	account30 := testAccount(30, string(domain.AccountTypeAPIKey), "gpt-5.1")
@@ -319,6 +347,7 @@ type fakePorts struct {
 	sticky        map[string]int64
 	deletedSticky map[string]bool
 	busy          map[int64]bool
+	missingOnGet  map[int64]bool
 }
 
 func newFakePorts() *fakePorts {
@@ -328,6 +357,7 @@ func newFakePorts() *fakePorts {
 		sticky:        make(map[string]int64),
 		deletedSticky: make(map[string]bool),
 		busy:          make(map[int64]bool),
+		missingOnGet:  make(map[int64]bool),
 	}
 }
 
@@ -394,6 +424,9 @@ func (f *fakePorts) ListSchedulableOpenAIAccounts(_ context.Context, _ int64) ([
 }
 
 func (f *fakePorts) GetAccount(_ context.Context, accountID int64) (Account, bool, error) {
+	if f.missingOnGet[accountID] {
+		return Account{}, false, nil
+	}
 	account, ok := f.accounts[accountID]
 	return account, ok, nil
 }
