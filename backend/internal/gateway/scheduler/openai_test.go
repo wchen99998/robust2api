@@ -266,6 +266,18 @@ func TestOpenAISchedulerModelWildcardRejectsUnrelatedModel(t *testing.T) {
 	}
 }
 
+func TestOpenAISchedulerModelWildcardStarMatchesAnyModel(t *testing.T) {
+	if !supportsModel(domain.PlatformOpenAI, []string{"*"}, "any-model") {
+		t.Fatal("star wildcard did not match arbitrary model")
+	}
+}
+
+func TestOpenAISchedulerModelWildcardIsCaseSensitive(t *testing.T) {
+	if supportsModel(domain.PlatformOpenAI, []string{"CLAUDE-*"}, "claude-sonnet-4-5") {
+		t.Fatal("wildcard matched with different case, want legacy case-sensitive behavior")
+	}
+}
+
 func TestOpenAISchedulerGeminiCustomToolsAliasUsesNormalizedModel(t *testing.T) {
 	if !supportsModel(domain.PlatformGemini, []string{"gemini-3.1-pro-preview"}, "gemini-3.1-pro-preview-customtools") {
 		t.Fatal("Gemini customtools alias was not normalized")

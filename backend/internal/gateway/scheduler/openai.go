@@ -316,11 +316,8 @@ func supportsModelWildcard(pattern string, requestedModel string) bool {
 	if !strings.HasSuffix(pattern, "*") {
 		return false
 	}
-	prefix := strings.TrimSuffix(pattern, "*")
-	if prefix == "" {
-		return false
-	}
-	return strings.HasPrefix(strings.ToLower(requestedModel), strings.ToLower(prefix))
+	prefix := pattern[:len(pattern)-1]
+	return strings.HasPrefix(requestedModel, prefix)
 }
 
 func normalizeRequestedModelForLookup(platform domain.Platform, requestedModel string) string {
