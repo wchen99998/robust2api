@@ -876,11 +876,53 @@ func (s *OpenAIGatewayService) GatewayLookupPreviousResponseAccount(
 	requestedModel string,
 	excludedIDs map[int64]struct{},
 ) (int64, bool, error) {
-	selection, err := s.SelectAccountByPreviousResponseID(ctx, groupID, previousResponseID, requestedModel, excludedIDs)
-	if err != nil || selection == nil || selection.Account == nil {
-		return 0, false, err
+	if s == nil {
+		return 0, false, nil
 	}
-	return selection.Account.ID, true, nil
+	responseID := strings.TrimSpace(previousResponseID)
+	if responseID == "" {
+		return 0, false, nil
+	}
+	store := s.getOpenAIWSStateStore()
+	if store == nil {
+		return 0, false, nil
+	}
+
+	groupIDValue := derefGroupID(groupID)
+	accountID, err := store.GetResponseAccount(ctx, groupIDValue, responseID)
+	if err != nil || accountID <= 0 {
+		return 0, false, nil
+	}
+	if excludedIDs != nil {
+		if _, excluded := excludedIDs[accountID]; excluded {
+			return 0, false, nil
+		}
+	}
+
+	account, err := s.getSchedulableAccount(ctx, accountID)
+	if err != nil || account == nil {
+		_ = store.DeleteResponseAccount(ctx, groupIDValue, responseID)
+		return 0, false, nil
+	}
+	if s.getOpenAIWSProtocolResolver().Resolve(account).Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
+		return 0, false, nil
+	}
+	if shouldClearStickySession(account, requestedModel) || !account.IsOpenAI() || !account.IsSchedulable() {
+		_ = store.DeleteResponseAccount(ctx, groupIDValue, responseID)
+		return 0, false, nil
+	}
+	if requestedModel != "" && !account.IsModelSupported(requestedModel) {
+		return 0, false, nil
+	}
+	account = s.recheckSelectedOpenAIAccountFromDB(ctx, account, requestedModel)
+	if account == nil {
+		_ = store.DeleteResponseAccount(ctx, groupIDValue, responseID)
+		return 0, false, nil
+	}
+	if s.getOpenAIWSProtocolResolver().Resolve(account).Transport != OpenAIUpstreamTransportResponsesWebsocketV2 {
+		return 0, false, nil
+	}
+	return account.ID, true, nil
 }
 
 func (s *OpenAIGatewayService) GatewayGetStickySessionAccountID(ctx context.Context, groupID *int64, sessionHash string) (int64, bool, error) {
