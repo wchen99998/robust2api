@@ -10,6 +10,7 @@ import (
 
 	"github.com/Wei-Shaw/sub2api/internal/gateway/domain"
 	openai "github.com/Wei-Shaw/sub2api/internal/gateway/provider/openai"
+	"github.com/Wei-Shaw/sub2api/internal/gateway/scheduler"
 	"github.com/Wei-Shaw/sub2api/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -58,6 +59,36 @@ func TestOpenAIResponsesPlanningHelperReturnsNormalizedBodyAndLegacyAccount(t *t
 	require.NotNil(t, result)
 	require.Same(t, account, result.Account)
 	require.JSONEq(t, `{"model":"gpt-5.1"}`, string(result.NormalizedBody))
+}
+
+func TestOpenAIResponsesPlanningResultConvertsSchedulerSelectionToLegacySelection(t *testing.T) {
+	account := &service.Account{
+		ID:          22,
+		Platform:    service.PlatformOpenAI,
+		Type:        service.AccountTypeOAuth,
+		Concurrency: 5,
+	}
+
+	release := func() {}
+	selection := openAIPlanningResultToLegacySelection(&openAIResponsesPlanningResult{
+		Account: account,
+		ScheduleResult: &scheduler.ScheduleResult{
+			Account: scheduler.Account{
+				Snapshot: domain.AccountSnapshot{ID: 22},
+			},
+			Layer: domain.AccountDecisionLoadBalance,
+			Reservation: scheduler.Reservation{
+				AccountID: 22,
+				Acquired:  true,
+				Release:   release,
+			},
+		},
+	})
+
+	require.NotNil(t, selection)
+	require.Same(t, account, selection.Account)
+	require.True(t, selection.Acquired)
+	require.NotNil(t, selection.ReleaseFunc)
 }
 
 func TestOpenAIResponsesPlanningHelperAppliesRequestedModelOverrideToNormalizedBodies(t *testing.T) {

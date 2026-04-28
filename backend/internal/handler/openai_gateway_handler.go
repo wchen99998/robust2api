@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	"github.com/Wei-Shaw/sub2api/internal/gateway/domain"
 	runtimefailover "github.com/Wei-Shaw/sub2api/internal/gatewayruntime/failover"
 	pkghttputil "github.com/Wei-Shaw/sub2api/internal/pkg/httputil"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/ip"
@@ -316,16 +317,21 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 	for {
 		// Select account supporting the requested model
 		reqLog.Debug("openai.account_selecting", zap.Int("excluded_account_count", len(failedAccountIDs)))
-		selectCtx, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
-		selection, scheduleDecision, err := h.gatewayService.SelectAccountWithScheduler(
-			selectCtx,
-			apiKey.GroupID,
-			previousResponseID,
-			sessionHash,
-			reqModel,
-			failedAccountIDs,
-			service.OpenAIUpstreamTransportAny,
-		)
+		_, selectSpan := tracer.Start(c.Request.Context(), "gateway.select_account")
+		planningHelper := openAIResponsesPlanningHelper{
+			gatewayService:     h.gatewayService,
+			maxAccountSwitches: h.maxAccountSwitches,
+		}
+		planningResult, err := planningHelper.planAndSelect(c, openAIResponsesPlanningInput{
+			body:               body,
+			subject:            openAIPlanningSubjectFromService(apiKey, subject.UserID),
+			transport:          domain.TransportHTTP,
+			previousResponseID: previousResponseID,
+			sessionKey:         sessionHash,
+			excludedAccountIDs: failedAccountIDs,
+		})
+		selection := openAIPlanningResultToLegacySelection(planningResult)
+		scheduleDecision := openAIPlanningResultToLogDecision(planningResult)
 		if err != nil {
 			appelotel.RecordSpanError(selectSpan, err, err.Error())
 			selectSpan.End()
@@ -351,6 +357,9 @@ func (h *OpenAIGatewayHandler) Responses(c *gin.Context) {
 			appelotel.RecordSpanError(span, nil, "no available accounts")
 			h.handleStreamingAwareError(c, http.StatusServiceUnavailable, "api_error", "No available accounts", streamStarted)
 			return
+		}
+		if planningResult != nil && len(planningResult.NormalizedBody) > 0 {
+			body = planningResult.NormalizedBody
 		}
 		setOpenAIAccountSpanIdentity(selectSpan, selection.Account, "")
 		selectSpan.End()

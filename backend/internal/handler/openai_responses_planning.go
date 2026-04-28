@@ -47,6 +47,35 @@ type openAIResponsesPlanningHelper struct {
 	selectAccount      func(input openAIResponsesPlanningInput) (*openAIResponsesPlanningResult, error)
 }
 
+type openAIResponsesSchedulerBridge struct {
+	*service.OpenAIGatewayService
+}
+
+func (b openAIResponsesSchedulerBridge) GatewayGetStickySessionAccountID(
+	ctx context.Context,
+	groupID *int64,
+	sessionHash string,
+) (int64, bool, error) {
+	if b.OpenAIGatewayService == nil {
+		return 0, false, nil
+	}
+	accountID, ok, err := b.OpenAIGatewayService.GatewayGetStickySessionAccountID(ctx, groupID, sessionHash)
+	if err != nil {
+		return 0, false, nil
+	}
+	return accountID, ok, nil
+}
+
+type openAIPlanningLogDecision struct {
+	Layer             string
+	StickyPreviousHit bool
+	StickySessionHit  bool
+	CandidateCount    int
+	TopK              int
+	LatencyMs         int64
+	LoadSkew          float64
+}
+
 func (h openAIResponsesPlanningHelper) planAndSelect(
 	c *gin.Context,
 	input openAIResponsesPlanningInput,
@@ -113,7 +142,7 @@ func (h openAIResponsesPlanningHelper) planAndSelect(
 	}
 
 	ports := adapters.OpenAISchedulerPorts{
-		Bridge:         h.gatewayService,
+		Bridge:         openAIResponsesSchedulerBridge{OpenAIGatewayService: h.gatewayService},
 		GroupID:        groupIDPtr,
 		RequestedModel: requestedModel,
 		Excluded:       input.excludedAccountIDs,
@@ -157,6 +186,47 @@ func (h openAIResponsesPlanningHelper) planAndSelect(
 		NormalizedBody: append([]byte(nil), parsed.NormalizedBody...),
 		ScheduleResult: scheduleResult,
 	}, nil
+}
+
+func openAIPlanningResultToLegacySelection(result *openAIResponsesPlanningResult) *service.AccountSelectionResult {
+	if result == nil || result.Account == nil {
+		return nil
+	}
+
+	selection := &service.AccountSelectionResult{
+		Account: result.Account,
+	}
+	if result.ScheduleResult == nil {
+		return selection
+	}
+
+	selection.Acquired = result.ScheduleResult.Reservation.Acquired
+	selection.ReleaseFunc = result.ScheduleResult.Reservation.Release
+	if result.ScheduleResult.WaitPlan.Required {
+		selection.WaitPlan = &service.AccountWaitPlan{
+			AccountID:      result.Account.ID,
+			MaxConcurrency: result.Account.Concurrency,
+			Timeout:        result.ScheduleResult.WaitPlan.Timeout,
+			MaxWaiting:     1,
+		}
+	}
+
+	return selection
+}
+
+func openAIPlanningResultToLogDecision(result *openAIResponsesPlanningResult) openAIPlanningLogDecision {
+	if result == nil || result.ScheduleResult == nil {
+		return openAIPlanningLogDecision{}
+	}
+
+	scheduleResult := result.ScheduleResult
+	return openAIPlanningLogDecision{
+		Layer:             string(scheduleResult.Layer),
+		StickyPreviousHit: scheduleResult.Layer == domain.AccountDecisionPreviousResponseID,
+		StickySessionHit:  scheduleResult.Layer == domain.AccountDecisionSessionHash,
+		CandidateCount:    scheduleResult.Diagnostics.Total,
+		TopK:              scheduleResult.Diagnostics.Eligible,
+	}
 }
 
 func contextFromGin(c *gin.Context) context.Context {
