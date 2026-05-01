@@ -14,7 +14,9 @@ type IngressRequest struct {
 	Transport TransportKind `json:"transport"`
 	Method    string        `json:"method"`
 	Path      string        `json:"path"`
+	Subpath   string        `json:"subpath,omitempty"`
 	Header    http.Header   `json:"header,omitempty"`
+	Body      []byte        `json:"-"`
 }
 
 func (r IngressRequest) MarshalJSON() ([]byte, error) {
@@ -25,6 +27,7 @@ func (r IngressRequest) MarshalJSON() ([]byte, error) {
 		Transport TransportKind `json:"transport"`
 		Method    string        `json:"method"`
 		Path      string        `json:"path"`
+		Subpath   string        `json:"subpath,omitempty"`
 		Header    http.Header   `json:"header,omitempty"`
 	}
 
@@ -35,6 +38,7 @@ func (r IngressRequest) MarshalJSON() ([]byte, error) {
 		Transport: r.Transport,
 		Method:    r.Method,
 		Path:      r.Path,
+		Subpath:   r.Subpath,
 		Header:    redactHeaders(r.Header),
 	})
 }

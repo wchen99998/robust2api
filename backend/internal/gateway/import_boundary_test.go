@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestGatewayFoundationImportBoundaries(t *testing.T) {
+func TestGatewayImportBoundaries(t *testing.T) {
 	forbiddenImports := []string{
 		"github.com/Wei-Shaw/sub2api/ent",
 		"github.com/Wei-Shaw/sub2api/internal/config",
@@ -22,32 +22,101 @@ func TestGatewayFoundationImportBoundaries(t *testing.T) {
 		"github.com/gin-gonic/gin",
 	}
 
-	for _, packageDir := range []string{"domain", "core"} {
-		err := filepath.WalkDir(packageDir, func(path string, entry os.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
-				return nil
-			}
+	strictPackages := []string{"domain", "core", "provider", "planning", "scheduler"}
+	for _, packageDir := range strictPackages {
+		assertPackageAvoidsImports(t, packageDir, forbiddenImports)
+	}
+}
 
-			file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
-			if err != nil {
-				t.Fatalf("parse imports for %s: %v", path, err)
+func TestGatewayEdgePackageSmoke(t *testing.T) {
+	for _, packageDir := range []string{"ingress", "adapters"} {
+		packageDir := packageDir
+		t.Run(packageDir, func(t *testing.T) {
+			if !directoryExists(t, packageDir) {
+				t.Skipf("edge package directory %s does not exist yet", packageDir)
 			}
+			assertGoFilesParse(t, packageDir)
+		})
+	}
+}
 
-			for _, importSpec := range file.Imports {
-				importPath := strings.Trim(importSpec.Path.Value, `"`)
-				for _, forbiddenImport := range forbiddenImports {
-					if importPath == forbiddenImport || strings.HasPrefix(importPath, forbiddenImport+"/") {
-						t.Errorf("%s imports forbidden package %q", path, importPath)
-					}
+func assertPackageAvoidsImports(t *testing.T, packageDir string, forbiddenImports []string) {
+	t.Helper()
+
+	if _, err := os.Stat(packageDir); err != nil {
+		if os.IsNotExist(err) {
+			return
+		}
+		t.Fatalf("stat package dir %s: %v", packageDir, err)
+	}
+
+	err := filepath.WalkDir(packageDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			return nil
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatalf("parse imports for %s: %v", path, err)
+		}
+
+		for _, importSpec := range file.Imports {
+			importPath := strings.Trim(importSpec.Path.Value, `"`)
+			for _, forbiddenImport := range forbiddenImports {
+				if importPath == forbiddenImport || strings.HasPrefix(importPath, forbiddenImport+"/") {
+					t.Errorf("%s imports forbidden package %q", path, importPath)
 				}
 			}
-			return nil
-		})
-		if err != nil {
-			t.Fatalf("walk package dir %s: %v", packageDir, err)
 		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk package dir %s: %v", packageDir, err)
 	}
+}
+
+func assertGoFilesParse(t *testing.T, packageDir string) {
+	t.Helper()
+
+	forEachGoSourceFile(t, packageDir, func(path string) {
+		if _, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly); err != nil {
+			t.Fatalf("parse imports for %s: %v", path, err)
+		}
+	})
+}
+
+func forEachGoSourceFile(t *testing.T, packageDir string, visit func(path string)) {
+	t.Helper()
+
+	err := filepath.WalkDir(packageDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			return nil
+		}
+		visit(path)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("walk package dir %s: %v", packageDir, err)
+	}
+}
+
+func directoryExists(t *testing.T, path string) bool {
+	t.Helper()
+
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false
+	}
+	if err != nil {
+		t.Fatalf("stat package dir %s: %v", path, err)
+	}
+	if !info.IsDir() {
+		t.Fatalf("package path %s is not a directory", path)
+	}
+	return true
 }

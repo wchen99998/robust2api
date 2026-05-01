@@ -35,15 +35,20 @@ func newGatewayRoutesTestRouter() *gin.Engine {
 	return router
 }
 
-func TestGatewayRoutesOpenAIResponsesCompactPathIsRegistered(t *testing.T) {
+func TestGatewayRoutesOpenAIResponsesAliasesAreRegistered(t *testing.T) {
 	router := newGatewayRoutesTestRouter()
 
-	for _, path := range []string{"/v1/responses/compact", "/responses/compact"} {
-		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"gpt-5"}`))
+	for _, path := range []string{
+		"/responses",
+		"/responses/compact",
+		"/v1/responses",
+		"/v1/responses/compact",
+	} {
+		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{"model":"gpt-5.1"}`))
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
 		router.ServeHTTP(w, req)
-		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s should hit OpenAI responses handler", path)
+		require.NotEqual(t, http.StatusNotFound, w.Code, "path=%s", path)
 	}
 }

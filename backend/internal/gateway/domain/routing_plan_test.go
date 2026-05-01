@@ -463,6 +463,41 @@ func TestRoutingPlanJSONDoesNotSerializeCanonicalBody(t *testing.T) {
 	}
 }
 
+func TestIngressRequestBodyIsNotSerialized(t *testing.T) {
+	req := IngressRequest{
+		RequestID: "req-body",
+		Endpoint:  EndpointOpenAIResponses,
+		Platform:  PlatformOpenAI,
+		Transport: TransportHTTP,
+		Method:    http.MethodPost,
+		Path:      "/v1/responses",
+		Body:      []byte(`{"model":"gpt-5.1","input":"secret prompt"}`),
+	}
+
+	raw, err := json.Marshal(req)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if strings.Contains(string(raw), "secret prompt") {
+		t.Fatalf("ingress request JSON leaked body prompt: %s", raw)
+	}
+	if strings.Contains(string(raw), "gpt-5.1") {
+		t.Fatalf("ingress request JSON leaked body model: %s", raw)
+	}
+}
+
+func TestSubjectGroupSnapshotCarriesPlatform(t *testing.T) {
+	subject := Subject{Group: GroupSnapshot{ID: 10, Name: "openai-group", Platform: PlatformOpenAI}}
+
+	raw, err := json.Marshal(subject)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(raw), `"platform":"openai"`) {
+		t.Fatalf("subject JSON missing group platform: %s", raw)
+	}
+}
+
 func TestRoutingPlanJSONDoesNotSerializeReservationToken(t *testing.T) {
 	plan := RoutingPlan{
 		Account: AccountDecision{

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/Wei-Shaw/sub2api/internal/config"
+	gatewaydomain "github.com/Wei-Shaw/sub2api/internal/gateway/domain"
 	"github.com/Wei-Shaw/sub2api/internal/pkg/openai"
 	"github.com/cespare/xxhash/v2"
 	"github.com/gin-gonic/gin"
@@ -651,6 +652,31 @@ func TestOpenAISelectAccountWithLoadAwareness_StickyWaitPlan(t *testing.T) {
 	}
 	if selection.Account == nil || selection.Account.ID != 1 {
 		t.Fatalf("expected account 1")
+	}
+}
+
+func TestOpenAIGatewayService_GatewayAccountWaitPlanUsesStickyAndFallbackLimits(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Gateway.Scheduling.StickySessionMaxWaiting = 7
+	cfg.Gateway.Scheduling.StickySessionWaitTimeout = 45 * time.Second
+	cfg.Gateway.Scheduling.FallbackMaxWaiting = 19
+	cfg.Gateway.Scheduling.FallbackWaitTimeout = 12 * time.Second
+	svc := &OpenAIGatewayService{cfg: cfg}
+	account := &Account{ID: 22, Concurrency: 5}
+
+	stickyPlan := svc.GatewayAccountWaitPlan(context.Background(), account, gatewaydomain.AccountDecisionSessionHash)
+	if !stickyPlan.Required || stickyPlan.Timeout != 45*time.Second || stickyPlan.MaxWaiting != 7 || stickyPlan.MaxConcurrency != 5 {
+		t.Fatalf("sticky wait plan = %#v, want timeout 45s/max waiting 7/max concurrency 5", stickyPlan)
+	}
+
+	previousResponsePlan := svc.GatewayAccountWaitPlan(context.Background(), account, gatewaydomain.AccountDecisionPreviousResponseID)
+	if !previousResponsePlan.Required || previousResponsePlan.Timeout != 45*time.Second || previousResponsePlan.MaxWaiting != 7 || previousResponsePlan.MaxConcurrency != 5 {
+		t.Fatalf("previous-response wait plan = %#v, want sticky timeout/max waiting", previousResponsePlan)
+	}
+
+	fallbackPlan := svc.GatewayAccountWaitPlan(context.Background(), account, gatewaydomain.AccountDecisionLoadBalance)
+	if !fallbackPlan.Required || fallbackPlan.Timeout != 12*time.Second || fallbackPlan.MaxWaiting != 19 || fallbackPlan.MaxConcurrency != 5 {
+		t.Fatalf("fallback wait plan = %#v, want timeout 12s/max waiting 19/max concurrency 5", fallbackPlan)
 	}
 }
 

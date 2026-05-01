@@ -18,6 +18,57 @@ type openAISnapshotCacheStub struct {
 	accountsByID     map[int64]*Account
 }
 
+type slotTrackingConcurrencyCache struct {
+	ConcurrencyCache
+	mu    sync.Mutex
+	slots map[int64]map[string]struct{}
+}
+
+func (c *slotTrackingConcurrencyCache) AcquireAccountSlot(_ context.Context, accountID int64, maxConcurrency int, requestID string) (bool, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.slots == nil {
+		c.slots = make(map[int64]map[string]struct{})
+	}
+	current := c.slots[accountID]
+	if len(current) >= maxConcurrency {
+		return false, nil
+	}
+	if current == nil {
+		current = make(map[string]struct{})
+		c.slots[accountID] = current
+	}
+	current[requestID] = struct{}{}
+	return true, nil
+}
+
+func (c *slotTrackingConcurrencyCache) ReleaseAccountSlot(_ context.Context, accountID int64, requestID string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if current := c.slots[accountID]; current != nil {
+		delete(current, requestID)
+	}
+	return nil
+}
+
+func (c *slotTrackingConcurrencyCache) GetAccountWaitingCount(context.Context, int64) (int, error) {
+	return 0, nil
+}
+
+func (c *slotTrackingConcurrencyCache) GetAccountsLoadBatch(_ context.Context, accounts []AccountWithConcurrency) (map[int64]*AccountLoadInfo, error) {
+	out := make(map[int64]*AccountLoadInfo, len(accounts))
+	for _, account := range accounts {
+		out[account.ID] = &AccountLoadInfo{AccountID: account.ID, LoadRate: 0}
+	}
+	return out, nil
+}
+
+func (c *slotTrackingConcurrencyCache) current(accountID int64) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return len(c.slots[accountID])
+}
+
 func (s *openAISnapshotCacheStub) GetSnapshot(ctx context.Context, bucket SchedulerBucket) ([]*Account, bool, error) {
 	if len(s.snapshotAccounts) == 0 {
 		return nil, false, nil
@@ -43,6 +94,187 @@ func (s *openAISnapshotCacheStub) GetAccount(ctx context.Context, accountID int6
 	}
 	cloned := *account
 	return &cloned, nil
+}
+
+func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountFiltersUnschedulableAccounts(t *testing.T) {
+	ctx := context.Background()
+	future := time.Now().Add(time.Hour)
+	tests := []struct {
+		name           string
+		account        Account
+		requestedModel string
+		wantNil        bool
+	}{
+		{
+			name: "active OpenAI account",
+			account: Account{
+				ID:          91001,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+			},
+			wantNil: false,
+		},
+		{
+			name: "non OpenAI account",
+			account: Account{
+				ID:          91002,
+				Platform:    PlatformAnthropic,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+			},
+			wantNil: true,
+		},
+		{
+			name: "inactive OpenAI account",
+			account: Account{
+				ID:          91003,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusDisabled,
+				Schedulable: true,
+			},
+			wantNil: true,
+		},
+		{
+			name: "unschedulable OpenAI account",
+			account: Account{
+				ID:          91004,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: false,
+			},
+			wantNil: true,
+		},
+		{
+			name: "temporarily unschedulable OpenAI account",
+			account: Account{
+				ID:                     91005,
+				Platform:               PlatformOpenAI,
+				Type:                   AccountTypeOAuth,
+				Status:                 StatusActive,
+				Schedulable:            true,
+				TempUnschedulableUntil: &future,
+			},
+			wantNil: true,
+		},
+		{
+			name: "requested model unsupported",
+			account: Account{
+				ID:          91006,
+				Platform:    PlatformOpenAI,
+				Type:        AccountTypeOAuth,
+				Status:      StatusActive,
+				Schedulable: true,
+				Credentials: map[string]any{
+					"model_mapping": map[string]any{"gpt-4o": "gpt-4o"},
+				},
+			},
+			requestedModel: "gpt-5.1",
+			wantNil:        true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			svc := &OpenAIGatewayService{
+				accountRepo: stubOpenAIAccountRepo{accounts: []Account{tt.account}},
+			}
+
+			account, err := svc.GatewayGetSchedulableOpenAIAccount(ctx, tt.account.ID, tt.requestedModel)
+			require.NoError(t, err)
+			if tt.wantNil {
+				require.Nil(t, account)
+				return
+			}
+			require.NotNil(t, account)
+			require.Equal(t, tt.account.ID, account.ID)
+		})
+	}
+}
+
+func TestOpenAIGatewayService_GatewayGetSchedulableOpenAIAccountRechecksDBModelRateLimit(t *testing.T) {
+	ctx := context.Background()
+	requestedModel := "gpt-5.1"
+	snapshotAccount := &Account{
+		ID:          91007,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{requestedModel: requestedModel},
+		},
+	}
+	dbAccount := *snapshotAccount
+	dbAccount.Extra = map[string]any{
+		modelRateLimitsKey: map[string]any{
+			requestedModel: map[string]any{
+				"rate_limit_reset_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			},
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		accountsByID: map[int64]*Account{snapshotAccount.ID: snapshotAccount},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:       stubOpenAIAccountRepo{accounts: []Account{dbAccount}},
+		schedulerSnapshot: &SchedulerSnapshotService{cache: snapshotCache},
+	}
+
+	account, err := svc.GatewayGetSchedulableOpenAIAccount(ctx, snapshotAccount.ID, requestedModel)
+	require.NoError(t, err)
+	require.Nil(t, account)
+}
+
+func TestOpenAIGatewayService_SelectAccountWithScheduler_WaitPlanSkipsStaleDBModelRateLimit(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10108)
+	requestedModel := "gpt-5.1"
+	snapshotAccount := &Account{
+		ID:          91008,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeOAuth,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Priority:    0,
+		Credentials: map[string]any{
+			"model_mapping": map[string]any{requestedModel: requestedModel},
+		},
+	}
+	dbAccount := *snapshotAccount
+	dbAccount.Extra = map[string]any{
+		modelRateLimitsKey: map[string]any{
+			requestedModel: map[string]any{
+				"rate_limit_reset_at": time.Now().Add(time.Hour).UTC().Format(time.RFC3339),
+			},
+		},
+	}
+	snapshotCache := &openAISnapshotCacheStub{
+		snapshotAccounts: []*Account{snapshotAccount},
+		accountsByID:     map[int64]*Account{snapshotAccount.ID: snapshotAccount},
+	}
+	concurrencyCache := stubConcurrencyCache{
+		acquireResults: map[int64]bool{snapshotAccount.ID: false},
+		loadMap: map[int64]*AccountLoadInfo{
+			snapshotAccount.ID: {AccountID: snapshotAccount.ID, LoadRate: 100},
+		},
+	}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{dbAccount}},
+		cache:              &stubGatewayCache{},
+		cfg:                &config.Config{},
+		schedulerSnapshot:  &SchedulerSnapshotService{cache: snapshotCache},
+		concurrencyService: NewConcurrencyService(concurrencyCache),
+	}
+
+	selection, _, err := svc.SelectAccountWithScheduler(ctx, &groupID, "", "", requestedModel, nil, OpenAIUpstreamTransportAny)
+	require.Error(t, err)
+	require.Nil(t, selection)
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionStickyRateLimitedAccountFallsBackToFreshCandidate(t *testing.T) {
@@ -190,6 +422,129 @@ func TestOpenAIGatewayService_SelectAccountWithScheduler_PreviousResponseSticky(
 	if selection.ReleaseFunc != nil {
 		selection.ReleaseFunc()
 	}
+}
+
+func TestOpenAIGatewayService_GatewayLookupPreviousResponseAccount_DoesNotAcquireSlot(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10109)
+	account := Account{
+		ID:          91009,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Extra: map[string]any{
+			"openai_apikey_responses_websockets_v2_enabled": true,
+		},
+	}
+	cache := &stubGatewayCache{}
+	store := NewOpenAIWSStateStore(cache)
+	slotCache := &slotTrackingConcurrencyCache{}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{account}},
+		cache:              cache,
+		cfg:                newOpenAIWSV2TestConfig(),
+		concurrencyService: NewConcurrencyService(slotCache),
+		openaiWSStateStore: store,
+	}
+
+	require.NoError(t, store.BindResponseAccount(ctx, groupID, "resp_prev_lookup_only", account.ID, time.Hour))
+
+	accountID, ok, err := svc.GatewayLookupPreviousResponseAccount(ctx, &groupID, "resp_prev_lookup_only", "gpt-5.1", nil)
+	require.NoError(t, err)
+	require.True(t, ok)
+	require.Equal(t, account.ID, accountID)
+	require.Zero(t, slotCache.current(account.ID), "previous-response bridge lookup must not reserve concurrency")
+
+	acquired, err := svc.GatewayAcquireAccountSlot(ctx, account.ID, account.Concurrency)
+	require.NoError(t, err)
+	require.NotNil(t, acquired)
+	require.True(t, acquired.Acquired)
+	require.Equal(t, 1, slotCache.current(account.ID))
+
+	acquired.ReleaseFunc()
+	require.Zero(t, slotCache.current(account.ID))
+}
+
+func TestOpenAIGatewayService_GatewayLookupPreviousResponseAccount_ExcludedMiss(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10110)
+	account := Account{
+		ID:          91010,
+		Platform:    PlatformOpenAI,
+		Type:        AccountTypeAPIKey,
+		Status:      StatusActive,
+		Schedulable: true,
+		Concurrency: 1,
+		Extra: map[string]any{
+			"openai_apikey_responses_websockets_v2_enabled": true,
+		},
+	}
+	cache := &stubGatewayCache{}
+	store := NewOpenAIWSStateStore(cache)
+	slotCache := &slotTrackingConcurrencyCache{}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{account}},
+		cache:              cache,
+		cfg:                newOpenAIWSV2TestConfig(),
+		concurrencyService: NewConcurrencyService(slotCache),
+		openaiWSStateStore: store,
+	}
+
+	require.NoError(t, store.BindResponseAccount(ctx, groupID, "resp_prev_lookup_excluded", account.ID, time.Hour))
+
+	accountID, ok, err := svc.GatewayLookupPreviousResponseAccount(
+		ctx,
+		&groupID,
+		"resp_prev_lookup_excluded",
+		"gpt-5.1",
+		map[int64]struct{}{account.ID: {}},
+	)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Zero(t, accountID)
+	require.Zero(t, slotCache.current(account.ID))
+}
+
+func TestOpenAIGatewayService_GatewayLookupPreviousResponseAccount_StaleMissDeletesBinding(t *testing.T) {
+	ctx := context.Background()
+	groupID := int64(10111)
+	rateLimitedUntil := time.Now().Add(30 * time.Minute)
+	account := Account{
+		ID:               91011,
+		Platform:         PlatformOpenAI,
+		Type:             AccountTypeAPIKey,
+		Status:           StatusActive,
+		Schedulable:      true,
+		Concurrency:      1,
+		RateLimitResetAt: &rateLimitedUntil,
+		Extra: map[string]any{
+			"openai_apikey_responses_websockets_v2_enabled": true,
+		},
+	}
+	cache := &stubGatewayCache{}
+	store := NewOpenAIWSStateStore(cache)
+	slotCache := &slotTrackingConcurrencyCache{}
+	svc := &OpenAIGatewayService{
+		accountRepo:        stubOpenAIAccountRepo{accounts: []Account{account}},
+		cache:              cache,
+		cfg:                newOpenAIWSV2TestConfig(),
+		concurrencyService: NewConcurrencyService(slotCache),
+		openaiWSStateStore: store,
+	}
+
+	require.NoError(t, store.BindResponseAccount(ctx, groupID, "resp_prev_lookup_stale", account.ID, time.Hour))
+
+	accountID, ok, err := svc.GatewayLookupPreviousResponseAccount(ctx, &groupID, "resp_prev_lookup_stale", "gpt-5.1", nil)
+	require.NoError(t, err)
+	require.False(t, ok)
+	require.Zero(t, accountID)
+	require.Zero(t, slotCache.current(account.ID))
+
+	boundAccountID, getErr := store.GetResponseAccount(ctx, groupID, "resp_prev_lookup_stale")
+	require.NoError(t, getErr)
+	require.Zero(t, boundAccountID)
 }
 
 func TestOpenAIGatewayService_SelectAccountWithScheduler_SessionSticky(t *testing.T) {
